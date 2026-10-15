@@ -133,7 +133,7 @@ Order (top = first executed):
 2. `SecurityHeadersMiddleware` — X-Content-Type-Options, X-Frame-Options, CSP, Cache-Control
 3. `GlobalExceptionHandlingMiddleware` — catches all exceptions, returns ProblemDetails
 4. HTTPS Redirection / HSTS
-5. Swagger (development only)
+5. Swagger (all environments; `Swagger__Enabled=false` disables it)
 6. CORS
 7. Rate Limiter
 8. Serilog Request Logging

@@ -180,3 +180,6 @@
 ### OQ-032: Render.com container hosting (2026-10-15)
 - **Added:** `Dockerfile` (multi-stage, non-root, listens on `$PORT`), `.dockerignore`, `DEPLOYMENT-RENDER.md`. Not built or run yet (no Docker on the development machine).
 - **Open:** (a) is a public PaaS (Render, servers outside NSG control) approved for this system under the SOW/security requirements, or only for demos? (b) Render's proxy address range for `ForwardedHeaders__KnownNetworks` (to be read from the first deployment's logs); (c) whether `X-Forwarded-For` from Render carries more than one hop (the app uses `ForwardLimit = 1`, so per-IP rate limits and audit IPs must be checked); (d) where the MySQL 8 database is hosted, since Render has no managed MySQL; (e) persistent disk for `FileStorage`.
+
+### OQ-033: Swagger enabled in Production (2026-10-15)
+- Swagger UI/JSON (`/swagger`) is now on in every environment at the project owner's request; `Swagger__Enabled=false` turns it off. It lists the whole API surface to anyone with the URL, so switch it off (or restrict it) for the real production deployment. Open: who approves leaving it on for a hosted demo.

@@ -262,8 +262,8 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseHttpsRedirection();
 
-// Swagger — development only by default
-if (app.Environment.IsDevelopment())
+// Swagger — on in every environment by client request; set Swagger__Enabled=false to switch it off without a code change
+if (builder.Configuration.GetValue("Swagger:Enabled", true))
 {
     app.UseSwagger();
     app.UseSwaggerUI(options =>
