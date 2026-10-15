@@ -24,7 +24,7 @@ builder.Host.UseSerilog((context, configuration) =>
         .ReadFrom.Configuration(context.Configuration)
         .Enrich.FromLogContext()
         .Enrich.WithProperty("Application", "NSG.Mobile.API")
-        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {CorrelationId} {Message:lj}{NewLine}{Exception}")
+        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {CorrelationId} {ClientIp} {Message:lj}{NewLine}{Exception}")
         .WriteTo.File("logs/nsg-api-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 30));
 
 // ── Secrets: refuse to start with a missing, placeholder or weak JWT / encryption / blind-index key ──
