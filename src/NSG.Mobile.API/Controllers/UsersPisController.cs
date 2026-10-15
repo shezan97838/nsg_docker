@@ -28,6 +28,7 @@ public class UsersPisController : ControllerBase
 
     /// <summary>Get a paginated list of personnel records, with search and filters. Contains no sensitive identifiers.</summary>
     [HttpGet]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(PaginatedResponse<UserPisListItemDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] int pageNumber = 1,
