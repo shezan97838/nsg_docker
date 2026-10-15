@@ -1,0 +1,73 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.dll
+*.pdb
+*.exe
+
+## IDE
+.vs/
+.vscode/
+*.swp
+*.swo
+
+## Rider
+.idea/
+
+## Build Results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+## NuGet
+*.nupkg
+**/packages/*
+project.lock.json
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+
+## Logs
+logs/
+*.log
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Secrets — NEVER commit real secrets
+## appsettings.json and appsettings.Development.json are tracked but must hold placeholders/non-secret values only
+## (guarded by ConfigurationSafetyTests). Real values go in user-secrets, environment variables or a vault.
+appsettings.Production.json
+appsettings.Staging.json
+appsettings.Local.json
+appsettings.*.local.json
+**/secrets.json
+**/UserSecrets/
+.env
+.env.*
+*.env
+!*.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+fcm-credentials*.json
+*service-account*.json
+
+## File storage
+FileStorage/
+
+## EF Core Migrations (keep migrations, ignore temp files)
+*.Designer.cs.bak

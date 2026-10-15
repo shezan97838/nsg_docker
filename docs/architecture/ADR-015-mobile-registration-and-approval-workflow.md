@@ -1,0 +1,53 @@
+# ADR-015: Mobile registration, OTP, MPIN and approval workflow
+
+**Status:** Implemented. Migration `Add_Mobile_Profile_Approval_And_Grant_Tables` is **not applied to development or production**. On 2026-10-15 it was applied, rolled back and re-applied on MySQL 8.0.44 in the disposable database `nsg_mobileauth_test`; the generated `pending_nsg_number` column, its unique index and all check/unique constraints were exercised there, and the full test suite (507 tests) passed against it. OTP delivery has not been tested against a real SMS gateway; a fixed demo OTP mode exists for presentations (see below).
+
+Builds on ADR-014 (entities), ADR-005/-007 (phone login, biometrics boundary).
+
+## Endpoints (`api/v1`)
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST mobile-auth/login/check` | anonymous, `auth` limiter | Decide the next step |
+| `POST mobile-auth/login` | anonymous, `auth` | Verify MPIN, issue access token |
+| `POST mobile-auth/otp/send` | anonymous, `otp` limiter | Send OTP (flow `Registration` or `MpinReset`) |
+| `POST mobile-auth/otp/verify` | anonymous, `otp` | Verify OTP; raise approval request or issue a grant |
+| `POST mobile-auth/registration/submit` | anonymous + registration grant | Recheck PIS; issue MPIN-setup grant |
+| `POST mobile-auth/mpin/setup` | anonymous + MPIN-setup grant | Create the Employee profile |
+| `POST mobile-auth/mpin/change` | `RequireMobileProfile` | Change MPIN (current MPIN verified) |
+| `POST mobile-auth/mpin/reset` | anonymous + reset grant | Reset a forgotten MPIN |
+| `GET mobile-approval-requests` | `RequireITAdmin` | Paged list, `status`, `search` |
+| `PUT mobile-approval-requests/{id}/decision` | `RequireITAdmin` | Approve / reject |
+
+Success body: `{ "message", "data": { "status", ... } }` (`ApiResult<T>`); list: `PaginatedResponse` or `{ "message": "No mobile approval requests found." }`; every failure: ProblemDetails with `detail`. 201 is returned when an approval request or a profile is created. `GlobalExceptionHandlingMiddleware` now also writes a ProblemDetails body for bare 401/403/429 responses.
+
+## Decisions
+1. **Eligibility order** (re-run at every step, nothing is remembered client-side): profile (by NSG number or mobile; only a profile matching all three identifiers is "yours", otherwise the generic no-match answer) → pending request for the NSG number (acknowledged only when mobile and date of birth also match the request; PIS is **not** queried, no OTP, no new request) → PIS match on all three fields → activation status. A PIS record that is inactive is treated like Rejected (assumption, see OQ-028).
+2. **Grants** (`mobile_auth_grants`, new table): opaque 256-bit random secret, only its SHA-256 stored, bound to NSG number + mobile, purpose-specific (`RegistrationVerified` → `MpinSetup`, `MpinReset`), 10-minute lifetime, consumed with a conditional `UPDATE ... WHERE consumed_at_utc IS NULL` (so concurrent use has one winner), only the newest grant per NSG number stays valid. A grant is not a JWT and no protected API accepts it.
+3. **OTP**: existing `OtpService` (6 digits, CSPRNG, hashed, 5-minute expiry, 5 attempts, 60-second resend cooldown). Purposes: `Registration`, `PasswordReset` (MPIN recovery). Additions: cap of 5 sends per mobile+purpose per rolling hour; the OTP must have been sent to the person's registered number. The destination is always the number in PIS / on the profile.
+4. **Approval request**: created only after a correct OTP for a PIS-Pending person, or at registration/submit if the status went back to Pending. The unique `pending_nsg_number` index is the concurrency guarantee; a lost race answers "already pending". An Approved person never gets a request.
+5. **Profile creation** (`mpin/setup`): NSG number, mobile and date of birth are copied from PIS (never from the request), role is `Employee`, `is_active` true. Grant consumption and insert share one transaction; unique keys on NSG number and mobile are the duplicate guard.
+6. **MPIN**: 4–6 digits, repeated digits and straight runs rejected; PBKDF2-SHA256 100K (existing `IPasswordHashingService`). Lockout: 5 wrong MPINs (`Security:MaxFailedLoginAttempts`) → 30 minutes (`Security:LockoutDurationMinutes`), counted with an atomic SQL increment. A wrong current MPIN in `mpin/change` counts too. A wrong MPIN for identifiers that do not all match a profile counts against nobody. Reset by OTP clears the lockout; it needs a verified OTP and cannot be done with NSG number, mobile and date of birth alone. Reset invalidates every outstanding grant of the person.
+7. **Access token**: `JwtTokenService.GenerateMobileAccessToken` — same key, issuer, audience, HS256, lifetime as staff tokens. Claims: `sub=mobile:{id}` (deliberately not an integer so it can never resolve to a `users.id`), `jti`, `iat`, role, `profile_id`, `token_use=mobile_access`. Policy `RequireMobileProfile` requires `token_use` and `profile_id`.
+8. **Decision** (`PUT .../decision`): one transaction; the request is claimed with `UPDATE ... WHERE approval_status = 0` (only the first decision wins, later ones get 409), then `users_pis.mobile_app_activation_status` is updated; a missing PIS row rolls everything back (409). Approver id comes from the token (`sub`), timestamps from the server clock (UTC). Responses show IST (+05:30, fixed offset, no DST).
+9. **Audit**: new `AuditAction` values `MobileApprovalRequested`, `MobileProfileCreated`, `MpinChanged`, `MpinReset` (stored as strings, no schema change). Entries carry ids only — no NSG number, mobile, MPIN, OTP or tokens.
+
+## Not included / dependencies
+- **No refresh token and no device binding for mobile profiles.** `refresh_tokens` and `devices` have foreign keys to `users`, which mobile profiles are not. The access token lives `Jwt:AccessTokenExpirationMinutes` and the app must log in again with the MPIN. Needs an ADR before single-device binding (ADR-006) applies to profiles.
+- **Issued access tokens are not revoked** by an MPIN reset/change (stateless JWT); they expire on their own.
+- **SMS**: `NicSmsServicePlaceholder` is still the registered `INicSmsService`. It reports success and **logs the OTP in clear text** (development only). No OTP reaches a phone until a real gateway implementation is registered; see `docs/CONFIGURATION.md`.
+- Rate-limit policies are per client IP (existing `auth` 10/min, `otp` 5/5 min); users behind one NAT share them.
+- `OtpService.VerifyAsync` increments the attempt counter with read-modify-write, so a burst of parallel guesses can slightly exceed the attempt limit (existing behaviour, not changed).
+
+## Addendum 2026-10-15: demo OTP mode and identity review
+- **`Otp:Mode` (`Sms` default | `Demo`).** `Demo` issues the fixed OTP `123456` through the normal `OtpService` path (hash stored, expiry, attempts, cooldown, single use unchanged) and skips the SMS call; `otp/send` says demo mode is active and never claims delivery. `OtpModeGuard` rejects `Demo` at startup (and again in the `OtpService` constructor) unless the environment is Development, or Staging/Demo with `Otp:AllowDemoOutsideDevelopment=true`. A failing SMS provider fails the send; there is no fallback. `NicSmsServicePlaceholder` now fails closed and no longer logs OTPs. Real provider: register an `INicSmsService`, set `Otp:Mode=Sms`.
+- **Identity review.** No ASP.NET Core Identity, `IdentityUser` or `Identity.Jwt` is used (enforced by `MobileIdentityTests`). Mobile profiles authenticate against `mobile_user_profiles` only; the mobile JWT has `sub=mobile:{id}`, `profile_id` and `token_use=mobile_access`, so `ICurrentUserService.UserId` (which parses an integer `sub`) is null for it and it can never be recorded as an approver or match a `users` row. Mobile tokens carry the `Employee` role and are refused by `RequireITAdmin`; staff tokens are refused by `RequireMobileProfile`. Tokens are issued only after a successful MPIN check. Limitations are unchanged: no refresh token and no device binding for mobile profiles (`refresh_tokens`/`devices` reference `users`), and no revocation of issued access tokens.
+- **Per-endpoint rate limits** are now configurable (`RateLimiting:AuthPermitLimit`, `RateLimiting:OtpPermitLimit`), defaults unchanged.
+
+## Addendum 2026-10-15 (2): mobile sessions with refresh tokens
+Resolves the "no refresh token for mobile profiles" limitation. New table `mobile_refresh_tokens` (migration `Add_Mobile_Refresh_Tokens`), independent of the staff `refresh_tokens`: `profile_id` bigint with a Restrict foreign key to `mobile_user_profiles`, `token_hash` (SHA-256, unique), `family_id` (the session), `expires_at_utc`, `revoked_at_utc`, `revoke_reason`, `reuse_detected_at_utc`.
+- **Login** (after MPIN success only) returns the access JWT and a refresh token; the access token carries `sid` = session id. One active session per profile: a new login revokes the earlier one (this stands in for single-device binding, which still has no device record for profiles).
+- **Rotation** (`POST mobile-auth/token/refresh`): in one transaction the presented token is claimed with a conditional update (`WHERE revoked_at_utc IS NULL AND expires_at_utc > now`), so of several concurrent requests exactly one succeeds; the successor is stored in the same session. Presenting an already-rotated token revokes the whole session (`TokenReuseDetected` audited) — including the legitimate holder's newest token, by design. A concurrent double-send of the same token therefore also ends the session. A deactivated profile gets 403 and loses all sessions.
+- **Logout** (`POST mobile-auth/logout`, body = refresh token) revokes the session; idempotent and silent about unknown tokens.
+- **Revocation:** MPIN change and MPIN reset revoke every session in the same transaction as the MPIN update. Deactivating a profile (`is_active = 0`) takes effect immediately: a JWT-bearer hook checks, for every mobile access token, that its `sid` session has a live token and its profile is active, so access tokens stop working at once instead of at expiry. No endpoint to deactivate a profile exists yet; the check applies to any change of `is_active`.
+- **Separation:** the hook acts only on tokens with `token_use=mobile_access`; staff tokens are untouched. Refresh tokens are opaque, not JWTs, and are accepted only by `token/refresh` and `logout`.
+- **Not done:** an absolute lifetime cap on a session (sliding rotation can continue indefinitely while used at least every 7 days), and device binding.

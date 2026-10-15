@@ -1,0 +1,40 @@
+# Keep the build context small and free of secrets, build output and local data.
+**/bin/
+**/obj/
+**/logs/
+**/*.user
+**/*.suo
+.vs/
+.vscode/
+.idea/
+.git/
+.gitignore
+.claude/
+
+# Not needed by the API image
+tests/
+tools/
+data/
+docs/
+README.md
+CLAUDE.md
+Dockerfile
+.dockerignore
+
+# Secrets and developer-only settings — never inside an image
+**/appsettings.Development.json
+**/appsettings.Production.json
+**/appsettings.Staging.json
+**/appsettings.Local.json
+**/appsettings.*.local.json
+**/secrets.json
+.env
+.env.*
+*.env
+*.pfx
+*.p12
+*.pem
+*.key
+**/fcm-credentials*.json
+**/*service-account*.json
+**/FileStorage/

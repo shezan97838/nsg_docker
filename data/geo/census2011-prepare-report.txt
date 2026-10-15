@@ -1,0 +1,45 @@
+Source file rows read: 6,57,010
+Candidate town rows (statutory 8xxxxx or tagged '(CT)'): 8,377
+Duplicate rows folded (same town listed in several sub-districts / summary row): 446
+Towns whose folded rows had differing name text (canonical summary-row name used): 1
+Rejected rows: 0
+Distinct towns written: 7,931  (statutory 4,041, census 3,890)
+
+Reconciliation against Census 2011 table A-01 (number of towns, 2011 state boundaries):
+CensusState | Name | A-01 towns | Directory distinct towns | Statutory | Census | Difference
+01 | JAMMU & KASHMIR | 122 | 122 | 86 | 36 | 0
+02 | HIMACHAL PRADESH | 59 | 59 | 56 | 3 | 0
+03 | PUNJAB | 217 | 217 | 143 | 74 | 0
+04 | CHANDIGARH | 6 | 6 | 1 | 5 | 0
+05 | UTTARAKHAND | 115 | 115 | 74 | 41 | 0
+06 | HARYANA | 154 | 154 | 80 | 74 | 0
+07 | NCT OF DELHI | 113 | 113 | 3 | 110 | 0
+08 | RAJASTHAN | 297 | 297 | 185 | 112 | 0
+09 | UTTAR PRADESH | 915 | 915 | 648 | 267 | 0
+10 | BIHAR | 199 | 199 | 139 | 60 | 0
+11 | SIKKIM | 9 | 9 | 8 | 1 | 0
+12 | ARUNACHAL PRADESH | 27 | 27 | 26 | 1 | 0
+13 | NAGALAND | 26 | 26 | 19 | 7 | 0
+14 | MANIPUR | 51 | 51 | 28 | 23 | 0
+15 | MIZORAM | 23 | 23 | 23 | 0 | 0
+16 | TRIPURA | 42 | 42 | 16 | 26 | 0
+17 | MEGHALAYA | 22 | 22 | 10 | 12 | 0
+18 | ASSAM | 214 | 214 | 88 | 126 | 0
+19 | WEST BENGAL | 909 | 910 | 129 | 781 | +1
+20 | JHARKHAND | 228 | 228 | 40 | 188 | 0
+21 | ODISHA | 223 | 223 | 107 | 116 | 0
+22 | CHHATTISGARH | 182 | 182 | 168 | 14 | 0
+23 | MADHYA PRADESH | 476 | 476 | 364 | 112 | 0
+24 | GUJARAT | 348 | 348 | 195 | 153 | 0
+25 | DAMAN & DIU | 8 | 8 | 2 | 6 | 0
+26 | DADRA & NAGAR HAVELI | 6 | 6 | 1 | 5 | 0
+27 | MAHARASHTRA | 534 | 534 | 256 | 278 | 0
+28 | ANDHRA PRADESH | 353 | 350 | 125 | 225 | -3
+29 | KARNATAKA | 347 | 347 | 220 | 127 | 0
+30 | GOA | 70 | 70 | 14 | 56 | 0
+31 | LAKSHADWEEP | 6 | 6 | 0 | 6 | 0
+32 | KERALA | 520 | 520 | 59 | 461 | 0
+33 | TAMIL NADU | 1097 | 1097 | 721 | 376 | 0
+34 | PUDUCHERRY | 10 | 10 | 6 | 4 | 0
+35 | ANDAMAN & NICOBAR ISLANDS | 5 | 5 | 1 | 4 | 0
+TOTAL | | 7933 | 7931 | | | -2
