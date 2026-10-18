@@ -3,45 +3,20 @@ using NSG.Mobile.Infrastructure.Options;
 namespace NSG.Mobile.Infrastructure.Security;
 
 /// <summary>
-/// Fail-closed rule for the fixed demo OTP. Demo mode is allowed only in Development, or in Staging/Demo when
-/// <see cref="OtpOptions.AllowDemoOutsideDevelopment"/> is set. Production, an unset or unknown environment name, and anything
-/// else are rejected, so a misconfigured deployment stops at startup instead of accepting 123456.
+/// OTP mode rules. By client/owner decision (2026-10-18) the fixed demo OTP (123456, no SMS) is allowed in every environment,
+/// including Production, and on any database. The former fail-closed restriction (Development / approved Staging only, and a
+/// <c>_demo</c> database name) has been removed on purpose; the methods are kept so callers and the OtpService constructor stay unchanged.
+/// REVERT before the BSNL SMS gateway goes live: set <c>Otp:Mode=Sms</c> and restore the restrictions.
 /// </summary>
 public static class OtpModeGuard
 {
+    /// <summary>Demo mode is accepted in every environment (see the class remarks).</summary>
     public static void EnsureAllowed(OtpOptions options, string? environmentName)
     {
-        if (options.Mode != OtpMode.Demo) return;
-
-        bool development = string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase);
-        bool approvedPresentation = options.AllowDemoOutsideDevelopment
-            && (string.Equals(environmentName, "Staging", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(environmentName, "Demo", StringComparison.OrdinalIgnoreCase));
-
-        if (!development && !approvedPresentation)
-        {
-            throw new InvalidOperationException(
-                $"{OtpOptions.SectionName}:Mode=Demo is not allowed in the '{environmentName}' environment. " +
-                "Use Mode=Sms, or run in Development (or Staging/Demo with Otp:AllowDemoOutsideDevelopment=true for an approved presentation).");
-        }
     }
 
-    /// <summary>
-    /// A hosted demo (demo OTP outside Development) must run against a database that is dedicated to it: the database name has to
-    /// end in <c>_demo</c>. This keeps a demo deployment from ever being pointed at a database that holds real data.
-    /// </summary>
+    /// <summary>Demo mode no longer requires a database name ending in <c>_demo</c> (see the class remarks).</summary>
     public static void EnsureDemoDatabase(OtpOptions options, string? environmentName, string? connectionString)
     {
-        if (options.Mode != OtpMode.Demo || string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase)) return;
-
-        string database = string.Empty;
-        try { database = new MySqlConnector.MySqlConnectionStringBuilder(connectionString ?? string.Empty).Database; }
-        catch (ArgumentException) { /* unparsable: treated as no database name below */ }
-
-        if (!database.EndsWith("_demo", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                "Otp:Mode=Demo outside Development requires a dedicated demo database: the database name in ConnectionStrings:MySql must end with '_demo'.");
-        }
     }
 }

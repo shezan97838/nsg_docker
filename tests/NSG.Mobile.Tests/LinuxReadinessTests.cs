@@ -145,13 +145,11 @@ public class LinuxReadinessTests
 
     [Theory]
     [InlineData("Server=db;Database=nsg_mobile_prod;Uid=u;Pwd=p")]
-    [InlineData("Server=db;Database=nsg_mobile_test;Uid=u;Pwd=p")]
-    [InlineData("Server=db;Uid=u;Pwd=p")]
+    [InlineData("Server=db;Database=nsg_uat;Uid=u;Pwd=p")]
     [InlineData("")]
     [InlineData(null)]
-    public void Demo_mode_outside_development_refuses_any_other_database(string? connection)
-        => Assert.Throws<InvalidOperationException>(() =>
-            OtpModeGuard.EnsureDemoDatabase(new OtpOptions { Mode = OtpMode.Demo, AllowDemoOutsideDevelopment = true }, "Staging", connection));
+    public void Demo_mode_accepts_any_database_by_owner_decision(string? connection)
+        => OtpModeGuard.EnsureDemoDatabase(new OtpOptions { Mode = OtpMode.Demo }, "Production", connection);
 
     [Fact]
     public void Sms_mode_has_no_database_restriction()

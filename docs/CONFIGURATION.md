@@ -190,6 +190,8 @@ The BSNL SMS gateway is not available yet. `Otp:Mode` selects how OTPs are produ
 | `Sms` (default) | Random OTP sent through `INicSmsService`. With only the placeholder registered, every send **fails** (502 `OTP_SEND_FAILED`); nothing is faked and the OTP is not logged. If a real gateway fails, the send fails: there is never a fallback to demo. |
 | `Demo` | Every OTP is `123456`. No SMS is sent; `otp/send` answers "Demo OTP mode is active. No SMS has been sent…" with `data.demoOtpMode=true`. Eligibility, hashing, 5-minute expiry, 5 attempts, 60-second resend cooldown, hourly cap, single use and purpose isolation all still apply. |
 
+**Owner decision 2026-10-18:** `Otp:Mode=Demo` is now the default in `appsettings.json` and `OtpModeGuard` no longer restricts it by environment or database name, so Production sends no SMS and every OTP is `123456`. The "Fail closed" paragraph below describes the superseded behaviour. Revert (`Otp:Mode=Sms`, restore the guard) before the BSNL gateway goes live.
+
 **Fail closed:** the host refuses to start with `Demo` unless the environment is `Development`, or `Staging`/`Demo` **and** `Otp__AllowDemoOutsideDevelopment=true`. `Production`, an unset or unknown environment name, and an unrecognised mode value all stop startup. `OtpService` repeats the check when it is constructed.
 
 * **Local:** `appsettings.Development.json` already sets `Otp:Mode=Demo`. Run with `ASPNETCORE_ENVIRONMENT=Development`.

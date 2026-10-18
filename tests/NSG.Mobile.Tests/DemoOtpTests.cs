@@ -183,26 +183,13 @@ public class DemoOtpTests
 
     [Theory]
     [InlineData("Production", false)]
-    [InlineData("Production", true)]
     [InlineData("production", true)]
-    [InlineData("", true)]
-    [InlineData(null, true)]
-    [InlineData("Prod", true)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
     [InlineData("Staging", false)]
-    [InlineData("Testing", true)]
-    public void Demo_mode_is_rejected_outside_development_unless_explicitly_approved_for_staging(string? environment, bool allowFlag)
-    {
-        OtpOptions options = new() { Mode = OtpMode.Demo, AllowDemoOutsideDevelopment = allowFlag };
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => OtpModeGuard.EnsureAllowed(options, environment));
-        Assert.Contains("not allowed", ex.Message);
-    }
-
-    [Theory]
     [InlineData("Development", false)]
-    [InlineData("development", false)]
-    [InlineData("Staging", true)]
     [InlineData("Demo", true)]
-    public void Demo_mode_is_allowed_only_in_development_or_approved_staging(string environment, bool allowFlag)
+    public void Demo_mode_is_allowed_in_every_environment_by_owner_decision(string? environment, bool allowFlag)
         => OtpModeGuard.EnsureAllowed(new OtpOptions { Mode = OtpMode.Demo, AllowDemoOutsideDevelopment = allowFlag }, environment);
 
     [Theory]
@@ -214,9 +201,9 @@ public class DemoOtpTests
         => OtpModeGuard.EnsureAllowed(new OtpOptions { Mode = OtpMode.Sms }, environment);
 
     [Fact]
-    public void The_service_itself_refuses_to_be_built_in_production_in_demo_mode()
+    public void The_service_can_be_built_in_production_in_demo_mode()
     {
-        Assert.Throws<InvalidOperationException>(() => Build(OtpMode.Demo, "Production"));
+        Assert.NotNull(Build(OtpMode.Demo, "Production").Service);
     }
 
     [Fact]
@@ -227,13 +214,12 @@ public class DemoOtpTests
     }
 
     [Fact]
-    public void Committed_configuration_enables_demo_only_in_the_development_file()
+    public void Committed_configuration_enables_demo_in_base_and_development_files()
     {
         string root = FindRoot();
         string baseJson = File.ReadAllText(Path.Combine(root, "src", "NSG.Mobile.API", "appsettings.json"));
         string devJson = File.ReadAllText(Path.Combine(root, "src", "NSG.Mobile.API", "appsettings.Development.json"));
-        Assert.Contains("\"Mode\": \"Sms\"", baseJson);
-        Assert.DoesNotContain("Demo", baseJson);
+        Assert.Contains("\"Mode\": \"Demo\"", baseJson);
         Assert.Contains("\"Mode\": \"Demo\"", devJson);
         Assert.False(File.Exists(Path.Combine(root, "src", "NSG.Mobile.API", "appsettings.Production.json")));
     }
