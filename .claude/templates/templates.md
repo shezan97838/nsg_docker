@@ -10,8 +10,8 @@ public class MyEntity
 {
     public int Id { get; set; }
     // Properties here
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAtIst { get; set; } = IndianStandardTime.Now;
+    public DateTime UpdatedAtIst { get; set; } = IndianStandardTime.Now;
 }
 ```
 

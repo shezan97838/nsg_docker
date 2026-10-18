@@ -98,6 +98,16 @@ UNDERSTAND → VERIFY REQUIREMENT → INSPECT EXISTING CODE → IMPACT ANALYSIS
 | Secrets from config, never source code | appsettings.json |
 | MySQL-first, Linux-safe database names (lowercase snake_case, explicit mappings, reviewed migrations) | `docs/DATABASE-STANDARDS.md`, `DatabaseNamingRuleTests` |
 
+## Timestamp Convention (IST is authoritative)
+
+**Every `DateTime` in this project is an Indian Standard Time (IST, Asia/Kolkata, UTC+05:30, no DST) instant.** This is the single rule; any older document, comment or template that says UTC is superseded by it. Authoritative detail: `docs/DATABASE-STANDARDS.md`.
+
+- **Database:** `datetime(6)` columns whose name ends in `_ist` (`created_at_ist`, `expires_at_ist`). `DatabaseNamingStandard` appends `_ist` and `DatabaseNamingRuleTests` fails on any `DateTime` column that does not comply. No `*_utc` columns, no `DateTimeOffset`/`timestamp` columns. C# properties end in `Ist` (`CreatedAtIst`).
+- **Creation and updates:** write `IndianStandardTime.Now` (`NSG.Mobile.Domain.Common`). Never `DateTime.Now` (host-local time) and never `DateTime.UtcNow` for a stored value.
+- **Comparisons and expiry:** compare a stored value only with another IST value (`IndianStandardTime.Now`); never mix IST and UTC in one comparison. Convert explicitly with `IndianStandardTime.ConvertFromUtc` / `ConvertToUtc` when a library hands you UTC (for example JWT `exp`, which is a Unix-epoch value and is not stored). Nothing may depend on the server's local timezone or on MySQL's session `time_zone`.
+- **API serialization:** responses expose stored IST instants as `DateTimeOffset` with the fixed `+05:30` offset via `IstTime.FromIst`; requests carrying an offset are converted to IST before storage. Never return an unmarked or UTC (`Z`) value for a stored timestamp.
+- **Dates without time** (`date_of_birth` etc.) are `DateOnly` / `date`: no timezone, no conversion.
+
 ## Testing
 
 **Current state: No dedicated test projects exist.**

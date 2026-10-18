@@ -38,8 +38,8 @@ public class MyEntityConfiguration : IEntityTypeConfiguration<MyEntity> {
 |-------|------------|-----------------------------|
 | Users | MobileNumber (unique), ForceNumber (unique), Status | AUTO_INCREMENT PK, RowVersion |
 | Devices | UserId+Status, UserId+DeviceIdentifierHash | AUTO_INCREMENT PK |
-| refresh_tokens | token_hash (unique), family_id, user_id+revoked_at_utc | AUTO_INCREMENT PK, rotation chain |
-| audit_logs | created_at_utc, user_id+created_at_utc, action | AUTO_INCREMENT PK, `additional_data` (json) |
+| refresh_tokens | token_hash (unique), family_id, user_id+revoked_at_ist | AUTO_INCREMENT PK, rotation chain |
+| audit_logs | created_at_ist, user_id+created_at_ist, action | AUTO_INCREMENT PK, `additional_data` (json) |
 | OtpRequests | ReferenceId (unique), MobileNumber+Purpose+CreatedAt | AUTO_INCREMENT PK |
 
 ## MySQL 8.x Specific Rules

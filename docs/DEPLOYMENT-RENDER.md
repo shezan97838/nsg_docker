@@ -35,3 +35,10 @@ Render does not publish a fixed proxy address. To find it: deploy, send one requ
 
 ## Smoke test
 Use `DEPLOYMENT-UBUNTU.md` section 7 against `https://<service>.onrender.com` (skip the nginx-specific checks).
+
+## Automatic database migrations (opt-in)
+`Database:MigrateOnStartup` is `true` in `appsettings.json`, so the app applies pending EF Core migrations whenever it starts (`StartupDatabaseMigrator`), locally and on Render. To turn it off for an environment set `Database__MigrateOnStartup=false` in Render → Environment (or in `appsettings.Development.json` locally). If the setting is missing the code treats it as off.
+- The database user needs DDL rights (`CREATE`, `ALTER`, `INDEX`, `DROP`, `REFERENCES`) on the target schema.
+- A failed migration stops the app, so the deploy fails visibly; read the Render log for the migration names and the error. Only migration names are logged.
+- **Single instance only.** EF Core 8 has no migration lock on MySQL: with two or more instances starting together they can race. Scale out only after migrations are applied (or turn the setting off).
+- Review each migration's SQL before pushing it (`dotnet ef migrations script`). It applies to whatever database `ConnectionStrings__MySql` points at, with no further prompt, and a migration that drops or renames data is not undone by redeploying an older image.

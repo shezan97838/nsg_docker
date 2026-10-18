@@ -67,7 +67,7 @@ MySQL on Linux treats database and table names as case-sensitive (`lower_case_ta
 |---|---|
 | Explicit snake_case tables, derived columns/keys/indexes/foreign keys, 64-character limit | `src/NSG.Mobile.Infrastructure/Persistence/DatabaseNamingStandard.cs` (runs when the model is built) |
 | Complete expected schema (every table, column, MySQL type, nullability) | `tests/NSG.Mobile.Tests/ExpectedDatabaseSchema.cs`, asserted by `DatabaseNamingRuleTests` |
-| No reserved words, FK/PK type equality, Restrict, check-constraint columns, UTC columns, lowercase create script | `DatabaseNamingRuleTests` |
+| No reserved words, FK/PK type equality, Restrict, check-constraint columns, IST `_ist` columns, lowercase create script | `DatabaseNamingRuleTests` |
 | Migration chain applies on real MySQL | the whole integration suite (`ApiFactory.ResetDatabaseAsync` runs every migration) |
 
 ## 4. Changing the schema: checklist

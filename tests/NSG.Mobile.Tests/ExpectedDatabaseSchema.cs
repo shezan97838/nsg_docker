@@ -9,6 +9,45 @@ internal static class ExpectedDatabaseSchema
     /// <summary>table -> "column|mysql type|NULL or NOT NULL", in column order.</summary>
     public static readonly IReadOnlyDictionary<string, string[]> Tables = new Dictionary<string, string[]>
     {
+        ["admin_profiles"] = new[]
+        {
+            "id|bigint|NOT NULL",
+            "nsg_number|varchar(30)|NOT NULL",
+            "role_id|int|NOT NULL",
+            "password_hash|varchar(500)|NULL",
+            "activation_status|int|NOT NULL",
+            "is_active|tinyint(1)|NOT NULL",
+            "failed_login_attempts|int|NOT NULL",
+            "lockout_end_ist|datetime(6)|NULL",
+            "last_login_at_ist|datetime(6)|NULL",
+            "created_at_ist|datetime(6)|NOT NULL",
+            "created_by|bigint|NULL",
+            "updated_at_ist|datetime(6)|NULL",
+            "updated_by|bigint|NULL",
+        },
+        ["admin_refresh_tokens"] = new[]
+        {
+            "id|bigint|NOT NULL",
+            "admin_profile_id|bigint|NOT NULL",
+            "token_hash|varchar(100)|NOT NULL",
+            "family_id|char(36)|NOT NULL",
+            "expires_at_ist|datetime(6)|NOT NULL",
+            "created_at_ist|datetime(6)|NOT NULL",
+            "created_by_ip|varchar(45)|NULL",
+            "revoked_at_ist|datetime(6)|NULL",
+            "revoke_reason|varchar(50)|NULL",
+            "reuse_detected_at_ist|datetime(6)|NULL",
+        },
+        ["admin_roles"] = new[]
+        {
+            "id|int|NOT NULL",
+            "role_code|varchar(50)|NOT NULL",
+            "role_name|varchar(100)|NOT NULL",
+            "description|varchar(500)|NULL",
+            "is_active|tinyint(1)|NOT NULL",
+            "created_at_ist|datetime(6)|NOT NULL",
+            "updated_at_ist|datetime(6)|NULL",
+        },
         ["approve_mobile_users"] = new[]
         {
             "id|bigint|NOT NULL",

@@ -103,8 +103,8 @@ refresh_tokens *──1 refresh_tokens (self-ref: rotation chain)
 |-------|-----|------------|-------------|
 | Users | int Id (identity) | MobileNumber (unique), ForceNumber (unique), Status | rowversion |
 | Devices | int Id (identity) | UserId+Status, UserId+DeviceIdentifierHash | — |
-| refresh_tokens | int id (identity) | token_hash (unique), family_id, user_id+revoked_at_utc | — |
-| audit_logs | bigint id (identity) | created_at_utc, user_id+created_at_utc, action | — (append-only) |
+| refresh_tokens | int id (identity) | token_hash (unique), family_id, user_id+revoked_at_ist | — |
+| audit_logs | bigint id (identity) | created_at_ist, user_id+created_at_ist, action | — (append-only) |
 | OtpRequests | int Id (identity) | ReferenceId (unique), MobileNumber+Purpose+CreatedAt | — |
 
 ## 4. Configuration Architecture

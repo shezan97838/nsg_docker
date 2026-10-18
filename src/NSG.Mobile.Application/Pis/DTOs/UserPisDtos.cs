@@ -112,23 +112,73 @@ public class UserPisFilter
     public MobileAppActivationStatus? MobileAppActivationStatus { get; set; }
 }
 
-/// <summary>Compact row for the personnel list. Contains no sensitive identifiers.</summary>
+/// <summary>
+/// Row for the personnel list: every personnel field of <see cref="UserPisResponseDto"/> except the audit metadata
+/// (created/updated timestamps and user ids) and the Aadhaar/PAN/PRAN/salary-account identifiers, which are not
+/// returned in bulk (not even masked) and remain available only from the single-record endpoint.
+/// </summary>
 public class UserPisListItemDto
 {
     public long Id { get; set; }
     public string NsgNumber { get; set; } = string.Empty;
     public string ServiceNumber { get; set; } = string.Empty;
     public string? FullName { get; set; }
+
     public int? NsgRankId { get; set; }
     public string? NsgRankName { get; set; }
     public int? NsgTradeId { get; set; }
     public string? NsgTradeName { get; set; }
+    public int? ParentDepartmentRankId { get; set; }
+    public string? ParentDepartmentRankName { get; set; }
+    public int? PdTradeId { get; set; }
+    public string? PdTradeName { get; set; }
     public int? NsgUnitId { get; set; }
     public string? NsgUnitName { get; set; }
-    public string? MobileNumber { get; set; }
+    public int? EducationId { get; set; }
+    public string? EducationName { get; set; }
+
+    public DateOnly? DateOfInductionInNsg { get; set; }
+    public DateOnly? SideSteppedOn { get; set; }
+    public int? SideSteppedFromNsgUnitId { get; set; }
+    public string? SideSteppedFromNsgUnitName { get; set; }
+    public DateOnly? DateOfRepatriation { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
+    public DateOnly? DateOfEnrollmentInGovtService { get; set; }
+    public DateOnly? DateOfSuperannuation { get; set; }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public PersonnelCategory? Category { get; set; }
+
+    public int? ReligionId { get; set; }
+    public string? ReligionName { get; set; }
+    public string? FatherName { get; set; }
+    public string? MotherName { get; set; }
+    public string? SpouseName { get; set; }
+    public string? NextOfKinMobileNumber { get; set; }
+    public int? NumberOfChildren { get; set; }
+    public string? MobileNumber { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public BloodGroupType? BloodGroup { get; set; }
+
+    public int? HeightCm { get; set; }
+    public decimal? WeightKg { get; set; }
+
+    public string? PermanentVillage { get; set; }
+    public string? PermanentPostOffice { get; set; }
+    public string? PermanentPoliceStation { get; set; }
+    public string? PermanentDistrict { get; set; }
+    public int? PermanentStateId { get; set; }
+    public string? PermanentStateName { get; set; }
+    public string? PermanentPinCode { get; set; }
+
+    public DateOnly? DateOfAme { get; set; }
+    public DateOnly? DateOfImmovablePropertyReturn { get; set; }
+    public decimal? EarnedLeaveDue { get; set; }
+    public decimal? HalfPayLeaveDue { get; set; }
+    public string? PaternityLeaveAvailed { get; set; }
+    public string? MaternityLeaveAvailed { get; set; }
+    public string? ChildCareLeaveAvailed { get; set; }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public MobileAppActivationStatus MobileAppActivationStatus { get; set; }

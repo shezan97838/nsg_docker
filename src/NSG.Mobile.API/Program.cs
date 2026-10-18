@@ -113,6 +113,27 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser()
               .RequireClaim(DomainConstants.MobileClaims.TokenUse, DomainConstants.MobileClaims.MobileAccess)
               .RequireClaim(DomainConstants.MobileClaims.ProfileId));
+
+    // Admin Portal (ADR-017): the AdminBearer scheme only accepts admin access tokens whose session and account are live; the policy
+    // additionally requires the admin token-use claim and the named fixed role. Roles are never read from a request.
+    void AddAdminPolicy(string name, params string[] roleCodes) => options.AddPolicy(name, policy =>
+    {
+        policy.AddAuthenticationSchemes(DomainConstants.AdminClaims.Scheme)
+              .RequireAuthenticatedUser()
+              .RequireClaim(DomainConstants.AdminClaims.TokenUse, DomainConstants.AdminClaims.AdminAccess)
+              .RequireClaim(DomainConstants.AdminClaims.ProfileId);
+        if (roleCodes.Length > 0) policy.RequireRole(roleCodes);
+    });
+
+    AddAdminPolicy(DomainConstants.Policies.RequireAdminAccount,
+        AdminRoleCodes.SuperAdmin, AdminRoleCodes.RegistrationAdmin, AdminRoleCodes.PisAdmin,
+        AdminRoleCodes.GrievanceAdmin, AdminRoleCodes.MediaCellAdmin, AdminRoleCodes.SalaryManagementAdmin);
+    AddAdminPolicy(DomainConstants.Policies.RequireSuperAdmin, AdminRoleCodes.SuperAdmin);
+    AddAdminPolicy(DomainConstants.Policies.RequireRegistrationAdmin, AdminRoleCodes.RegistrationAdmin);
+    AddAdminPolicy(DomainConstants.Policies.RequirePisAdmin, AdminRoleCodes.PisAdmin);
+    AddAdminPolicy(DomainConstants.Policies.RequireGrievanceAdmin, AdminRoleCodes.GrievanceAdmin);
+    AddAdminPolicy(DomainConstants.Policies.RequireMediaCellAdmin, AdminRoleCodes.MediaCellAdmin);
+    AddAdminPolicy(DomainConstants.Policies.RequireSalaryManagementAdmin, AdminRoleCodes.SalaryManagementAdmin);
 });
 
 // ── TEMPORARY: authorization bypass for local development while the token/login flow is built ──
@@ -235,6 +256,18 @@ if (!builder.Environment.IsDevelopment())
 
 var app = builder.Build();
 
+// ── One-off operator command: create the first Super Admin (ADR-017). Never runs unless asked for by name; the web host is not started. ──
+if (args.Length > 0 && string.Equals(args[0], BootstrapSuperAdminCommand.Name, StringComparison.Ordinal))
+{
+    return await BootstrapSuperAdminCommand.RunAsync(app.Services, args);
+}
+
+// ── Optional automatic migrations (off by default; set Database__MigrateOnStartup=true on a single-instance host). Not run for the one-off commands above. ──
+if (builder.Configuration.GetValue<bool>(StartupDatabaseMigrator.SettingName))
+{
+    await StartupDatabaseMigrator.ApplyAsync(app.Services, app.Logger, CancellationToken.None);
+}
+
 // ── Middleware Pipeline (order matters) ──
 
 if (authorizationDisabled)
@@ -309,6 +342,7 @@ app.MapControllers();
 // ── Run ──
 Log.Information("NSG Mobile API starting...");
 app.Run();
+return 0;
 
 // Exposes the entry point to WebApplicationFactory in integration tests.
 public partial class Program { }

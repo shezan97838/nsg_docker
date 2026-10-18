@@ -1,4 +1,5 @@
 # ADR-015: Mobile registration, OTP, MPIN and approval workflow
+> **Timestamp note (2026-10-18):** this document predates the IST decision. Where it says UTC or `*_utc`, the current rule is IST and `*_ist` columns (see `CLAUDE.md` "Timestamp Convention" and `docs/DATABASE-STANDARDS.md`). The text below is kept as the historical record.
 
 **Status:** Implemented. Migration `Add_Mobile_Profile_Approval_And_Grant_Tables` is **not applied to development or production**. On 2026-10-15 it was applied, rolled back and re-applied on MySQL 8.0.44 in the disposable database `nsg_mobileauth_test`; the generated `pending_nsg_number` column, its unique index and all check/unique constraints were exercised there, and the full test suite (507 tests) passed against it. OTP delivery has not been tested against a real SMS gateway; a fixed demo OTP mode exists for presentations (see below).
 

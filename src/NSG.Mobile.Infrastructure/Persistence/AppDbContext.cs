@@ -32,6 +32,9 @@ public class AppDbContext : DbContext
     public DbSet<ApproveMobileUser> ApproveMobileUsers => Set<ApproveMobileUser>();
     public DbSet<MobileAuthGrant> MobileAuthGrants => Set<MobileAuthGrant>();
     public DbSet<MobileRefreshToken> MobileRefreshTokens => Set<MobileRefreshToken>();
+    public DbSet<AdminRole> AdminRoles => Set<AdminRole>();
+    public DbSet<AdminProfile> AdminProfiles => Set<AdminProfile>();
+    public DbSet<AdminRefreshToken> AdminRefreshTokens => Set<AdminRefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

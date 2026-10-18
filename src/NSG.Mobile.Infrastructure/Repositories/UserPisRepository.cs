@@ -62,7 +62,13 @@ public class UserPisRepository : IUserPisRepository
         List<UserPis> items = await query
             .Include(p => p.NsgRank)
             .Include(p => p.NsgTrade)
+            .Include(p => p.ParentDepartmentRank)
+            .Include(p => p.PdTrade)
             .Include(p => p.NsgUnit)
+            .Include(p => p.SideSteppedFromNsgUnit)
+            .Include(p => p.Education)
+            .Include(p => p.Religion)
+            .Include(p => p.PermanentState)
             .OrderBy(p => p.NsgNumber).ThenBy(p => p.Id)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)

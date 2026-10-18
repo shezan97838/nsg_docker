@@ -11,8 +11,8 @@
 // Domain entity — pure C#, no EF attributes, no NuGet
 public class MyEntity {
     public int Id { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAtIst { get; set; } = IndianStandardTime.Now;
+    public DateTime UpdatedAtIst { get; set; } = IndianStandardTime.Now;
 }
 ```
 

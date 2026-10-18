@@ -1,4 +1,5 @@
 # ADR-014: Mobile user profile and mobile approval request entities
+> **Timestamp note (2026-10-18):** this document predates the IST decision. Where it says UTC or `*_utc`, the current rule is IST and `*_ist` columns (see `CLAUDE.md` "Timestamp Convention" and `docs/DATABASE-STANDARDS.md`). The text below is kept as the historical record.
 
 **Status:** Accepted. Entities and EF mappings exist; the migration was created with ADR-015 (`Add_Mobile_Profile_Approval_And_Grant_Tables`, **not applied to any database**). The workflow is implemented per ADR-015.
 

@@ -93,15 +93,30 @@ public class LinuxReadinessTests
     }
 
     [Fact]
-    public void The_application_never_applies_migrations_itself()
+    public void The_application_applies_migrations_only_through_the_opt_in_startup_migrator()
     {
         foreach (string file in Directory.GetFiles(Path.Combine(Root(), "src"), "*.cs", SearchOption.AllDirectories))
         {
             string separator = Path.DirectorySeparatorChar.ToString();
             if (file.Contains(separator + "Migrations" + separator) || file.Contains(separator + "obj" + separator) || file.Contains(separator + "bin" + separator)) continue;
+            if (Path.GetFileName(file) == "StartupDatabaseMigrator.cs") continue;   // the single, opt-in exception (Database__MigrateOnStartup, default off)
             string text = File.ReadAllText(file);
             Assert.DoesNotMatch(new Regex(@"\.(Migrate|MigrateAsync|EnsureCreated|EnsureCreatedAsync)\s*\("), text);
         }
+    }
+
+    [Fact]
+    public void Startup_migration_is_controlled_by_the_Database_MigrateOnStartup_setting()
+    {
+        string program = File.ReadAllText(Path.Combine(Root(), "src", "NSG.Mobile.API", "Program.cs"));
+        Assert.Contains("if (builder.Configuration.GetValue<bool>(StartupDatabaseMigrator.SettingName))", program);
+        Assert.Equal("Database:MigrateOnStartup", NSG.Mobile.API.Security.StartupDatabaseMigrator.SettingName);
+
+        // The switch lives in appsettings.json (an environment variable Database__MigrateOnStartup=false overrides it).
+        using System.Text.Json.JsonDocument settings = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(Root(), "src", "NSG.Mobile.API", "appsettings.json")));
+        Assert.True(settings.RootElement.GetProperty("Database").TryGetProperty("MigrateOnStartup", out System.Text.Json.JsonElement value));
+        Assert.True(value.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False);
     }
 
     [Fact]

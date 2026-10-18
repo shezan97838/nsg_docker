@@ -25,6 +25,34 @@ public static class DomainConstants
 
         /// <summary>A mobile-app access token issued by mobile-auth/login (registration grants are opaque secrets, not JWTs).</summary>
         public const string RequireMobileProfile = nameof(RequireMobileProfile);
+
+        // Admin Portal (ADR-017). Every one requires an admin access token (own audience and scheme) whose session is live.
+        // The six roles are fixed; a policy admits exactly the named role. Super Admin does not implicitly pass the others.
+
+        /// <summary>Any active Admin Portal account, whatever its role.</summary>
+        public const string RequireAdminAccount = nameof(RequireAdminAccount);
+        public const string RequireSuperAdmin = nameof(RequireSuperAdmin);
+        public const string RequireRegistrationAdmin = nameof(RequireRegistrationAdmin);
+        public const string RequirePisAdmin = nameof(RequirePisAdmin);
+        public const string RequireGrievanceAdmin = nameof(RequireGrievanceAdmin);
+        public const string RequireMediaCellAdmin = nameof(RequireMediaCellAdmin);
+        public const string RequireSalaryManagementAdmin = nameof(RequireSalaryManagementAdmin);
+    }
+
+    /// <summary>Custom JWT claims and the authentication scheme of Admin Portal access tokens.</summary>
+    public static class AdminClaims
+    {
+        /// <summary>Name of the JWT bearer scheme that accepts only admin access tokens (audience <c>Jwt:AdminAudience</c>).</summary>
+        public const string Scheme = "AdminBearer";
+
+        public const string ProfileId = "admin_profile_id";
+
+        /// <summary>Same claim name as <see cref="MobileClaims.TokenUse"/>; the value says which kind of token it is.</summary>
+        public const string TokenUse = MobileClaims.TokenUse;
+        public const string AdminAccess = "admin_access";
+
+        /// <summary>Session (refresh-token family) the access token belongs to; checked on every request.</summary>
+        public const string SessionId = MobileClaims.SessionId;
     }
 
     /// <summary>Custom JWT claims used by mobile-app access tokens.</summary>

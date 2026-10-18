@@ -39,7 +39,7 @@
 - Indexes for actual query patterns (not speculative)
 - `AsNoTracking()` for read-only queries
 - No lazy loading — explicit Include only
-- Review migrations before applying
+- Review migrations before applying. Startup auto-migration is controlled by `Database:MigrateOnStartup` in `appsettings.json` (currently `true`, see OQ-034)
 - Table, column, index and constraint names: lowercase `snake_case` — see "Database Standards" and `docs/DATABASE-STANDARDS.md`
 
 ## Security Rules
@@ -98,7 +98,7 @@ Full rules, rationale and checklist: **`docs/DATABASE-STANDARDS.md`** (authorita
 - The MySQL schema is the source of truth. Windows is for development, Ubuntu Linux for deployment; a green Windows build does not prove Linux compatibility.
 - **Tables and columns: lowercase `snake_case`** (`a-z`, digits, `_`; start with a letter; at most 64 characters; never a MySQL reserved word such as `rank`). No exceptions for new or existing objects except EF's own `__EFMigrationsHistory`.
 - Every table is mapped explicitly with `ToTable("...")`; columns, keys, indexes and foreign keys are named by `DatabaseNamingStandard` (`pk_`, `ix_`, `fk_`, `ck_`). C# names stay PascalCase; JSON and routes are public contracts and are not renamed to match the database.
-- Every `DateTime` is a UTC instant stored as `datetime(6)` in a `*_utc` column. Foreign key columns match the referenced key type exactly. Foreign keys use `Restrict`.
+- Every `DateTime` is an IST (Asia/Kolkata, UTC+05:30) instant stored as `datetime(6)` in a `*_ist` column and written with `IndianStandardTime.Now` (never `DateTime.UtcNow`/`DateTime.Now`); the API exposes it with the fixed `+05:30` offset (`IstTime.FromIst`). See "Timestamp Convention" in `CLAUDE.md`. Foreign key columns match the referenced key type exactly. Foreign keys use `Restrict`.
 - Migrations: review the generated SQL; never edit or rename one applied to a shared database (use a corrective migration); never run at startup; test renames on a copy of real data; ask for approval before applying to development or production.
 - Raw SQL only in tests/tools, parameterised, lowercase identifiers. `tests/NSG.Mobile.Tests/ExpectedDatabaseSchema.cs` pins the whole schema and `DatabaseNamingRuleTests` enforces the rules; update the pinned schema in the same change as any schema change.
 

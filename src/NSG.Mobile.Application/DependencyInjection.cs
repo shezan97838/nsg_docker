@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using NSG.Mobile.Application.Admin.Services;
 using NSG.Mobile.Application.EducationQualifications.Services;
 using NSG.Mobile.Application.Geography.Services;
 using NSG.Mobile.Application.Lookups.Services;
@@ -36,6 +37,10 @@ public static class DependencyInjection
         services.AddScoped<IMobileAuthService, MobileAuthService>();
         services.AddScoped<IMobileApprovalService, MobileApprovalService>();
         services.AddScoped<IMobileProfileService, MobileProfileService>();
+        services.AddScoped<IAdminAccountService, AdminAccountService>();
+        services.AddScoped<IAdminActivationService, AdminActivationService>();
+        services.AddScoped<IAdminAuthService, AdminAuthService>();
+        services.AddScoped<IAdminBootstrapService, AdminBootstrapService>();
         services.TryAddSingleton(TimeProvider.System);
 
         // FluentValidation — auto-discover all validators in this assembly

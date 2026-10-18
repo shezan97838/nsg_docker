@@ -1,4 +1,5 @@
 # Database Schema Audit
+> **Timestamp note (2026-10-18):** this document predates the IST decision. Where it says UTC or `*_utc`, the current rule is IST and `*_ist` columns (see `CLAUDE.md` "Timestamp Convention" and `docs/DATABASE-STANDARDS.md`). The text below is kept as the historical record.
 
 Audit date 2026-10-14. Standard applied: [DATABASE-STANDARDS.md](DATABASE-STANDARDS.md). Scope: every mapped entity, table, column, key, index, constraint, migration and SQL statement.
 
@@ -63,7 +64,7 @@ Table mapping: `AuditLogs`→`audit_logs`, `Cities`→`cities`, `Devices`→`dev
 - **The corrective migration was applied to the development database `nsg_mobile_dev` on 2026-10-14** (backup taken first; row counts and checksums of all populated tables identical afterwards; 171 columns, 14 foreign keys, 12 check constraints and 46 indexes match the model; 0 orphaned rows; no identifier with an uppercase letter). It has also been applied to the disposable test database. It has NOT been applied to production.
 - Build Linux databases by running the migrations (bundle/script with a migrator account). Do not restore a Windows schema dump (M4).
 - Migrating needs `ALTER, CREATE, DROP, INDEX, REFERENCES` on the schema; no stored-routine rights are needed any more.
-- Check the Linux server defaults before the first deployment: version 8.0.x, `lower_case_table_names=0`, default collation `utf8mb4_0900_ai_ci`, strict `sql_mode`, `time_zone` UTC.
+- Check the Linux server defaults before the first deployment: version 8.0.x, `lower_case_table_names=0`, default collation `utf8mb4_0900_ai_ci`, strict `sql_mode`, `time_zone` is irrelevant to stored values (IST is written by the application) but must not be relied on.
 - Moving data from Windows is now safe for names (dumps contain lowercase tables); verify with the row-count/checksum method used above.
 - The FileStorage path in `appsettings.json` is still a Windows path (unrelated to the schema, see docs/CONFIGURATION.md).
 

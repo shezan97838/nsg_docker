@@ -128,10 +128,50 @@ public static class DependencyInjection
                     return Task.CompletedTask;
                 }
             };
+        })
+        // Admin Portal tokens (ADR-017): a second scheme with its own audience. A mobile token fails here on the audience, and an
+        // admin token fails the default scheme above for the same reason, so neither kind is accepted in the other's place.
+        .AddJwtBearer(DomainConstants.AdminClaims.Scheme, options =>
+        {
+            var adminJwt = new JwtOptions();
+            jwtSection.Bind(adminJwt);
+            if (string.Equals(adminJwt.EffectiveAdminAudience, adminJwt.Audience, StringComparison.Ordinal))
+                throw new InvalidOperationException("Jwt:AdminAudience must differ from Jwt:Audience, otherwise admin and mobile tokens would be interchangeable.");
+
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = adminJwt.Issuer,
+                ValidAudience = adminJwt.EffectiveAdminAudience,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
+                ClockSkew = TimeSpan.FromSeconds(30),
+                ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 }
+            };
+
+            options.Events = new JwtBearerEvents
+            {
+                OnTokenValidated = async context =>
+                {
+                    // An admin access token is only as good as its session and its account: logout, a new sign-in, deactivation or a
+                    // changed role end it at once, not at its expiry. Anything that is not exactly an admin access token is refused.
+                    var principal = context.Principal;
+                    bool valid = principal?.FindFirst(DomainConstants.AdminClaims.TokenUse)?.Value == DomainConstants.AdminClaims.AdminAccess
+                        && Guid.TryParse(principal.FindFirst(DomainConstants.AdminClaims.SessionId)?.Value, out var sessionId)
+                        && long.TryParse(principal.FindFirst(DomainConstants.AdminClaims.ProfileId)?.Value, out var adminProfileId)
+                        && principal.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value is { Length: > 0 } roleCode
+                        && await context.HttpContext.RequestServices.GetRequiredService<IAdminRefreshTokenRepository>()
+                            .IsSessionActiveAsync(sessionId, adminProfileId, roleCode, context.HttpContext.RequestAborted);
+                    if (!valid) context.Fail("Admin session is not active.");
+                }
+            };
         });
 
         // Security services
         services.AddScoped<ITokenService, JwtTokenService>();
+        services.AddScoped<IAdminTokenService, AdminJwtTokenService>();
         services.AddScoped<IPasswordHashingService, PasswordHashingService>();
         services.AddScoped<IEncryptionService, AesEncryptionService>();
         services.AddScoped<IBlindIndexService, HmacBlindIndexService>();
@@ -181,6 +221,9 @@ public static class DependencyInjection
         services.AddScoped<IApproveMobileUserRepository, ApproveMobileUserRepository>();
         services.AddScoped<IMobileAuthGrantRepository, MobileAuthGrantRepository>();
         services.AddScoped<IMobileRefreshTokenRepository, MobileRefreshTokenRepository>();
+        services.AddScoped<IAdminProfileRepository, AdminProfileRepository>();
+        services.AddScoped<IAdminRoleRepository, AdminRoleRepository>();
+        services.AddScoped<IAdminRefreshTokenRepository, AdminRefreshTokenRepository>();
     }
 
     private static void AddInfrastructureServices(this IServiceCollection services)

@@ -19,5 +19,11 @@ public enum OtpPurpose
     PasswordReset = 3,
 
     /// <summary>OTP for sensitive data change (e.g., PIS change request approval).</summary>
-    SensitiveChange = 4
+    SensitiveChange = 4,
+
+    /// <summary>OTP that proves control of the PIS-registered mobile while activating an Admin Portal account.</summary>
+    AdminActivation = 5,
+
+    /// <summary>OTP for the second factor of an Admin Portal login (password + OTP).</summary>
+    AdminLogin = 6
 }

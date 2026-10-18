@@ -12,6 +12,14 @@ public class JwtOptions
     [Required] public string Audience { get; set; } = string.Empty;
     public int AccessTokenExpirationMinutes { get; set; } = 15;
     public int RefreshTokenExpirationDays { get; set; } = 7;
+
+    /// <summary>
+    /// Audience of Admin Portal access tokens. Optional: when empty it is <c>{Audience}.Admin</c>. It must differ from
+    /// <see cref="Audience"/>, which is what keeps admin and mobile tokens from being accepted in each other's place.
+    /// </summary>
+    public string? AdminAudience { get; set; }
+
+    public string EffectiveAdminAudience => string.IsNullOrWhiteSpace(AdminAudience) ? Audience + ".Admin" : AdminAudience;
 }
 
 /// <summary>Security configuration for OTP, lockout, and password policies.</summary>

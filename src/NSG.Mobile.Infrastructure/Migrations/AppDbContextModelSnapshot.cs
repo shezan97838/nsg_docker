@@ -22,6 +22,268 @@ namespace NSG.Mobile.Infrastructure.Migrations
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.AdminProfile", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ActivationStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("activation_status");
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by");
+
+                    b.Property<int>("FailedLoginAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("failed_login_attempts");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<DateTime?>("LastLoginAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("last_login_at_ist");
+
+                    b.Property<DateTime?>("LockoutEndIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("lockout_end_ist");
+
+                    b.Property<string>("NsgNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("nsg_number");
+
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("password_hash");
+
+                    b.Property<int>("RoleId")
+                        .HasColumnType("int")
+                        .HasColumnName("role_id");
+
+                    b.Property<DateTime?>("UpdatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at_ist");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_admin_profiles");
+
+                    b.HasIndex("NsgNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_admin_profiles_nsg_number");
+
+                    b.HasIndex("RoleId")
+                        .HasDatabaseName("ix_admin_profiles_role_id");
+
+                    b.ToTable("admin_profiles", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_admin_profiles_activation_status", "`activation_status` IN (0, 1)");
+
+                            t.HasCheckConstraint("ck_admin_profiles_active_has_password", "`activation_status` = 0 OR `password_hash` IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_admin_profiles_failed_login_attempts", "`failed_login_attempts` >= 0");
+
+                            t.HasCheckConstraint("ck_admin_profiles_password_hash", "`password_hash` IS NULL OR CHAR_LENGTH(`password_hash`) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.AdminRefreshToken", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AdminProfileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("admin_profile_id");
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<string>("CreatedByIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("varchar(45)")
+                        .HasColumnName("created_by_ip");
+
+                    b.Property<DateTime>("ExpiresAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("expires_at_ist");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("char(36)")
+                        .HasColumnName("family_id");
+
+                    b.Property<DateTime?>("ReuseDetectedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("reuse_detected_at_ist");
+
+                    b.Property<string>("RevokeReason")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("revoke_reason");
+
+                    b.Property<DateTime?>("RevokedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("revoked_at_ist");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("token_hash");
+
+                    b.HasKey("Id")
+                        .HasName("pk_admin_refresh_tokens");
+
+                    b.HasIndex("FamilyId")
+                        .HasDatabaseName("ix_admin_refresh_tokens_family_id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_admin_refresh_tokens_token_hash");
+
+                    b.HasIndex("AdminProfileId", "RevokedAtIst")
+                        .HasDatabaseName("ix_admin_refresh_tokens_admin_profile_id_revoked_at_ist");
+
+                    b.ToTable("admin_refresh_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.AdminRole", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("RoleCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("role_code");
+
+                    b.Property<string>("RoleName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("role_name");
+
+                    b.Property<DateTime?>("UpdatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at_ist");
+
+                    b.HasKey("Id")
+                        .HasName("pk_admin_roles");
+
+                    b.HasIndex("RoleCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_admin_roles_role_code");
+
+                    b.ToTable("admin_roles", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_admin_roles_role_code_format", "`role_code` REGEXP '^[A-Z][A-Z_]*$'");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAtIst = new DateTime(2026, 10, 18, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            Description = "Provisions and manages Admin Portal accounts.",
+                            IsActive = true,
+                            RoleCode = "SUPER_ADMIN",
+                            RoleName = "Super Admin"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAtIst = new DateTime(2026, 10, 18, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            Description = "Reviews mobile-app registration requests.",
+                            IsActive = true,
+                            RoleCode = "REGISTRATION_ADMIN",
+                            RoleName = "Registration Admin"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            CreatedAtIst = new DateTime(2026, 10, 18, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            Description = "Maintains personnel information system records.",
+                            IsActive = true,
+                            RoleCode = "PIS_ADMIN",
+                            RoleName = "PIS Admin"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            CreatedAtIst = new DateTime(2026, 10, 18, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            Description = "Handles grievances.",
+                            IsActive = true,
+                            RoleCode = "GRIEVANCE_ADMIN",
+                            RoleName = "Grievance Admin"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            CreatedAtIst = new DateTime(2026, 10, 18, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            Description = "Manages media cell content.",
+                            IsActive = true,
+                            RoleCode = "MEDIA_CELL_ADMIN",
+                            RoleName = "Media Cell Admin"
+                        },
+                        new
+                        {
+                            Id = 6,
+                            CreatedAtIst = new DateTime(2026, 10, 18, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            Description = "Manages salary information.",
+                            IsActive = true,
+                            RoleCode = "SALARY_MANAGEMENT_ADMIN",
+                            RoleName = "Salary Management Admin"
+                        });
+                });
+
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.ApproveMobileUser", b =>
                 {
                     b.Property<long>("Id")
@@ -1472,6 +1734,28 @@ namespace NSG.Mobile.Infrastructure.Migrations
 
                             t.HasCheckConstraint("ck_users_pis_superannuation_after_birth", "`date_of_superannuation` IS NULL OR `date_of_birth` IS NULL OR `date_of_superannuation` > `date_of_birth`");
                         });
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.AdminProfile", b =>
+                {
+                    b.HasOne("NSG.Mobile.Domain.Entities.AdminRole", "Role")
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_admin_profiles_admin_roles_role_id");
+
+                    b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.AdminRefreshToken", b =>
+                {
+                    b.HasOne("NSG.Mobile.Domain.Entities.AdminProfile", null)
+                        .WithMany()
+                        .HasForeignKey("AdminProfileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_admin_refresh_tokens_admin_profiles_admin_profile_id");
                 });
 
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.City", b =>
