@@ -47,6 +47,15 @@ public class CurrentUserService : ICurrentUserService
         }
     }
 
+    public long? AdminProfileId
+    {
+        get
+        {
+            var claim = _httpContextAccessor.HttpContext?.User?.FindFirst(DomainConstants.AdminClaims.ProfileId);
+            return claim != null && long.TryParse(claim.Value, out var id) ? id : null;
+        }
+    }
+
     public string? Role
         => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Role)?.Value;
 

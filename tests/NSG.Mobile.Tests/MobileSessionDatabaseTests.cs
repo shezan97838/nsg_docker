@@ -52,6 +52,8 @@ public class MobileSessionDatabaseTests : IAsyncLifetime
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `mobile_auth_grants`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `mobile_user_profiles`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `otp_requests`");
+        await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `admin_refresh_tokens`");
+        await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `admin_profiles`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `users_pis`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `audit_logs`");
     }
@@ -276,7 +278,7 @@ public class MobileSessionDatabaseTests : IAsyncLifetime
         HttpClient mobile = Bearer(tokens.Access);
 
         // A mobile token is not an administrator.
-        Assert.Equal(HttpStatusCode.Forbidden, (await mobile.GetAsync(Approvals)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await mobile.GetAsync(Approvals)).StatusCode);   // admin-portal endpoint: a mobile token is not an admin token
 
         // A staff token (even ITAdmin) is not a mobile session: it has no profile claim and fails the mobile policy.
         HttpClient admin = _factory.CreateClientFor("ITAdmin");

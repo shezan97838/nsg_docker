@@ -23,16 +23,20 @@ public class MobileAuthFlowTests : IAsyncLifetime
     private const string Nsg = "FLOW-1001", Mobile = "9812345670", Dob = "1991-03-04", DemoOtp = "123456";
 
     private readonly ApiFactory _factory;
-    private readonly HttpClient _anonymous, _admin;
+    private readonly HttpClient _anonymous;
+    private HttpClient _admin = null!;   // a real Registration Admin session, created in InitializeAsync
 
     public MobileAuthFlowTests(DatabaseFixture fixture)
     {
         _factory = fixture.Factory;
         _anonymous = _factory.CreateClientFor(null);
-        _admin = _factory.CreateClientFor(DomainConstants.Roles.ITAdmin);
     }
 
-    public async Task InitializeAsync() => await CleanAsync();
+    public async Task InitializeAsync()
+    {
+        await CleanAsync();
+        _admin = await RegistrationAdminSession.CreateAsync(_factory);
+    }
     public async Task DisposeAsync() => await CleanAsync();
 
     private async Task CleanAsync()
@@ -43,6 +47,8 @@ public class MobileAuthFlowTests : IAsyncLifetime
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `mobile_user_profiles`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `mobile_auth_grants`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `otp_requests`");
+        await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `admin_refresh_tokens`");
+        await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `admin_profiles`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `users_pis`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `audit_logs`");
     }
@@ -210,7 +216,7 @@ public class MobileAuthFlowTests : IAsyncLifetime
         // 6. The mobile token can change the MPIN but cannot reach the admin API.
         HttpClient mobile = _factory.CreateClientFor(null);
         mobile.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        Assert.Equal(HttpStatusCode.Forbidden, (await mobile.GetAsync(Approvals)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await mobile.GetAsync(Approvals)).StatusCode);   // admin-portal endpoint: a mobile token is not an admin token
         Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync(mobile, $"{Auth}/mpin/change", new { currentMpin = "2580", newMpin = "2580", confirmNewMpin = "2580" })).Status);
         Assert.Equal(HttpStatusCode.Unauthorized, (await PostAsync(mobile, $"{Auth}/mpin/change", new { currentMpin = "9999", newMpin = "1357", confirmNewMpin = "1357" })).Status);
         Assert.Equal(HttpStatusCode.OK, (await PostAsync(mobile, $"{Auth}/mpin/change", new { currentMpin = "2580", newMpin = "1357", confirmNewMpin = "1357" })).Status);

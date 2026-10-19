@@ -67,7 +67,7 @@ Compatibility:
 
 ### 7. Review fields and audit columns
 - Check `ck_approve_mobile_users_review_fields`: a Pending request has `approved_by` and `approved_at_utc` NULL; an Approved or Rejected request has both set.
-- `approved_by`, `created_by` and `updated_by` stay plain `int` with no foreign key, following the existing convention (`users.approved_by`, `users_pis.created_by`). The reviewer is an IT admin from `users`; the creator of a self-registered request has no user id, so `created_by` stays NULL for those rows.
+- `approved_by`, `created_by` and `updated_by` stay plain `int` with no foreign key, following the existing convention (`users.approved_by`, `users_pis.created_by`). The reviewer is the authenticated Registration Admin (admin-portal account, ADR-016/017): `approved_by` holds the `admin_profiles` id read from the signed `admin_profile_id` token claim (a legacy staff `users` id is still accepted from a numeric `sub`); the audit log `user_id` carries the same id; the creator of a self-registered request has no user id, so `created_by` stays NULL for those rows.
 
 ## Migration step checklist
 Create the migration; review its SQL; extend `ExpectedDatabaseSchema.cs` (both tables including `pending_nsg_number`); run the full suite on the test database; ask for approval before applying to development.

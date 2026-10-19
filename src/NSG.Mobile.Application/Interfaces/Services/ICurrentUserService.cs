@@ -12,6 +12,9 @@ public interface ICurrentUserService
     /// <summary>Mobile-app profile id from the 'profile_id' claim of a mobile access token; null for any other token.</summary>
     long? ProfileId { get; }
 
+    /// <summary>Admin-portal account id from the 'admin_profile_id' claim of an admin access token; null for any other token.</summary>
+    long? AdminProfileId { get; }
+
     /// <summary>Authenticated device ID from JWT claim.</summary>
     int? DeviceId { get; }
 

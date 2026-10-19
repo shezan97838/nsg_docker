@@ -41,6 +41,10 @@ public sealed class ReviewerIdentityResolver : IReviewerIdentityResolver
 
     public ReviewerIdentity? Resolve()
     {
+        // Admin-portal token: the reviewer is the admin account id from the signed admin_profile_id claim (its 'sub' is not an integer).
+        if (_currentUser.AdminProfileId is long adminId and > 0 and <= int.MaxValue)
+            return new ReviewerIdentity((int)adminId, null);
+
         if (_currentUser.UserId is int userId)
             return new ReviewerIdentity(userId, null);
 

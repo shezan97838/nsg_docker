@@ -47,6 +47,7 @@ public class AdminPortalFlowTests : IAsyncLifetime
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `admin_refresh_tokens`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `admin_profiles`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `otp_requests`");
+        await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `approve_mobile_users`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `users_pis`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `audit_logs`");
     }
@@ -515,6 +516,99 @@ public class AdminPortalFlowTests : IAsyncLifetime
         // Mobile approval is an admin-portal endpoint restricted to REGISTRATION_ADMIN: a Super Admin is authenticated but lacks the role.
         Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(superAdmin, "/api/v1/mobile-approval-requests")).Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(pisAdmin, "/api/v1/mobile-approval-requests")).Status);
+    }
+
+    // ───────────────────────── mobile approval decisions ─────────────────────────
+
+    private const string RegNsg = "ADM-0004", RegMobile = "9811110004", Decision = "/api/v1/mobile-approval-requests";
+
+    private async Task<(HttpStatusCode Status, JsonElement Body)> PutAsync(HttpClient client, string url, object body)
+    {
+        HttpResponseMessage response = await client.PutAsync(url, Json(body));
+        return await ReadAsync(response, "PUT " + url);
+    }
+
+    private async Task<long> SeedPendingRequestAsync(string nsg, string mobile)
+    {
+        await SeedPisAsync(nsg, mobile, "Applicant " + nsg);
+        await using AppDbContext ctx = _factory.CreateContext();
+        ApproveMobileUser request = new() { NsgNumber = nsg, MobileNumber = mobile, DateOfBirth = DateOnly.Parse(Dob) };
+        ctx.ApproveMobileUsers.Add(request);
+        await ctx.SaveChangesAsync();
+        return request.Id;
+    }
+
+    [Fact]
+    public async Task Registration_admin_can_approve_and_reject_and_their_admin_id_is_stored_in_approved_by_and_the_audit()
+    {
+        HttpClient superAdmin = await SuperAdminClientAsync();
+        await SeedPisAsync(RegNsg, RegMobile, "Registration Person");
+        await CreateAccountAsync(superAdmin, RegNsg, RegMobile, AdminRoleCodes.RegistrationAdmin);
+        await ActivateAsync(RegNsg, RegMobile);
+        string accessToken = (await SignInAsync(RegNsg)).GetProperty("accessToken").GetString()!;
+        HttpClient registrationAdmin = Bearer(accessToken);
+        int adminProfileId = int.Parse(new JwtSecurityTokenHandler().ReadJwtToken(accessToken).Claims.Single(c => c.Type == DomainConstants.AdminClaims.ProfileId).Value);
+
+        // The list works for the role.
+        Assert.Equal(HttpStatusCode.OK, (await GetAsync(registrationAdmin, Decision)).Status);
+
+        long toApprove = await SeedPendingRequestAsync("REQ-0001", "9811110011");
+        long toReject = await SeedPendingRequestAsync("REQ-0002", "9811110012");
+
+        (HttpStatusCode approveStatus, JsonElement approved) = await PutAsync(registrationAdmin, $"{Decision}/{toApprove}/decision", new { decision = "Approved", remarks = "ok" });
+        Assert.Equal(HttpStatusCode.OK, approveStatus);
+        Assert.Equal("Mobile approval request approved successfully.", approved.GetProperty("message").GetString());
+        Assert.Equal(adminProfileId, approved.GetProperty("data").GetProperty("reviewedBy").GetInt32());
+
+        (HttpStatusCode rejectStatus, JsonElement rejected) = await PutAsync(registrationAdmin, $"{Decision}/{toReject}/decision", new { decision = "Rejected" });
+        Assert.Equal(HttpStatusCode.OK, rejectStatus);
+        Assert.Equal("Mobile approval request rejected successfully.", rejected.GetProperty("message").GetString());
+
+        await using AppDbContext ctx = _factory.CreateContext();
+        ApproveMobileUser approvedRow = await ctx.ApproveMobileUsers.AsNoTracking().SingleAsync(r => r.Id == toApprove);
+        ApproveMobileUser rejectedRow = await ctx.ApproveMobileUsers.AsNoTracking().SingleAsync(r => r.Id == toReject);
+        Assert.Equal(MobileAppActivationStatus.Approved, approvedRow.ApprovalStatus);
+        Assert.Equal(adminProfileId, approvedRow.ApprovedBy);
+        Assert.NotNull(approvedRow.ApprovedAtIst);
+        Assert.Equal(MobileAppActivationStatus.Rejected, rejectedRow.ApprovalStatus);
+        Assert.Equal(adminProfileId, rejectedRow.ApprovedBy);
+
+        Assert.Equal(MobileAppActivationStatus.Approved, (await ctx.UsersPis.AsNoTracking().SingleAsync(p => p.NsgNumber == "REQ-0001")).MobileAppActivationStatus);
+        Assert.Equal(MobileAppActivationStatus.Rejected, (await ctx.UsersPis.AsNoTracking().SingleAsync(p => p.NsgNumber == "REQ-0002")).MobileAppActivationStatus);
+
+        AuditLog granted = await ctx.AuditLogs.AsNoTracking().SingleAsync(a => a.Action == AuditAction.ITApprovalGranted && a.EntityId == toApprove.ToString());
+        AuditLog denied = await ctx.AuditLogs.AsNoTracking().SingleAsync(a => a.Action == AuditAction.ITApprovalRejected && a.EntityId == toReject.ToString());
+        Assert.Equal(adminProfileId, granted.UserId);
+        Assert.Equal(adminProfileId, denied.UserId);
+
+        // First decision wins: deciding again is a conflict and changes nothing.
+        Assert.Equal(HttpStatusCode.Conflict, (await PutAsync(registrationAdmin, $"{Decision}/{toApprove}/decision", new { decision = "Rejected" })).Status);
+    }
+
+    [Fact]
+    public async Task Only_a_registration_admin_may_decide_every_other_caller_is_refused_and_nothing_changes()
+    {
+        HttpClient superAdmin = await SuperAdminClientAsync();
+        await SeedPisAsync(PisNsg, PisMobile, "Pis Person");
+        await CreateAccountAsync(superAdmin, PisNsg, PisMobile, AdminRoleCodes.PisAdmin);
+        await ActivateAsync(PisNsg, PisMobile);
+        HttpClient pisAdmin = Bearer((await SignInAsync(PisNsg)).GetProperty("accessToken").GetString()!);
+
+        long requestId = await SeedPendingRequestAsync("REQ-0003", "9811110013");
+        string url = $"{Decision}/{requestId}/decision";
+        object body = new { decision = "Approved" };
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await PutAsync(superAdmin, url, body)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await PutAsync(pisAdmin, url, body)).Status);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PutAsync(_anonymous, url, body)).Status);
+        foreach (string role in new[] { DomainConstants.Roles.ITAdmin, DomainConstants.Roles.SystemAdmin, AdminRoleCodes.RegistrationAdmin })
+            Assert.Equal(HttpStatusCode.Unauthorized, (await PutAsync(_factory.CreateClientFor(role), url, body)).Status); // staff/mobile-audience tokens, even with the role name
+
+        await using AppDbContext ctx = _factory.CreateContext();
+        ApproveMobileUser row = await ctx.ApproveMobileUsers.AsNoTracking().SingleAsync(r => r.Id == requestId);
+        Assert.Equal(MobileAppActivationStatus.Pending, row.ApprovalStatus);
+        Assert.Null(row.ApprovedBy);
+        Assert.False(await ctx.AuditLogs.AnyAsync(a => a.Action == AuditAction.ITApprovalGranted || a.Action == AuditAction.ITApprovalRejected));
     }
 
     // ───────────────────────── deactivation ─────────────────────────

@@ -22,17 +22,21 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
     private const string Auth = "/api/v1/mobile-auth";
 
     private readonly ApiFactory _factory;
-    private readonly HttpClient _admin, _employee, _anonymous;
+    private readonly HttpClient _employee, _anonymous;
+    private HttpClient _admin = null!;   // a real Registration Admin session, created in InitializeAsync
 
     public MobileAuthDatabaseTests(DatabaseFixture fixture)
     {
         _factory = fixture.Factory;
-        _admin = _factory.CreateClientFor(DomainConstants.Roles.ITAdmin);
         _employee = _factory.CreateClientFor(DomainConstants.Roles.Employee);
         _anonymous = _factory.CreateClientFor(null);
     }
 
-    public async Task InitializeAsync() => await CleanAsync();
+    public async Task InitializeAsync()
+    {
+        await CleanAsync();
+        _admin = await RegistrationAdminSession.CreateAsync(_factory);
+    }
     public async Task DisposeAsync() => await CleanAsync();
 
     private async Task CleanAsync()
@@ -42,6 +46,8 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `approve_mobile_users`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `mobile_user_profiles`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `mobile_auth_grants`");
+        await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `admin_refresh_tokens`");
+        await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `admin_profiles`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `users_pis`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `audit_logs`");
     }
@@ -184,7 +190,7 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
     {
         long id = await SeedPendingAsync();
         await using (AppDbContext ctx = _factory.CreateContext())
-            await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `users_pis`");
+            await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `users_pis` WHERE `nsg_number` = 'NSG-1'");
 
         HttpResponseMessage response = await _admin.PutAsync($"{Approvals}/{id}/decision", Json(new { decision = "Approved" }));
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -217,7 +223,7 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
     public async Task Admin_endpoints_answer_401_and_403_with_a_body()
     {
         long id = await SeedPendingAsync();
-        foreach ((HttpClient client, HttpStatusCode expected) in new[] { (_anonymous, HttpStatusCode.Unauthorized), (_employee, HttpStatusCode.Forbidden) })
+        foreach ((HttpClient client, HttpStatusCode expected) in new[] { (_anonymous, HttpStatusCode.Unauthorized), (_employee, HttpStatusCode.Unauthorized) })
         {
             HttpResponseMessage list = await client.GetAsync(Approvals);
             HttpResponseMessage decide = await client.PutAsync($"{Approvals}/{id}/decision", Json(new { decision = "Approved" }));

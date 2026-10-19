@@ -293,6 +293,7 @@ internal sealed class FakeCurrentUser : ICurrentUserService
 {
     public int? UserId { get; set; }
     public long? ProfileId { get; set; }
+    public long? AdminProfileId { get; set; }
     public int? DeviceId => null;
     public string? Role => null;
     public string? CorrelationId => "test-correlation";
