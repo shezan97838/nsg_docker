@@ -116,6 +116,14 @@ public class MobileAuthFlowDto
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? OtpExpiresAt { get; set; }
 
+    /// <summary>When the approval request was raised, in IST (+05:30). Present on login/check when a request exists.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? RequestedAt { get; set; }
+
+    /// <summary>When the approval request was approved, in IST (+05:30). Present on login/check once approved.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? ApprovedAt { get; set; }
+
     /// <summary>Short-lived single-use grant for the next step. It is not an access token and opens no protected API.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? GrantToken { get; set; }

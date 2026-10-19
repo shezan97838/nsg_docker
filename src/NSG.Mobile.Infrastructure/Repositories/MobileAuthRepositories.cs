@@ -182,6 +182,12 @@ public class ApproveMobileUserRepository : IApproveMobileUserRepository
         => await _context.ApproveMobileUsers.AsNoTracking()
             .FirstOrDefaultAsync(a => a.NsgNumber == nsgNumber && a.ApprovalStatus == MobileAppActivationStatus.Pending, cancellationToken);
 
+    public async Task<ApproveMobileUser?> GetLatestApprovedByNsgNumberAsync(string nsgNumber, CancellationToken cancellationToken = default)
+        => await _context.ApproveMobileUsers.AsNoTracking()
+            .Where(a => a.NsgNumber == nsgNumber && a.ApprovalStatus == MobileAppActivationStatus.Approved)
+            .OrderByDescending(a => a.ApprovedAtIst)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public async Task<PendingRequestOutcome> AddPendingAsync(ApproveMobileUser request, CancellationToken cancellationToken = default)
     {
         _context.ApproveMobileUsers.Add(request);

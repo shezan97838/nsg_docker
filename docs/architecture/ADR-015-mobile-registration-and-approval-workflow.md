@@ -16,8 +16,8 @@ Builds on ADR-014 (entities), ADR-005/-007 (phone login, biometrics boundary).
 | `POST mobile-auth/mpin/setup` | anonymous + MPIN-setup grant | Create the Employee profile |
 | `POST mobile-auth/mpin/change` | `RequireMobileProfile` | Change MPIN (current MPIN verified) |
 | `POST mobile-auth/mpin/reset` | anonymous + reset grant | Reset a forgotten MPIN |
-| `GET mobile-approval-requests` | `RequireITAdmin` | Paged list, `status`, `search` |
-| `PUT mobile-approval-requests/{id}/decision` | `RequireITAdmin` | Approve / reject |
+| `GET mobile-approval-requests` | `RequireRegistrationAdmin` (REGISTRATION_ADMIN) | Paged list, `status`, `search` |
+| `PUT mobile-approval-requests/{id}/decision` | `RequireRegistrationAdmin` (REGISTRATION_ADMIN) | Approve / reject |
 
 Success body: `{ "message", "data": { "status", ... } }` (`ApiResult<T>`); list: `PaginatedResponse` or `{ "message": "No mobile approval requests found." }`; every failure: ProblemDetails with `detail`. 201 is returned when an approval request or a profile is created. `GlobalExceptionHandlingMiddleware` now also writes a ProblemDetails body for bare 401/403/429 responses.
 

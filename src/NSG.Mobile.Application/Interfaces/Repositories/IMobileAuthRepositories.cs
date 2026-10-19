@@ -48,6 +48,9 @@ public interface IApproveMobileUserRepository
 {
     Task<ApproveMobileUser?> GetPendingByNsgNumberAsync(string nsgNumber, CancellationToken cancellationToken = default);
 
+    /// <summary>The most recently approved request of the NSG number, or null when none was ever approved.</summary>
+    Task<ApproveMobileUser?> GetLatestApprovedByNsgNumberAsync(string nsgNumber, CancellationToken cancellationToken = default);
+
     /// <summary>Inserts a Pending request; the unique <c>pending_nsg_number</c> index turns a concurrent duplicate into <see cref="PendingRequestOutcome.AlreadyPending"/>.</summary>
     Task<PendingRequestOutcome> AddPendingAsync(ApproveMobileUser request, CancellationToken cancellationToken = default);
 

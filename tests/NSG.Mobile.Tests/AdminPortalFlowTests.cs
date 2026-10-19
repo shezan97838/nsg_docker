@@ -512,7 +512,9 @@ public class AdminPortalFlowTests : IAsyncLifetime
         // An admin token, even a Super Admin's, is refused by mobile-profile and staff endpoints.
         Assert.Equal(HttpStatusCode.Unauthorized, (await GetAsync(superAdmin, "/api/v1/profile")).Status);
         Assert.Equal(HttpStatusCode.Unauthorized, (await GetAsync(superAdmin, "/api/v1/ranks")).Status);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await GetAsync(superAdmin, "/api/v1/mobile-approval-requests")).Status);
+        // Mobile approval is an admin-portal endpoint restricted to REGISTRATION_ADMIN: a Super Admin is authenticated but lacks the role.
+        Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(superAdmin, "/api/v1/mobile-approval-requests")).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(pisAdmin, "/api/v1/mobile-approval-requests")).Status);
     }
 
     // ───────────────────────── deactivation ─────────────────────────

@@ -8,10 +8,10 @@ using NSG.Mobile.Domain.Enums;
 
 namespace NSG.Mobile.API.Controllers;
 
-/// <summary>IT Admin review of mobile activation requests. Every endpoint requires the ITAdmin policy.</summary>
+/// <summary>Registration Admin review of mobile activation requests. Every endpoint requires the RequireRegistrationAdmin policy (admin-portal REGISTRATION_ADMIN role).</summary>
 [ApiController]
 [Route("api/v1/mobile-approval-requests")]
-[Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+[Authorize(Policy = DomainConstants.Policies.RequireRegistrationAdmin)]
 [Produces("application/json")]
 public class MobileApprovalRequestsController : ControllerBase
 {

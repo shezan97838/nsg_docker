@@ -163,7 +163,7 @@ While the token/login flow is being built, `Security:DisableAuthorization` can s
 
 ### Temporary reviewer `AsmarTest` (TEMP-DEV-REVIEWER)
 
-With no IT Admin login yet, approving or rejecting a mobile approval request (`PUT /api/v1/mobile-approval-requests/{id}/decision`) with no token user is recorded as reviewer `AsmarTest`.
+With no Registration Admin login yet, approving or rejecting a mobile approval request (`PUT /api/v1/mobile-approval-requests/{id}/decision`) with no token user is recorded as reviewer `AsmarTest`.
 
 * Active only when the bypass above is active, so only in Development; `ReviewerIdentityResolver` also checks `IHostEnvironment.IsDevelopment()`. Staging and Production never accept it (the request is refused with 401, as before).
 * A real token user id always wins. The name is never read from the request body.

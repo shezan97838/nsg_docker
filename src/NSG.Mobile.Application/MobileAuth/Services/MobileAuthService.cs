@@ -80,12 +80,34 @@ public class MobileAuthService : IMobileAuthService
         Identity id = Identity.From(request);
         Eligibility eligibility = await EvaluateAsync(id, cancellationToken);
 
-        return eligibility.Kind switch
+        // Dates come from approve_mobile_users: the pending request's requested_at_ist, or for an approved person the approval
+        // (requested_at_ist and approved_at_ist of the latest approved request). A field with no row behind it is omitted, never null.
+        switch (eligibility.Kind)
         {
-            EligibilityKind.ActiveProfile => Flow(MobileAuthStatus.MpinRequired),
-            EligibilityKind.OtpEligible => Flow(MobileAuthStatus.OtpRequired),
-            _ => Terminal(eligibility)
-        };
+            case EligibilityKind.PendingRequest:
+                return WithDates(Terminal(eligibility), eligibility.Request);
+
+            case EligibilityKind.ActiveProfile or EligibilityKind.OtpEligible:
+                ApproveMobileUser? approved = await _requests.GetLatestApprovedByNsgNumberAsync(id.Nsg, cancellationToken);
+                return WithDates(
+                    Flow(eligibility.Kind == EligibilityKind.ActiveProfile ? MobileAuthStatus.MpinRequired : MobileAuthStatus.OtpRequired),
+                    approved);
+
+            default:
+                return Terminal(eligibility);
+        }
+    }
+
+    private static Result<MobileAuthFlowDto> WithDates(Result<MobileAuthFlowDto> result, ApproveMobileUser? request)
+    {
+        if (result.IsSuccess && request != null)
+        {
+            result.Data!.RequestedAt = IstTime.FromIst(request.RequestedAtIst);
+            if (request.ApprovedAtIst.HasValue)
+                result.Data.ApprovedAt = IstTime.FromIst(request.ApprovedAtIst.Value);
+        }
+
+        return result;
     }
 
     // ───────────────────────── 2. login ─────────────────────────
@@ -491,7 +513,7 @@ public class MobileAuthService : IMobileAuthService
 
     private enum EligibilityKind { NotMatched, ActiveProfile, InactiveProfile, PendingRequest, AccessUnavailable, OtpEligible }
 
-    private sealed record Eligibility(EligibilityKind Kind, UserPis? Pis = null, MobileUserProfile? Profile = null)
+    private sealed record Eligibility(EligibilityKind Kind, UserPis? Pis = null, MobileUserProfile? Profile = null, ApproveMobileUser? Request = null)
     {
         /// <summary>The mobile number on record (ten digits) for the matched person.</summary>
         public string? RegisteredMobile => Profile?.MobileNumber ?? Pis?.MobileNumber;
@@ -542,7 +564,7 @@ public class MobileAuthService : IMobileAuthService
         if (pending != null)
         {
             return Matches(id, pending.NsgNumber, pending.MobileNumber, pending.DateOfBirth)
-                ? new Eligibility(EligibilityKind.PendingRequest)
+                ? new Eligibility(EligibilityKind.PendingRequest, Request: pending)
                 : new Eligibility(EligibilityKind.NotMatched);
         }
 

@@ -167,6 +167,11 @@ internal sealed class FakeRequestRepository : IApproveMobileUserRepository
     public Task<ApproveMobileUser?> GetPendingByNsgNumberAsync(string nsgNumber, CancellationToken cancellationToken = default)
         => Task.FromResult(Requests.FirstOrDefault(r => r.ApprovalStatus == MobileAppActivationStatus.Pending && string.Equals(r.NsgNumber, nsgNumber, StringComparison.OrdinalIgnoreCase)));
 
+    public Task<ApproveMobileUser?> GetLatestApprovedByNsgNumberAsync(string nsgNumber, CancellationToken cancellationToken = default)
+        => Task.FromResult(Requests
+            .Where(r => r.ApprovalStatus == MobileAppActivationStatus.Approved && string.Equals(r.NsgNumber, nsgNumber, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(r => r.ApprovedAtIst).FirstOrDefault());
+
     public Task<PendingRequestOutcome> AddPendingAsync(ApproveMobileUser request, CancellationToken cancellationToken = default)
     {
         // Mirrors ix_approve_mobile_users_pending_nsg_number.
