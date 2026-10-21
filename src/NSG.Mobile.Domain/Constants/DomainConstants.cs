@@ -37,6 +37,9 @@ public static class DomainConstants
         public const string RequireGrievanceAdmin = nameof(RequireGrievanceAdmin);
         public const string RequireMediaCellAdmin = nameof(RequireMediaCellAdmin);
         public const string RequireSalaryManagementAdmin = nameof(RequireSalaryManagementAdmin);
+
+        /// <summary>PIS lookup data: open to mobile and staff callers via the default scheme, and to Admin Portal callers with the PIS_ADMIN role.</summary>
+        public const string RequirePisLookupRead = nameof(RequirePisLookupRead);
     }
 
     /// <summary>Custom JWT claims and the authentication scheme of Admin Portal access tokens.</summary>

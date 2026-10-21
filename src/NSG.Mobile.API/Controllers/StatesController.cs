@@ -13,7 +13,7 @@ namespace NSG.Mobile.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/states")]
-[Authorize]
+[Authorize(Policy = DomainConstants.Policies.RequirePisLookupRead)]
 [Produces("application/json")]
 public class StatesController : ControllerBase
 {

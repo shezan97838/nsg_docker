@@ -12,7 +12,7 @@ namespace NSG.Mobile.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/parent-department-ranks")]
-[Authorize]
+[Authorize(Policy = DomainConstants.Policies.RequirePisLookupRead)]
 [Produces("application/json")]
 public class ParentDepartmentRanksController : ControllerBase
 {

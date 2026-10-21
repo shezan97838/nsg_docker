@@ -9,11 +9,11 @@ namespace NSG.Mobile.API.Controllers;
 
 /// <summary>
 /// NSG rank hierarchy management for the admin portal.
-/// Reads are open to any authenticated user (dropdown); writes require ITAdmin.
+/// Reads are open to any authenticated mobile/staff user or PIS Admin; writes require ITAdmin.
 /// </summary>
 [ApiController]
 [Route("api/v1/ranks")]
-[Authorize]
+[Authorize(Policy = DomainConstants.Policies.RequirePisLookupRead)]
 [Produces("application/json")]
 public class RankHierarchyController : ControllerBase
 {
@@ -27,7 +27,6 @@ public class RankHierarchyController : ControllerBase
     /// <summary>Get active ranks ordered by SrNo, for populating dropdowns.</summary>
     /// <remarks>Not paginated: the rank list is a small, bounded lookup (22 official ranks).</remarks>
     [HttpGet("dropdown")]
-    [Authorize]
     [ProducesResponseType(typeof(IReadOnlyList<RankDropdownDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetDropdown(CancellationToken cancellationToken)
     {
@@ -37,7 +36,6 @@ public class RankHierarchyController : ControllerBase
 
     /// <summary>Get a paginated list of ranks (admin view).</summary>
     [HttpGet]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
     [ProducesResponseType(typeof(PaginatedResponse<RankResponseDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] int pageNumber = 1,
@@ -54,7 +52,6 @@ public class RankHierarchyController : ControllerBase
 
     /// <summary>Get a rank by ID.</summary>
     [HttpGet("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
     [ProducesResponseType(typeof(RankResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)

@@ -10,7 +10,7 @@ namespace NSG.Mobile.API.Controllers;
 /// <summary>PD trade lookup. Reads are open to any authenticated user; writes require ITAdmin.</summary>
 [ApiController]
 [Route("api/v1/pd-trades")]
-[Authorize]
+[Authorize(Policy = DomainConstants.Policies.RequirePisLookupRead)]
 [Produces("application/json")]
 public class PdTradesController : ControllerBase
 {

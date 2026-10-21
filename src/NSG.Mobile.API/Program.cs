@@ -1,6 +1,8 @@
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
@@ -134,6 +136,23 @@ builder.Services.AddAuthorization(options =>
     AddAdminPolicy(DomainConstants.Policies.RequireGrievanceAdmin, AdminRoleCodes.GrievanceAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireMediaCellAdmin, AdminRoleCodes.MediaCellAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireSalaryManagementAdmin, AdminRoleCodes.SalaryManagementAdmin);
+
+    // PIS lookup APIs: open to mobile and staff callers via default scheme (Bearer), and to Admin Portal callers with the PIS_ADMIN role (AdminBearer).
+    options.AddPolicy(DomainConstants.Policies.RequirePisLookupRead, policy =>
+    {
+        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme, DomainConstants.AdminClaims.Scheme)
+              .RequireAuthenticatedUser()
+              .RequireAssertion(context =>
+              {
+                  if (context.User.HasClaim(DomainConstants.AdminClaims.TokenUse, DomainConstants.AdminClaims.AdminAccess))
+                  {
+                      return context.User.IsInRole(AdminRoleCodes.PisAdmin)
+                          || context.User.Claims.Any(c => c.Type == ClaimTypes.Role && string.Equals(c.Value, AdminRoleCodes.PisAdmin, StringComparison.OrdinalIgnoreCase));
+                  }
+
+                  return true;
+              });
+    });
 });
 
 // ── TEMPORARY: authorization bypass for local development while the token/login flow is built ──

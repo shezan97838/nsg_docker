@@ -12,7 +12,7 @@ namespace NSG.Mobile.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/religions")]
-[Authorize]
+[Authorize(Policy = DomainConstants.Policies.RequirePisLookupRead)]
 [Produces("application/json")]
 public class ReligionsController : ControllerBase
 {

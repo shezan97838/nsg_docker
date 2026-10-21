@@ -12,7 +12,7 @@ namespace NSG.Mobile.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/nsg-units")]
-[Authorize]
+[Authorize(Policy = DomainConstants.Policies.RequirePisLookupRead)]
 [Produces("application/json")]
 public class NsgUnitsController : ControllerBase
 {

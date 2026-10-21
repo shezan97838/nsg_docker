@@ -10,7 +10,7 @@ namespace NSG.Mobile.API.Controllers;
 /// <summary>NSG trade lookup. Reads are open to any authenticated user; writes require ITAdmin.</summary>
 [ApiController]
 [Route("api/v1/nsg-trades")]
-[Authorize]
+[Authorize(Policy = DomainConstants.Policies.RequirePisLookupRead)]
 [Produces("application/json")]
 public class NsgTradesController : ControllerBase
 {
