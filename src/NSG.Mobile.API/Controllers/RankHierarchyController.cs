@@ -9,7 +9,7 @@ namespace NSG.Mobile.API.Controllers;
 
 /// <summary>
 /// NSG rank hierarchy management for the admin portal.
-/// Reads are open to any authenticated mobile/staff user or PIS Admin; writes require ITAdmin.
+/// Reads are open to any authenticated mobile/staff user or PIS Admin; writes require PIS Admin.
 /// </summary>
 [ApiController]
 [Route("api/v1/ranks")]
@@ -62,7 +62,7 @@ public class RankHierarchyController : ControllerBase
 
     /// <summary>Create a rank.</summary>
     [HttpPost]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(RankResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateRankRequestDto request, CancellationToken cancellationToken)
@@ -75,7 +75,7 @@ public class RankHierarchyController : ControllerBase
 
     /// <summary>Update a rank (including activate/deactivate via IsActive).</summary>
     [HttpPut("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(RankResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -90,7 +90,7 @@ public class RankHierarchyController : ControllerBase
     /// personnel record is assigned it.
     /// </summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]

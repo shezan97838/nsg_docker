@@ -9,13 +9,13 @@ using NSG.Mobile.Domain.Enums;
 namespace NSG.Mobile.API.Controllers;
 
 /// <summary>
-/// Personnel (PIS) master records for the admin portal. Every endpoint requires ITAdmin: the data covers all employees
+/// Personnel (PIS) master records for the admin portal. Every endpoint requires PIS Admin: the data covers all employees
 /// and includes sensitive identifiers (returned masked only). An employee viewing their own record is the Profile
 /// module's concern, not this controller's.
 /// </summary>
 [ApiController]
 [Route("api/v1/users-pis")]
-[Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+[Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
 [Produces("application/json")]
 public class UsersPisController : ControllerBase
 {

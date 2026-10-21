@@ -503,7 +503,7 @@ public class AdminPortalFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, (await GetAsync(_anonymous, $"{Auth}/me")).Status);
 
         // A mobile-audience token, even one carrying an admin-looking role, is refused by every admin endpoint.
-        foreach (string role in new[] { "SUPER_ADMIN", DomainConstants.Roles.SystemAdmin, DomainConstants.Roles.ITAdmin })
+        foreach (string role in new[] { "SUPER_ADMIN", DomainConstants.Roles.SuperAdmin, DomainConstants.Roles.PisAdmin })
         {
             HttpClient mobileLike = _factory.CreateClientFor(role);
             Assert.Equal(HttpStatusCode.Unauthorized, (await GetAsync(mobileLike, Accounts)).Status);
@@ -512,7 +512,7 @@ public class AdminPortalFlowTests : IAsyncLifetime
 
         // An admin token, even a Super Admin's, is refused by mobile-profile and staff endpoints.
         Assert.Equal(HttpStatusCode.Unauthorized, (await GetAsync(superAdmin, "/api/v1/profile")).Status);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await GetAsync(superAdmin, "/api/v1/onboarding/pending")).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(superAdmin, "/api/v1/onboarding/pending")).Status);
         // Mobile approval is an admin-portal endpoint restricted to REGISTRATION_ADMIN: a Super Admin is authenticated but lacks the role.
         Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(superAdmin, "/api/v1/mobile-approval-requests")).Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(pisAdmin, "/api/v1/mobile-approval-requests")).Status);
@@ -605,7 +605,7 @@ public class AdminPortalFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await PutAsync(superAdmin, url, body)).Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await PutAsync(pisAdmin, url, body)).Status);
         Assert.Equal(HttpStatusCode.Unauthorized, (await PutAsync(_anonymous, url, body)).Status);
-        foreach (string role in new[] { DomainConstants.Roles.ITAdmin, DomainConstants.Roles.SystemAdmin, AdminRoleCodes.RegistrationAdmin })
+        foreach (string role in new[] { DomainConstants.Roles.PisAdmin, DomainConstants.Roles.SuperAdmin, AdminRoleCodes.RegistrationAdmin })
             Assert.Equal(HttpStatusCode.Unauthorized, (await PutAsync(_factory.CreateClientFor(role), url, body)).Status); // staff/mobile-audience tokens, even with the role name
 
         await using AppDbContext ctx = _factory.CreateContext();

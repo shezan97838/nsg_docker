@@ -30,7 +30,7 @@ public class PisLookupAuthorizationTests : IAsyncLifetime
     private HttpClient _pisAdmin = null!;
     private HttpClient _superAdmin = null!;
     private HttpClient _employee = null!;
-    private HttpClient _itAdmin = null!;
+    private HttpClient _staffPisAdmin = null!;
     private HttpClient _anonymous = null!;
 
     public PisLookupAuthorizationTests(DatabaseFixture fixture)
@@ -43,7 +43,7 @@ public class PisLookupAuthorizationTests : IAsyncLifetime
         await SeedLookupDataAsync();
         (_pisAdmin, _superAdmin) = await PisAdminSession.CreateClientsAsync(_factory);
         _employee = _factory.CreateClientFor(DomainConstants.Roles.Employee);
-        _itAdmin = _factory.CreateClientFor(DomainConstants.Roles.ITAdmin);
+        _staffPisAdmin = _factory.CreateClientFor(DomainConstants.Roles.PisAdmin);
         _anonymous = _factory.CreateClientFor(null);
     }
 
@@ -154,9 +154,9 @@ public class PisLookupAuthorizationTests : IAsyncLifetime
 
     [Theory]
     [MemberData(nameof(AllLookupEndpoints))]
-    public async Task ITAdmin_staff_user_can_access_lookup_api_and_receives_200_OK(string endpoint)
+    public async Task PisAdmin_staff_user_can_access_lookup_api_and_receives_200_OK(string endpoint)
     {
-        HttpResponseMessage response = await _itAdmin.GetAsync(endpoint);
+        HttpResponseMessage response = await _staffPisAdmin.GetAsync(endpoint);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 }

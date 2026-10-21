@@ -37,18 +37,62 @@ public class MobileProfileService : IMobileProfileService
 
         return Result.Success(new MobileProfileResponseDto
         {
+            // ── Identity and service ──
             NsgNumber = pis.NsgNumber,
             ServiceNumber = pis.ServiceNumber,
             FullName = pis.FullName,
-            RankName = pis.NsgRank?.RankName,
-            ParentDepartmentRankName = pis.ParentDepartmentRank?.Name,
+            NsgRankId = pis.NsgRankId,
+            NsgRankName = pis.NsgRank?.RankName,
+            NsgTradeId = pis.NsgTradeId,
             NsgTradeName = pis.NsgTrade?.NsgTradeName,
+            ParentDepartmentRankId = pis.ParentDepartmentRankId,
+            ParentDepartmentRankName = pis.ParentDepartmentRank?.Name,
+            PdTradeId = pis.PdTradeId,
+            PdTradeName = pis.PdTrade?.PdTradeName,
+            NsgUnitId = pis.NsgUnitId,
             NsgUnitName = pis.NsgUnit?.Name,
-            Category = pis.Category?.ToString(),
-            DateOfBirth = pis.DateOfBirth,
+            EducationId = pis.EducationId,
+            EducationName = pis.Education?.CourseName,
             DateOfInductionInNsg = pis.DateOfInductionInNsg,
+            SideSteppedOn = pis.SideSteppedOn,
+            SideSteppedFromNsgUnitId = pis.SideSteppedFromNsgUnitId,
+            SideSteppedFromNsgUnitName = pis.SideSteppedFromNsgUnit?.Name,
+            DateOfRepatriation = pis.DateOfRepatriation,
+            DateOfBirth = pis.DateOfBirth,
+            DateOfEnrollmentInGovtService = pis.DateOfEnrollmentInGovtService,
             DateOfSuperannuation = pis.DateOfSuperannuation,
-            MobileNumber = pis.MobileNumber
+
+            // ── Personal and family ──
+            Category = pis.Category,
+            ReligionId = pis.ReligionId,
+            ReligionName = pis.Religion?.Name,
+            FatherName = pis.FatherName,
+            MotherName = pis.MotherName,
+            SpouseName = pis.SpouseName,
+            NextOfKinMobileNumber = pis.NextOfKinMobileNumber,
+            NumberOfChildren = pis.NumberOfChildren,
+            MobileNumber = pis.MobileNumber,
+            BloodGroup = pis.BloodGroup,
+            HeightCm = pis.HeightCm.HasValue ? (int)pis.HeightCm.Value : null,
+            WeightKg = pis.WeightKg,
+
+            // ── Permanent address ──
+            PermanentVillage = pis.PermanentVillage,
+            PermanentPostOffice = pis.PermanentPostOffice,
+            PermanentPoliceStation = pis.PermanentPoliceStation,
+            PermanentDistrict = pis.PermanentDistrict,
+            PermanentStateId = pis.PermanentStateId,
+            PermanentStateName = pis.PermanentState?.Name,
+            PermanentPinCode = pis.PermanentPinCode,
+
+            // ── Service and leave summaries ──
+            DateOfAme = pis.DateOfAme,
+            DateOfImmovablePropertyReturn = pis.DateOfImmovablePropertyReturn,
+            EarnedLeaveDue = pis.EarnedLeaveDue,
+            HalfPayLeaveDue = pis.HalfPayLeaveDue,
+            PaternityLeaveAvailed = pis.PaternityLeaveAvailed,
+            MaternityLeaveAvailed = pis.MaternityLeaveAvailed,
+            ChildCareLeaveAvailed = pis.ChildCareLeaveAvailed
         });
     }
 }

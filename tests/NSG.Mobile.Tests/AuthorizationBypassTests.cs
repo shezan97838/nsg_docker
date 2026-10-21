@@ -51,7 +51,7 @@ public class AuthorizationBypassTests
             Environment.SetEnvironmentVariable(EnvVariable, "true");   // ApiFactory's constructor resets it to false
             using HttpClient anonymous = factory.CreateClientFor(null);
             pis = anonymous.GetAsync("/api/v1/users-pis").GetAwaiter().GetResult().StatusCode;
-            ranks = anonymous.GetAsync("/api/v1/ranks").GetAwaiter().GetResult().StatusCode;   // ITAdmin-only endpoint
+            ranks = anonymous.GetAsync("/api/v1/ranks").GetAwaiter().GetResult().StatusCode;   // PIS Admin endpoint
             write = anonymous.DeleteAsync("/api/v1/users-pis/424242").GetAwaiter().GetResult().StatusCode;
         });
         await Task.CompletedTask;
@@ -103,7 +103,7 @@ public class AuthorizationBypassTests
     public async Task Handler_satisfies_every_pending_requirement_including_role_and_deny_anonymous()
     {
         AuthorizationHandlerContext context = new(
-            new IAuthorizationRequirement[] { new DenyAnonymousAuthorizationRequirement(), new RolesAuthorizationRequirement(new[] { "ITAdmin" }) },
+            new IAuthorizationRequirement[] { new DenyAnonymousAuthorizationRequirement(), new RolesAuthorizationRequirement(new[] { "PisAdmin" }) },
             new ClaimsPrincipal(new ClaimsIdentity()),   // anonymous, no roles
             resource: null);
 

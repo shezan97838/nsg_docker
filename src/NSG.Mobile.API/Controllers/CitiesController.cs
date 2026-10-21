@@ -42,7 +42,7 @@ public class CitiesController : ControllerBase
 
     /// <summary>Create a city/town.</summary>
     [HttpPost]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(CityResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -56,7 +56,7 @@ public class CitiesController : ControllerBase
 
     /// <summary>Update a city/town.</summary>
     [HttpPut("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(CityResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -69,7 +69,7 @@ public class CitiesController : ControllerBase
 
     /// <summary>Delete a city/town.</summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)

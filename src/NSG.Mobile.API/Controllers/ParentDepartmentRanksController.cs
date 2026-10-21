@@ -8,7 +8,7 @@ using NSG.Mobile.Domain.Constants;
 namespace NSG.Mobile.API.Controllers;
 
 /// <summary>
-/// Parent department rank lookup management. Reads are open to any authenticated user; writes require ITAdmin.
+/// Parent department rank lookup management. Reads are open to any authenticated user; writes require PIS Admin.
 /// </summary>
 [ApiController]
 [Route("api/v1/parent-department-ranks")]
@@ -60,7 +60,7 @@ public class ParentDepartmentRanksController : ControllerBase
 
     /// <summary>Create a parent department rank.</summary>
     [HttpPost]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(LookupResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -74,7 +74,7 @@ public class ParentDepartmentRanksController : ControllerBase
 
     /// <summary>Update a parent department rank (including activate/deactivate via IsActive).</summary>
     [HttpPut("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(LookupResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -87,7 +87,7 @@ public class ParentDepartmentRanksController : ControllerBase
 
     /// <summary>Delete a parent department rank. Returns 409 when personnel records still reference it.</summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]

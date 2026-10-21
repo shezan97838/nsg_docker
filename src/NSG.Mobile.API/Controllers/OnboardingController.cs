@@ -11,11 +11,11 @@ namespace NSG.Mobile.API.Controllers;
 /// IT Cell onboarding management controller.
 /// SOW §3.7 Step 2: IT Cell verifies identity and approves/rejects registration.
 /// 
-/// All endpoints require ITAdmin role.
+/// All endpoints require PIS Admin policy.
 /// </summary>
 [ApiController]
 [Route("api/v1/onboarding")]
-[Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+[Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
 [Produces("application/json")]
 public class OnboardingController : ControllerBase
 {

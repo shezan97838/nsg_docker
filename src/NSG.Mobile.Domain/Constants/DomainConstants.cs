@@ -10,17 +10,17 @@ public static class DomainConstants
     public static class Roles
     {
         public const string Employee = nameof(Employee);
-        public const string ITAdmin = nameof(ITAdmin);
-        public const string NodalOfficer = nameof(NodalOfficer);
-        public const string SystemAdmin = nameof(SystemAdmin);
+        public const string SuperAdmin = nameof(SuperAdmin);
+        public const string RegistrationAdmin = nameof(RegistrationAdmin);
+        public const string PisAdmin = nameof(PisAdmin);
+        public const string GrievanceAdmin = nameof(GrievanceAdmin);
+        public const string MediaCellAdmin = nameof(MediaCellAdmin);
+        public const string SalaryManagementAdmin = nameof(SalaryManagementAdmin);
     }
 
     /// <summary>Authorization policy names.</summary>
     public static class Policies
     {
-        public const string RequireITAdmin = nameof(RequireITAdmin);
-        public const string RequireNodalOfficer = nameof(RequireNodalOfficer);
-        public const string RequireSystemAdmin = nameof(RequireSystemAdmin);
         public const string RequireActiveAccount = nameof(RequireActiveAccount);
 
         /// <summary>A mobile-app access token issued by mobile-auth/login (registration grants are opaque secrets, not JWTs).</summary>

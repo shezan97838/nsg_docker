@@ -142,7 +142,7 @@ public class MobileApprovalReviewerTests
     [Fact]
     public void The_registration_admin_policy_is_a_different_policy_from_the_staff_and_super_admin_ones()
     {
-        Assert.NotEqual(DomainConstants.Policies.RequireITAdmin, DomainConstants.Policies.RequireRegistrationAdmin);
+        Assert.NotEqual(DomainConstants.Policies.RequirePisAdmin, DomainConstants.Policies.RequireRegistrationAdmin);
         Assert.NotEqual(DomainConstants.Policies.RequireSuperAdmin, DomainConstants.Policies.RequireRegistrationAdmin);
         Assert.Equal("REGISTRATION_ADMIN", AdminRoleCodes.RegistrationAdmin);
     }

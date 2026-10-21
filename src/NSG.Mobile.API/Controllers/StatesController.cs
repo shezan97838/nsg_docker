@@ -57,7 +57,7 @@ public class StatesController : ControllerBase
 
     /// <summary>Create a state/UT.</summary>
     [HttpPost]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(StateResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -71,7 +71,7 @@ public class StatesController : ControllerBase
 
     /// <summary>Update a state/UT.</summary>
     [HttpPut("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(StateResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -84,7 +84,7 @@ public class StatesController : ControllerBase
 
     /// <summary>Delete a state/UT. Rejected with 409 while it still has cities.</summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]

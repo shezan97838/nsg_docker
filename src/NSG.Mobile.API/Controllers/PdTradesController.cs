@@ -49,7 +49,7 @@ public class PdTradesController : ControllerBase
 
     /// <summary>Create a PD trade.</summary>
     [HttpPost]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(PdTradeResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -63,7 +63,7 @@ public class PdTradesController : ControllerBase
 
     /// <summary>Update a PD trade (name and active flag; both required). Returns 409 when deactivating a trade that personnel use.</summary>
     [HttpPut("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(PdTradeResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -76,7 +76,7 @@ public class PdTradesController : ControllerBase
 
     /// <summary>"Delete" a PD trade: deactivates it (idempotent). Never hard-deletes; returns 409 while personnel use it.</summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]

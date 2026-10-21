@@ -16,7 +16,7 @@ public class GeographyApiTests : IAsyncLifetime
     public GeographyApiTests(DatabaseFixture fixture)
     {
         _factory = fixture.Factory;
-        _admin = _factory.CreateClientFor(DomainConstants.Roles.ITAdmin);
+        _admin = _factory.CreateClientFor(DomainConstants.Roles.PisAdmin);
         _employee = _factory.CreateClientFor(DomainConstants.Roles.Employee);
         _anonymous = _factory.CreateClientFor(null);
     }

@@ -8,7 +8,7 @@ using NSG.Mobile.Domain.Constants;
 namespace NSG.Mobile.API.Controllers;
 
 /// <summary>
-/// Religion lookup management. Reads are open to any authenticated user; writes require ITAdmin.
+/// Religion lookup management. Reads are open to any authenticated user; writes require PIS Admin.
 /// </summary>
 [ApiController]
 [Route("api/v1/religions")]
@@ -60,7 +60,7 @@ public class ReligionsController : ControllerBase
 
     /// <summary>Create a religion.</summary>
     [HttpPost]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(LookupResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -74,7 +74,7 @@ public class ReligionsController : ControllerBase
 
     /// <summary>Update a religion (including activate/deactivate via IsActive).</summary>
     [HttpPut("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(typeof(LookupResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -87,7 +87,7 @@ public class ReligionsController : ControllerBase
 
     /// <summary>Delete a religion. Returns 409 when personnel records still reference it.</summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireITAdmin)]
+    [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]

@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NSG.Mobile.Domain.Common;
+using NSG.Mobile.Domain.Constants;
 using NSG.Mobile.Domain.Entities;
 using NSG.Mobile.Domain.Enums;
 using NSG.Mobile.Infrastructure.Persistence;
@@ -280,8 +281,8 @@ public class MobileSessionDatabaseTests : IAsyncLifetime
         // A mobile token is not an administrator.
         Assert.Equal(HttpStatusCode.Unauthorized, (await mobile.GetAsync(Approvals)).StatusCode);   // admin-portal endpoint: a mobile token is not an admin token
 
-        // A staff token (even ITAdmin) is not a mobile session: it has no profile claim and fails the mobile policy.
-        HttpClient admin = _factory.CreateClientFor("ITAdmin");
+        // A staff token (even PisAdmin) is not a mobile session: it has no profile claim and fails the mobile policy.
+        HttpClient admin = _factory.CreateClientFor(DomainConstants.Roles.PisAdmin);
         Assert.Equal(HttpStatusCode.Forbidden, (await admin.PostAsync($"{Auth}/mpin/change", Json(new { currentMpin = Mpin, newMpin = "1357", confirmNewMpin = "1357" }))).StatusCode);
 
         // A refresh token is not a bearer token, and an access token is not a refresh token.

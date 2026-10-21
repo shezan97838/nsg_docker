@@ -101,15 +101,6 @@ builder.Services.AddFluentValidationAutoValidation();
 // ── Authorization Policies ──
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy(DomainConstants.Policies.RequireITAdmin, policy =>
-        policy.RequireRole(DomainConstants.Roles.ITAdmin, DomainConstants.Roles.SystemAdmin));
-
-    options.AddPolicy(DomainConstants.Policies.RequireNodalOfficer, policy =>
-        policy.RequireRole(DomainConstants.Roles.NodalOfficer, DomainConstants.Roles.SystemAdmin));
-
-    options.AddPolicy(DomainConstants.Policies.RequireSystemAdmin, policy =>
-        policy.RequireRole(DomainConstants.Roles.SystemAdmin));
-
     // Mobile-app users: only a token issued by mobile-auth/login carries this claim.
     options.AddPolicy(DomainConstants.Policies.RequireMobileProfile, policy =>
         policy.RequireAuthenticatedUser()
@@ -132,10 +123,28 @@ builder.Services.AddAuthorization(options =>
         AdminRoleCodes.GrievanceAdmin, AdminRoleCodes.MediaCellAdmin, AdminRoleCodes.SalaryManagementAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireSuperAdmin, AdminRoleCodes.SuperAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireRegistrationAdmin, AdminRoleCodes.RegistrationAdmin);
-    AddAdminPolicy(DomainConstants.Policies.RequirePisAdmin, AdminRoleCodes.PisAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireGrievanceAdmin, AdminRoleCodes.GrievanceAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireMediaCellAdmin, AdminRoleCodes.MediaCellAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireSalaryManagementAdmin, AdminRoleCodes.SalaryManagementAdmin);
+
+    // PIS Admin: accepts Admin Portal callers with PIS_ADMIN role (AdminBearer) and authenticated callers with PisAdmin role (Bearer).
+    options.AddPolicy(DomainConstants.Policies.RequirePisAdmin, policy =>
+    {
+        policy.AddAuthenticationSchemes(DomainConstants.AdminClaims.Scheme, JwtBearerDefaults.AuthenticationScheme)
+              .RequireAuthenticatedUser()
+              .RequireAssertion(context =>
+              {
+                  if (context.User.HasClaim(DomainConstants.AdminClaims.TokenUse, DomainConstants.AdminClaims.AdminAccess))
+                  {
+                      return context.User.IsInRole(AdminRoleCodes.PisAdmin)
+                          || context.User.Claims.Any(c => c.Type == ClaimTypes.Role && string.Equals(c.Value, AdminRoleCodes.PisAdmin, StringComparison.OrdinalIgnoreCase));
+                  }
+
+                  return context.User.IsInRole(AdminRoleCodes.PisAdmin)
+                      || context.User.IsInRole(DomainConstants.Roles.PisAdmin)
+                      || context.User.Claims.Any(c => c.Type == ClaimTypes.Role && (string.Equals(c.Value, AdminRoleCodes.PisAdmin, StringComparison.OrdinalIgnoreCase) || string.Equals(c.Value, DomainConstants.Roles.PisAdmin, StringComparison.OrdinalIgnoreCase)));
+              });
+    });
 
     // PIS lookup APIs: open to mobile and staff callers via default scheme (Bearer), and to Admin Portal callers with the PIS_ADMIN role (AdminBearer).
     options.AddPolicy(DomainConstants.Policies.RequirePisLookupRead, policy =>

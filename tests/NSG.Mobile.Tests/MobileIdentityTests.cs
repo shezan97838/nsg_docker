@@ -65,7 +65,7 @@ public class MobileIdentityTests
     [Fact]
     public void A_staff_token_yields_a_user_id_and_never_a_profile_id()
     {
-        CurrentUserService user = CurrentUser(Validate(StaffToken("ITAdmin")));
+        CurrentUserService user = CurrentUser(Validate(StaffToken(DomainConstants.Roles.PisAdmin)));
         Assert.Equal(9001, user.UserId);
         Assert.Null(user.ProfileId);
     }
@@ -75,26 +75,26 @@ public class MobileIdentityTests
     {
         ClaimsPrincipal principal = Validate(MobileToken());
         Assert.True(principal.IsInRole(DomainConstants.Roles.Employee));
-        Assert.False(principal.IsInRole(DomainConstants.Roles.ITAdmin));
-        Assert.False(principal.IsInRole(DomainConstants.Roles.SystemAdmin));
+        Assert.False(principal.IsInRole(DomainConstants.Roles.PisAdmin));
+        Assert.False(principal.IsInRole(DomainConstants.Roles.SuperAdmin));
     }
 
     [Fact]
     public async Task Only_the_mobile_policy_accepts_a_mobile_token_and_it_rejects_staff_tokens()
     {
-        // The same requirements Program.cs registers for RequireMobileProfile and RequireITAdmin.
+        // The same requirements Program.cs registers for RequireMobileProfile and RequirePisAdmin.
         AuthorizationPolicy mobile = new AuthorizationPolicyBuilder().RequireAuthenticatedUser()
             .RequireClaim(DomainConstants.MobileClaims.TokenUse, DomainConstants.MobileClaims.MobileAccess)
             .RequireClaim(DomainConstants.MobileClaims.ProfileId).Build();
-        AuthorizationPolicy itAdmin = new AuthorizationPolicyBuilder().RequireRole(DomainConstants.Roles.ITAdmin, DomainConstants.Roles.SystemAdmin).Build();
+        AuthorizationPolicy pisAdmin = new AuthorizationPolicyBuilder().RequireRole(DomainConstants.Roles.PisAdmin, DomainConstants.Roles.SuperAdmin).Build();
 
         ClaimsPrincipal mobileUser = Validate(MobileToken());
-        ClaimsPrincipal admin = Validate(StaffToken("ITAdmin"));
+        ClaimsPrincipal admin = Validate(StaffToken(DomainConstants.Roles.PisAdmin));
 
         Assert.True(await Evaluate(mobile, mobileUser));
         Assert.False(await Evaluate(mobile, admin));          // a staff token cannot call mpin/change
-        Assert.False(await Evaluate(itAdmin, mobileUser));    // a mobile token cannot review requests
-        Assert.True(await Evaluate(itAdmin, admin));
+        Assert.False(await Evaluate(pisAdmin, mobileUser));    // a mobile token cannot review requests
+        Assert.True(await Evaluate(pisAdmin, admin));
     }
 
     [Fact]

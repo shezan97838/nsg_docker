@@ -23,7 +23,7 @@ public class RankDeleteApiTests : IAsyncLifetime
     public RankDeleteApiTests(DatabaseFixture fixture)
     {
         _factory = fixture.Factory;
-        _admin = _factory.CreateClientFor(DomainConstants.Roles.ITAdmin);
+        _admin = _factory.CreateClientFor(DomainConstants.Roles.PisAdmin);
         _employee = _factory.CreateClientFor(DomainConstants.Roles.Employee);
     }
 

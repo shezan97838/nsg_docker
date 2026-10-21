@@ -24,7 +24,7 @@ public class UsersPisTradeApiTests : IAsyncLifetime
     public UsersPisTradeApiTests(DatabaseFixture fixture)
     {
         _factory = fixture.Factory;
-        _admin = _factory.CreateClientFor(DomainConstants.Roles.ITAdmin);
+        _admin = _factory.CreateClientFor(DomainConstants.Roles.PisAdmin);
     }
 
     public async Task InitializeAsync()

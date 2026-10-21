@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using NSG.Mobile.Domain.Constants;
 using NSG.Mobile.Domain.Entities;
 using NSG.Mobile.Domain.Enums;
 using NSG.Mobile.Infrastructure.Persistence;
@@ -177,7 +178,7 @@ public class MobileProfileDatabaseTests : IAsyncLifetime
     [Fact]
     public async Task A_staff_token_is_not_a_mobile_identity()
     {
-        Assert.Equal(HttpStatusCode.Forbidden, (await _factory.CreateClientFor("ITAdmin").GetAsync(ProfileUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await _factory.CreateClientFor(DomainConstants.Roles.PisAdmin).GetAsync(ProfileUrl)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await _factory.CreateClientFor("Employee").GetAsync(ProfileUrl)).StatusCode);
     }
 }
