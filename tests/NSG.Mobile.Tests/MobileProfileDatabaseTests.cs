@@ -96,9 +96,12 @@ public class MobileProfileDatabaseTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         string text = await response.Content.ReadAsStringAsync();
         JsonElement body = JsonDocument.Parse(text).RootElement;
-        Assert.Equal(Nsg, body.GetProperty("nsgNumber").GetString());
-        Assert.Equal("Profile One", body.GetProperty("fullName").GetString());
-        Assert.Equal("1992-07-08", body.GetProperty("dateOfBirth").GetString());
+        Assert.True(body.GetProperty("success").GetBoolean());
+        Assert.Equal("Personnel details fetched successfully", body.GetProperty("message").GetString());
+        JsonElement data = body.GetProperty("data");
+        Assert.Equal(Nsg, data.GetProperty("nsgNumber").GetString());
+        Assert.Equal("Profile One", data.GetProperty("fullName").GetString());
+        Assert.Equal("1992-07-08", data.GetProperty("dateOfBirth").GetString());
         Assert.DoesNotContain(Secret, text);
         Assert.DoesNotContain(OtherNsg, text);
         foreach (string forbidden in new[] { "aadhaar", "pan", "pran", "salary", "hash", "mpin", "password" })
@@ -115,11 +118,11 @@ public class MobileProfileDatabaseTests : IAsyncLifetime
         {
             HttpResponseMessage response = await client.GetAsync(url);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.Equal(Nsg, (await ReadAsync(response)).GetProperty("nsgNumber").GetString());
+            Assert.Equal(Nsg, (await ReadAsync(response)).GetProperty("data").GetProperty("nsgNumber").GetString());
         }
 
         client.DefaultRequestHeaders.Add("X-Nsg-Number", OtherNsg);
-        Assert.Equal(Nsg, (await ReadAsync(await client.GetAsync(ProfileUrl))).GetProperty("nsgNumber").GetString());
+        Assert.Equal(Nsg, (await ReadAsync(await client.GetAsync(ProfileUrl))).GetProperty("data").GetProperty("nsgNumber").GetString());
     }
 
     [Fact]
@@ -128,8 +131,8 @@ public class MobileProfileDatabaseTests : IAsyncLifetime
         (string first, _) = await LoginAsync();
         (string second, _) = await LoginAsync(OtherNsg, OtherMobile);
 
-        Assert.Equal("Profile One", (await ReadAsync(await Bearer(first).GetAsync(ProfileUrl))).GetProperty("fullName").GetString());
-        Assert.Equal("Profile Two", (await ReadAsync(await Bearer(second).GetAsync(ProfileUrl))).GetProperty("fullName").GetString());
+        Assert.Equal("Profile One", (await ReadAsync(await Bearer(first).GetAsync(ProfileUrl))).GetProperty("data").GetProperty("fullName").GetString());
+        Assert.Equal("Profile Two", (await ReadAsync(await Bearer(second).GetAsync(ProfileUrl))).GetProperty("data").GetProperty("fullName").GetString());
     }
 
     [Fact]

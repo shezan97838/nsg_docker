@@ -27,13 +27,15 @@ public class ProfileController : ControllerBase
 
     /// <summary>Get the basic PIS details of the current mobile user.</summary>
     [HttpGet]
-    [ProducesResponseType(typeof(MobileProfileResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<MobileProfileResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMyProfile(CancellationToken cancellationToken)
     {
         Result<MobileProfileResponseDto> result = await _service.GetMyProfileAsync(cancellationToken);
-        return result.IsSuccess ? Ok(result.Data) : MobileAuthProblem.From(this, result);
+        return result.IsSuccess
+            ? Ok(new ApiResponse<MobileProfileResponseDto>(true, "Personnel details fetched successfully", result.Data))
+            : MobileAuthProblem.From(this, result);
     }
 }

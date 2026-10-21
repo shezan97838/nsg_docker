@@ -1,5 +1,8 @@
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using NSG.Mobile.API.Controllers;
 using NSG.Mobile.Application.Common;
 using NSG.Mobile.Application.Profile.DTOs;
 using NSG.Mobile.Application.Profile.Services;
@@ -289,5 +292,43 @@ public class MobileProfileServiceTests
         Assert.Equal("Alpha", (await service.GetMyProfileAsync()).Data!.FullName);
         user.ProfileId = 20;
         Assert.Equal("Bravo", (await service.GetMyProfileAsync()).Data!.FullName);
+    }
+
+    [Fact]
+    public async Task ProfileController_returns_success_envelope_with_message_and_data()
+    {
+        var (service, user, profiles, pis) = Build();
+        pis.Rows.Add(Pis(1, "NSG-MINE", "My Name", "9000000002"));
+        profiles.Profiles.Add(new MobileUserProfile { Id = 1, NsgNumber = "NSG-MINE", MobileNumber = "9000000002" });
+        user.ProfileId = 1;
+
+        ProfileController controller = new(service);
+        IActionResult actionResult = await controller.GetMyProfile(default);
+
+        OkObjectResult ok = Assert.IsType<OkObjectResult>(actionResult);
+        ApiResponse<MobileProfileResponseDto> envelope = Assert.IsType<ApiResponse<MobileProfileResponseDto>>(ok.Value);
+        Assert.True(envelope.Success);
+        Assert.Equal("Personnel details fetched successfully", envelope.Message);
+        Assert.NotNull(envelope.Data);
+        Assert.Equal("NSG-MINE", envelope.Data!.NsgNumber);
+        Assert.Equal("My Name", envelope.Data.FullName);
+    }
+
+    [Fact]
+    public async Task ProfileController_returns_problem_details_when_profile_not_found()
+    {
+        var (service, user, profiles, _) = Build();
+        profiles.Profiles.Add(new MobileUserProfile { Id = 5, NsgNumber = "NSG-GONE" });
+        user.ProfileId = 5;
+
+        ProfileController controller = new(service)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+        IActionResult actionResult = await controller.GetMyProfile(default);
+
+        ObjectResult objectResult = Assert.IsAssignableFrom<ObjectResult>(actionResult);
+        Assert.Equal(404, objectResult.StatusCode);
+        Assert.IsType<ProblemDetails>(objectResult.Value);
     }
 }
