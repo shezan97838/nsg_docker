@@ -187,7 +187,7 @@ public class MobileAuthFlowTests : IAsyncLifetime
 
         (HttpStatusCode _, JsonElement submitted) = await PostAsync(_anonymous, $"{Auth}/registration/submit", new { grantToken = registrationGrant });
         Assert.Equal("MPIN_SETUP_GRANTED", Status(submitted));
-        Assert.Equal("GRANT_INVALID", (await PostAsync(_anonymous, $"{Auth}/registration/submit", new { grantToken = registrationGrant })).Body.GetProperty("title").GetString());
+        Assert.Equal(NSG.Mobile.Application.MobileAuth.MobileAuthMessages.GrantInvalid, (await PostAsync(_anonymous, $"{Auth}/registration/submit", new { grantToken = registrationGrant })).Body.GetProperty("message").GetString());
 
         string setupGrant = submitted.GetProperty("data").GetProperty("grantToken").GetString()!;
         Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync(_anonymous, $"{Auth}/mpin/setup", new { grantToken = setupGrant, mpin = "1234", confirmMpin = "1234" })).Status);   // too easy
@@ -207,7 +207,8 @@ public class MobileAuthFlowTests : IAsyncLifetime
         Assert.Equal("MPIN_REQUIRED", Status((await PostAsync(_anonymous, $"{Auth}/login/check", Identity)).Body));
         (HttpStatusCode wrongStatus, JsonElement wrong) = await PostAsync(_anonymous, $"{Auth}/login", new { nsgNumber = Nsg, mobileNumber = Mobile, dateOfBirth = Dob, mpin = "0000" });
         Assert.Equal(HttpStatusCode.Unauthorized, wrongStatus);
-        Assert.False(wrong.TryGetProperty("data", out _));
+        Assert.False(wrong.GetProperty("success").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, wrong.GetProperty("data").ValueKind);
         (HttpStatusCode loginStatus, JsonElement login) = await PostAsync(_anonymous, $"{Auth}/login", new { nsgNumber = Nsg, mobileNumber = Mobile, dateOfBirth = Dob, mpin = "2580" });
         Assert.Equal(HttpStatusCode.OK, loginStatus);
         string accessToken = login.GetProperty("data").GetProperty("accessToken").GetString()!;

@@ -35,6 +35,10 @@ public class AppDbContext : DbContext
     public DbSet<AdminRole> AdminRoles => Set<AdminRole>();
     public DbSet<AdminProfile> AdminProfiles => Set<AdminProfile>();
     public DbSet<AdminRefreshToken> AdminRefreshTokens => Set<AdminRefreshToken>();
+    public DbSet<GrievanceCategory> GrievanceCategories => Set<GrievanceCategory>();
+    public DbSet<Grievance> Grievances => Set<Grievance>();
+    public DbSet<DgMessage> DgMessages => Set<DgMessage>();
+    public DbSet<GrievanceStatusLog> GrievanceStatusLogs => Set<GrievanceStatusLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

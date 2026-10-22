@@ -1,8 +1,12 @@
 using System.Text;
+using Amazon.Runtime;
+using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using NSG.Mobile.Application.Authentication.Interfaces;
 using NSG.Mobile.Application.Common;
@@ -224,6 +228,8 @@ public static class DependencyInjection
         services.AddScoped<IAdminProfileRepository, AdminProfileRepository>();
         services.AddScoped<IAdminRoleRepository, AdminRoleRepository>();
         services.AddScoped<IAdminRefreshTokenRepository, AdminRefreshTokenRepository>();
+        services.AddScoped<IGrievanceRepository, GrievanceRepository>();
+        services.AddScoped<IDgMessageRepository, DgMessageRepository>();
     }
 
     private static void AddInfrastructureServices(this IServiceCollection services)
@@ -242,11 +248,43 @@ public static class DependencyInjection
         services.Configure<HrmsOptions>(configuration.GetSection(HrmsOptions.SectionName));
         services.Configure<PayrollOptions>(configuration.GetSection(PayrollOptions.SectionName));
         services.Configure<FileStorageOptions>(configuration.GetSection(FileStorageOptions.SectionName));
+        services.AddR2StorageWhenConfigured(configuration);
 
         // Placeholder implementations — replace with actual integrations when API contracts are available
         services.AddScoped<INicSmsService, NicSmsServicePlaceholder>();
         services.AddScoped<IPushNotificationService, FcmPushNotificationServicePlaceholder>();
         services.AddScoped<IHrmsService, HrmsServicePlaceholder>();
         services.AddScoped<IPayrollService, PayrollServicePlaceholder>();
+    }
+
+    /// <summary>
+    /// Switches <see cref="IFileStorageService"/> from the local filesystem to private Cloudflare R2 when <c>R2Storage:ServiceUrl</c> holds a real
+    /// value. When R2 is chosen, a missing bucket or credential stops the application at startup with a message naming the missing settings.
+    /// With no real service URL the local storage stays in place and nothing else is validated.
+    /// </summary>
+    private static void AddR2StorageWhenConfigured(this IServiceCollection services, IConfiguration configuration)
+    {
+        IConfigurationSection section = configuration.GetSection(R2Options.SectionName);
+        R2Options r2 = section.Get<R2Options>() ?? new R2Options();
+        // Grievance documents may only be read or written when storage is private R2, or when running in Development.
+        bool r2Active = r2.IsEnabled;
+        services.AddSingleton<IStorageAvailability>(sp => new StorageAvailability(r2Active || sp.GetRequiredService<IHostEnvironment>().IsDevelopment()));
+        if (!r2Active) return;
+
+        r2.EnsureValid();
+        services.Configure<R2Options>(section);
+
+        // R2 specifics: path-style addressing, region "auto", and no SDK-added checksums (R2 rejects the newer default trailers).
+        services.TryAddSingleton<IAmazonS3>(_ => new AmazonS3Client(
+            new BasicAWSCredentials(r2.AccessKey, r2.SecretKey),
+            new AmazonS3Config
+            {
+                ServiceURL = r2.ServiceUrl,
+                ForcePathStyle = true,
+                AuthenticationRegion = "auto",
+                RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+                ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED
+            }));
+        services.Replace(ServiceDescriptor.Scoped<IFileStorageService, R2FileStorageService>());
     }
 }

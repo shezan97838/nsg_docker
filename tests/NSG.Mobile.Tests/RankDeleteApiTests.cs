@@ -43,7 +43,7 @@ public class RankDeleteApiTests : IAsyncLifetime
     {
         HttpResponseMessage r = await _admin.PostAsJsonAsync("/api/v1/ranks", new { srNo, rankName = "Test rank " + srNo, shortCode = "T" + srNo, isActive = true });
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+        return (await r.ReadDataAsync()).GetProperty("id").GetInt32();
     }
 
     private async Task AssignRankAsync(int rankId)
@@ -54,18 +54,18 @@ public class RankDeleteApiTests : IAsyncLifetime
     }
 
     private async Task<bool> IsActiveAsync(int id)
-        => (await (await _admin.GetAsync($"/api/v1/ranks/{id}")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("isActive").GetBoolean();
+        => (await (await _admin.GetAsync($"/api/v1/ranks/{id}")).ReadDataAsync()).GetProperty("isActive").GetBoolean();
 
     [Fact]
     public async Task Delete_of_an_unassigned_rank_deactivates_it_and_keeps_the_row()
     {
         int id = await CreateRankAsync(FirstTestSrNo);
 
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"/api/v1/ranks/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"/api/v1/ranks/{id}")).StatusCode);
 
         Assert.Equal(HttpStatusCode.OK, (await _admin.GetAsync($"/api/v1/ranks/{id}")).StatusCode); // still there
         Assert.False(await IsActiveAsync(id));
-        JsonElement dropdown = await (await _employee.GetAsync("/api/v1/ranks/dropdown")).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement dropdown = await (await _employee.GetAsync("/api/v1/ranks/dropdown")).ReadDataAsync();
         Assert.DoesNotContain(dropdown.EnumerateArray(), r => r.GetProperty("id").GetInt32() == id);
 
         await using AppDbContext ctx = _factory.CreateContext();
@@ -79,8 +79,8 @@ public class RankDeleteApiTests : IAsyncLifetime
     {
         int id = await CreateRankAsync(FirstTestSrNo + 1);
 
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"/api/v1/ranks/{id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"/api/v1/ranks/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"/api/v1/ranks/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"/api/v1/ranks/{id}")).StatusCode);
 
         await using AppDbContext ctx = _factory.CreateContext();
         Assert.Equal(1, await ctx.AuditLogs.CountAsync(a => a.EntityId == id.ToString() && a.AdditionalData!.Contains("RankDeactivated")));
@@ -95,7 +95,7 @@ public class RankDeleteApiTests : IAsyncLifetime
         HttpResponseMessage r = await _admin.DeleteAsync($"/api/v1/ranks/{id}");
 
         Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
-        Assert.Equal(409, (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32());
+        Assert.Equal(409, (int)r.StatusCode);
         Assert.True(await IsActiveAsync(id));
 
         await using AppDbContext ctx = _factory.CreateContext();
@@ -113,7 +113,7 @@ public class RankDeleteApiTests : IAsyncLifetime
         await using (AppDbContext ctx = _factory.CreateContext())
             await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `users_pis`");
 
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"/api/v1/ranks/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"/api/v1/ranks/{id}")).StatusCode);
         Assert.False(await IsActiveAsync(id));
     }
 

@@ -59,7 +59,7 @@ public class PisLookupApiTests : IAsyncLifetime
     {
         HttpResponseMessage r = await _admin.PostAsJsonAsync($"/api/v1/{resource}", new { name, isActive });
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        return await r.Content.ReadFromJsonAsync<JsonElement>();
+        return await r.ReadDataAsync();
     }
 
     private async Task<int> CountAuditAsync(string resource, int id, string operation)
@@ -121,7 +121,7 @@ public class PisLookupApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await _employee.DeleteAsync($"/api/v1/{resource}/{id}")).StatusCode);
 
         // The forbidden write attempts changed nothing.
-        JsonElement after = await (await _admin.GetAsync($"/api/v1/{resource}/{id}")).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement after = await (await _admin.GetAsync($"/api/v1/{resource}/{id}")).ReadDataAsync();
         Assert.Equal("Readable", after.GetProperty("name").GetString());
     }
 
@@ -133,7 +133,7 @@ public class PisLookupApiTests : IAsyncLifetime
         HttpResponseMessage r = await _admin.PostAsJsonAsync($"/api/v1/{resource}", new { name = "  13 SRG  ", isActive = true });
 
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        JsonElement body = await r.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement body = await r.ReadDataAsync();
         int id = body.GetProperty("id").GetInt32();
         Assert.Equal("13 SRG", body.GetProperty("name").GetString());
         Assert.True(body.GetProperty("isActive").GetBoolean());
@@ -148,10 +148,10 @@ public class PisLookupApiTests : IAsyncLifetime
         {
             HttpResponseMessage r = await _admin.PostAsJsonAsync($"/api/v1/{resource}", new { name });
             Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
-            Assert.Equal(400, (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32());
+            Assert.Equal(400, (int)r.StatusCode);
         }
 
-        JsonElement list = await (await _admin.GetAsync($"/api/v1/{resource}")).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement list = await (await _admin.GetAsync($"/api/v1/{resource}")).ReadDataAsync();
         Assert.Equal(0, list.GetProperty("totalCount").GetInt32());
     }
 
@@ -164,8 +164,8 @@ public class PisLookupApiTests : IAsyncLifetime
         {
             HttpResponseMessage r = await _admin.PostAsJsonAsync($"/api/v1/{resource}", new { name = duplicate });
             Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
-            JsonElement problem = await r.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal(409, problem.GetProperty("status").GetInt32());
+            JsonElement problem = await r.ReadDataAsync();
+            Assert.False(problem.GetProperty("success").GetBoolean());
         }
     }
 
@@ -179,11 +179,11 @@ public class PisLookupApiTests : IAsyncLifetime
 
         HttpResponseMessage found = await _admin.GetAsync($"/api/v1/{resource}/{id}");
         Assert.Equal(HttpStatusCode.OK, found.StatusCode);
-        Assert.Equal("Findable", (await found.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("name").GetString());
+        Assert.Equal("Findable", (await found.ReadDataAsync()).GetProperty("name").GetString());
 
         HttpResponseMessage missing = await _admin.GetAsync($"/api/v1/{resource}/{id + 999}");
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
-        Assert.Equal(404, (await missing.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32());
+        Assert.Equal(404, (int)missing.StatusCode);
     }
 
     [Theory, MemberData(nameof(Resources))]
@@ -193,7 +193,7 @@ public class PisLookupApiTests : IAsyncLifetime
         await CreateAsync(resource, "Alpha");
         await CreateAsync(resource, "Bravo (inactive)", isActive: false);
 
-        JsonElement items = await (await _employee.GetAsync($"/api/v1/{resource}/dropdown")).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement items = await (await _employee.GetAsync($"/api/v1/{resource}/dropdown")).ReadDataAsync();
 
         Assert.Equal(new[] { "Alpha", "Charlie" }, items.EnumerateArray().Select(i => i.GetProperty("name").GetString()).ToArray());
         Assert.False(items[0].TryGetProperty("isActive", out _)); // dropdown items are minimal
@@ -206,22 +206,22 @@ public class PisLookupApiTests : IAsyncLifetime
             await CreateAsync(resource, name);
         await CreateAsync(resource, "Delta Retired", isActive: false);
 
-        JsonElement page1 = await (await _admin.GetAsync($"/api/v1/{resource}?pageNumber=1&pageSize=2")).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement page1 = await (await _admin.GetAsync($"/api/v1/{resource}?pageNumber=1&pageSize=2")).ReadDataAsync();
         Assert.Equal(5, page1.GetProperty("totalCount").GetInt32());
         Assert.Equal(3, page1.GetProperty("totalPages").GetInt32());
         Assert.Equal(2, page1.GetProperty("items").GetArrayLength());
         Assert.True(page1.GetProperty("hasNextPage").GetBoolean());
 
-        JsonElement page3 = await (await _admin.GetAsync($"/api/v1/{resource}?pageNumber=3&pageSize=2")).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement page3 = await (await _admin.GetAsync($"/api/v1/{resource}?pageNumber=3&pageSize=2")).ReadDataAsync();
         Assert.Equal(1, page3.GetProperty("items").GetArrayLength());
 
-        JsonElement search = await (await _admin.GetAsync($"/api/v1/{resource}?search=delta")).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement search = await (await _admin.GetAsync($"/api/v1/{resource}?search=delta")).ReadDataAsync();
         Assert.Equal(4, search.GetProperty("totalCount").GetInt32());
 
-        JsonElement activeOnly = await (await _admin.GetAsync($"/api/v1/{resource}?search=delta&isActive=true")).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement activeOnly = await (await _admin.GetAsync($"/api/v1/{resource}?search=delta&isActive=true")).ReadDataAsync();
         Assert.Equal(3, activeOnly.GetProperty("totalCount").GetInt32());
 
-        JsonElement inactiveOnly = await (await _admin.GetAsync($"/api/v1/{resource}?isActive=false")).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement inactiveOnly = await (await _admin.GetAsync($"/api/v1/{resource}?isActive=false")).ReadDataAsync();
         Assert.Equal("Delta Retired", inactiveOnly.GetProperty("items")[0].GetProperty("name").GetString());
     }
 
@@ -236,7 +236,7 @@ public class PisLookupApiTests : IAsyncLifetime
         HttpResponseMessage r = await _admin.PutAsJsonAsync($"/api/v1/{resource}/{id}", new { name = " After ", isActive = false });
 
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
-        JsonElement body = await r.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement body = await r.ReadDataAsync();
         Assert.Equal("After", body.GetProperty("name").GetString());
         Assert.False(body.GetProperty("isActive").GetBoolean());
         Assert.NotEqual(JsonValueKind.Null, body.GetProperty("updatedAtIst").ValueKind);
@@ -275,7 +275,7 @@ public class PisLookupApiTests : IAsyncLifetime
         JsonElement created = await CreateAsync(resource, "Disposable");
         int id = created.GetProperty("id").GetInt32();
 
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"/api/v1/{resource}/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"/api/v1/{resource}/{id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await _admin.GetAsync($"/api/v1/{resource}/{id}")).StatusCode);
         Assert.Equal(1, await CountAuditAsync(resource, id, $"{EntityType(resource)}Deleted"));
     }
@@ -296,7 +296,7 @@ public class PisLookupApiTests : IAsyncLifetime
         HttpResponseMessage r = await _admin.DeleteAsync($"/api/v1/{resource}/{id}");
 
         Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
-        Assert.Equal(409, (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32());
+        Assert.Equal(409, (int)r.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await _admin.GetAsync($"/api/v1/{resource}/{id}")).StatusCode);
         Assert.Equal(0, await CountAuditAsync(resource, id, $"{EntityType(resource)}Deleted"));
 
@@ -326,6 +326,6 @@ public class PisLookupApiTests : IAsyncLifetime
 
         await AddPersonnelReferencingAsync(NsgUnits, unit.GetProperty("id").GetInt32());
 
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"/api/v1/{ParentDepartmentRanks}/{dept.GetProperty("id").GetInt32()}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"/api/v1/{ParentDepartmentRanks}/{dept.GetProperty("id").GetInt32()}")).StatusCode);
     }
 }

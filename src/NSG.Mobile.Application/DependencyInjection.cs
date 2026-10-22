@@ -3,6 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 using NSG.Mobile.Application.Admin.Services;
 using NSG.Mobile.Application.EducationQualifications.Services;
 using NSG.Mobile.Application.Geography.Services;
+using NSG.Mobile.Application.Grievances.Services;
+using NSG.Mobile.Application.DgMessages.Services;
 using NSG.Mobile.Application.Lookups.Services;
 using NSG.Mobile.Application.MobileAuth.Services;
 using NSG.Mobile.Application.Onboarding.Services;
@@ -41,6 +43,12 @@ public static class DependencyInjection
         services.AddScoped<IAdminActivationService, AdminActivationService>();
         services.AddScoped<IAdminAuthService, AdminAuthService>();
         services.AddScoped<IAdminBootstrapService, AdminBootstrapService>();
+        services.AddScoped<GrievanceDocumentAccess>();
+        services.AddScoped<IGrievanceService, GrievanceService>();
+        services.AddScoped<IGrievanceAdminService, GrievanceAdminService>();
+        services.AddScoped<IGrievanceCategoryService, GrievanceCategoryService>();
+        services.AddScoped<IGrievanceDashboardService, GrievanceDashboardService>();
+        services.AddScoped<IDgMessageService, DgMessageService>();
         services.TryAddSingleton(TimeProvider.System);
 
         // FluentValidation — auto-discover all validators in this assembly

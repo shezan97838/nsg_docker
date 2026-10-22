@@ -88,7 +88,7 @@ public class ParentDepartmentRanksController : ControllerBase
     /// <summary>Delete a parent department rank. Returns 409 when personnel records still reference it.</summary>
     [HttpDelete("{id:int}")]
     [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)

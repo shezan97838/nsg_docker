@@ -58,7 +58,7 @@ public class TradeLookupApiTests : IAsyncLifetime
     {
         HttpResponseMessage resp = await _admin.PostAsJsonAsync(Url(r), Body(r, name, isActive));
         Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
-        return await resp.Content.ReadFromJsonAsync<JsonElement>();
+        return await resp.ReadDataAsync();
     }
 
     private async Task UseByPersonnelAsync(string r, int tradeId)
@@ -99,7 +99,7 @@ public class TradeLookupApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await _employee.PostAsJsonAsync(Url(r), Body(r, "TD"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await _employee.PutAsJsonAsync($"{Url(r)}/{id}", Body(r, "X"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await _employee.DeleteAsync($"{Url(r)}/{id}")).StatusCode);
-        Assert.Equal("GD", (await (await _admin.GetAsync($"{Url(r)}/{id}")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty(NameField(r)).GetString());
+        Assert.Equal("GD", (await (await _admin.GetAsync($"{Url(r)}/{id}")).ReadDataAsync()).GetProperty(NameField(r)).GetString());
     }
 
     // ── Create ──
@@ -110,7 +110,7 @@ public class TradeLookupApiTests : IAsyncLifetime
         HttpResponseMessage resp = await _admin.PostAsJsonAsync(Url(r), new Dictionary<string, object?> { [NameField(r)] = "  GD  " });
 
         Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
-        JsonElement body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement body = await resp.ReadDataAsync();
         int id = body.GetProperty("id").GetInt32();
         Assert.EndsWith($"{Url(r)}/{id}", resp.Headers.Location!.AbsolutePath);
         Assert.Equal("GD", body.GetProperty(NameField(r)).GetString());
@@ -135,7 +135,7 @@ public class TradeLookupApiTests : IAsyncLifetime
         foreach (string? name in new[] { "", "   ", null, new string('x', 101) })
             Assert.Equal(HttpStatusCode.BadRequest, (await _admin.PostAsJsonAsync(Url(r), Body(r, name))).StatusCode);
 
-        Assert.Equal(0, (await (await _admin.GetAsync(Url(r))).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("totalCount").GetInt32());
+        Assert.Equal(0, (await (await _admin.GetAsync(Url(r))).ReadDataAsync()).GetProperty("totalCount").GetInt32());
     }
 
     [Theory, MemberData(nameof(Resources))]
@@ -155,8 +155,8 @@ public class TradeLookupApiTests : IAsyncLifetime
         await CreateAsync(Pd, "GD");
 
         // ...and the two lists do not see each other.
-        Assert.Equal(1, (await (await _admin.GetAsync(Url(Nsg))).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("totalCount").GetInt32());
-        Assert.Equal(1, (await (await _admin.GetAsync(Url(Pd))).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("totalCount").GetInt32());
+        Assert.Equal(1, (await (await _admin.GetAsync(Url(Nsg))).ReadDataAsync()).GetProperty("totalCount").GetInt32());
+        Assert.Equal(1, (await (await _admin.GetAsync(Url(Pd))).ReadDataAsync()).GetProperty("totalCount").GetInt32());
     }
 
     // ── Read ──
@@ -168,11 +168,11 @@ public class TradeLookupApiTests : IAsyncLifetime
 
         HttpResponseMessage found = await _admin.GetAsync($"{Url(r)}/{id}");
         Assert.Equal(HttpStatusCode.OK, found.StatusCode);
-        Assert.Equal("GD", (await found.Content.ReadFromJsonAsync<JsonElement>()).GetProperty(NameField(r)).GetString());
+        Assert.Equal("GD", (await found.ReadDataAsync()).GetProperty(NameField(r)).GetString());
 
         HttpResponseMessage missing = await _admin.GetAsync($"{Url(r)}/{id + 999}");
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
-        Assert.Equal(404, (await missing.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32());
+        Assert.Equal(404, (int)missing.StatusCode);
     }
 
     [Theory, MemberData(nameof(Resources))]
@@ -182,7 +182,7 @@ public class TradeLookupApiTests : IAsyncLifetime
             await CreateAsync(r, name);
         await CreateAsync(r, "Old GD", isActive: false);
 
-        async Task<JsonElement> List(string query) => await (await _admin.GetAsync($"{Url(r)}?{query}")).Content.ReadFromJsonAsync<JsonElement>();
+        async Task<JsonElement> List(string query) => await (await _admin.GetAsync($"{Url(r)}?{query}")).ReadDataAsync();
         string[] Names(JsonElement page) => page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty(NameField(r)).GetString()!).ToArray();
 
         JsonElement page1 = await List("pageNumber=1&pageSize=2");
@@ -208,7 +208,7 @@ public class TradeLookupApiTests : IAsyncLifetime
         HttpResponseMessage resp = await _admin.PutAsJsonAsync($"{Url(r)}/{id}", Body(r, " General Duty ", isActive: false));
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        JsonElement body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement body = await resp.ReadDataAsync();
         Assert.Equal("General Duty", body.GetProperty(NameField(r)).GetString());
         Assert.False(body.GetProperty("isActive").GetBoolean());
         Assert.Equal(1, await AuditCountAsync(r, id, EntityType(r) + "Updated"));
@@ -220,7 +220,7 @@ public class TradeLookupApiTests : IAsyncLifetime
         int id = (await CreateAsync(r, "GD")).GetProperty("id").GetInt32();
 
         Assert.Equal(HttpStatusCode.BadRequest, (await _admin.PutAsJsonAsync($"{Url(r)}/{id}", Body(r, "GD", isActive: null))).StatusCode);
-        Assert.True((await (await _admin.GetAsync($"{Url(r)}/{id}")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("isActive").GetBoolean());
+        Assert.True((await (await _admin.GetAsync($"{Url(r)}/{id}")).ReadDataAsync()).GetProperty("isActive").GetBoolean());
     }
 
     [Theory, MemberData(nameof(Resources))]
@@ -242,10 +242,10 @@ public class TradeLookupApiTests : IAsyncLifetime
     {
         int id = (await CreateAsync(r, "GD")).GetProperty("id").GetInt32();
 
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"{Url(r)}/{id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"{Url(r)}/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"{Url(r)}/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"{Url(r)}/{id}")).StatusCode);
 
-        Assert.False((await (await _admin.GetAsync($"{Url(r)}/{id}")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("isActive").GetBoolean());
+        Assert.False((await (await _admin.GetAsync($"{Url(r)}/{id}")).ReadDataAsync()).GetProperty("isActive").GetBoolean());
         Assert.Equal(1, await AuditCountAsync(r, id, EntityType(r) + "Deactivated"));
         await using AppDbContext ctx = _factory.CreateContext();
         Assert.Equal(1, r == Nsg ? await ctx.NsgTrades.CountAsync(t => t.Id == id) : await ctx.PdTrades.CountAsync(t => t.Id == id));   // never hard-deleted
@@ -264,7 +264,7 @@ public class TradeLookupApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Conflict, (await _admin.DeleteAsync($"{Url(r)}/{id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await _admin.PutAsJsonAsync($"{Url(r)}/{id}", Body(r, "GD", isActive: false))).StatusCode);
 
-        JsonElement renamed = await (await _admin.PutAsJsonAsync($"{Url(r)}/{id}", Body(r, "General Duty"))).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement renamed = await (await _admin.PutAsJsonAsync($"{Url(r)}/{id}", Body(r, "General Duty"))).ReadDataAsync();
         Assert.Equal("General Duty", renamed.GetProperty(NameField(r)).GetString());
         Assert.True(renamed.GetProperty("isActive").GetBoolean());
         Assert.Equal(0, await AuditCountAsync(r, id, EntityType(r) + "Deactivated"));
@@ -282,7 +282,7 @@ public class TradeLookupApiTests : IAsyncLifetime
         await using (AppDbContext ctx = _factory.CreateContext())
             await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `users_pis`");
 
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"{Url(r)}/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"{Url(r)}/{id}")).StatusCode);
     }
 
     [Fact]
@@ -293,7 +293,7 @@ public class TradeLookupApiTests : IAsyncLifetime
         await UseByPersonnelAsync(Nsg, nsg);
 
         Assert.Equal(HttpStatusCode.Conflict, (await _admin.DeleteAsync($"{Url(Nsg)}/{nsg}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"{Url(Pd)}/{pd}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"{Url(Pd)}/{pd}")).StatusCode);
     }
 
     // ── Schema (real MySQL, created by the migrations) ──

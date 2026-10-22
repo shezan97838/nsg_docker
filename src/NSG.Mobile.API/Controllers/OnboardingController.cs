@@ -41,7 +41,7 @@ public class OnboardingController : ControllerBase
     /// <summary>Approve a pending registration.</summary>
     /// <remarks>SOW §3.7 Step 2: Upon approval, the user is notified and account is activated.</remarks>
     [HttpPost("approve/{userId:int}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ApproveRegistration(
@@ -61,7 +61,7 @@ public class OnboardingController : ControllerBase
 
     /// <summary>Reject a pending registration.</summary>
     [HttpPost("reject/{userId:int}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> RejectRegistration(

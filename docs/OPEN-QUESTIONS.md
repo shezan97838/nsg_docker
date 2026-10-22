@@ -62,6 +62,7 @@
 - Currently using minimal extensible role set
 
 ### OQ-011: Grievance Routing Rules
+- *Update 2026-10-22 (audit):* automatic routing by category was removed. A new grievance starts unassigned and a Grievance Admin assigns it with `POST /api/v1/admin/grievances/{id}/forward` (validated against active `GRIEVANCE_ADMIN` accounts). Who should receive new grievances by default, HQ NSG escalation and per-transition SLAs are still open (see OQ-038).
 - How are Nodal Officers assigned to categories?
 - Routing rules for HQ NSG escalation
 - SLA definitions for each status transition
@@ -187,3 +188,42 @@
 ### OQ-034: Automatic migrations at startup (2026-10-18)
 - The earlier rule was "migrations never run at startup". At the project owner's request startup migration is now enabled by `Database:MigrateOnStartup=true` in `appsettings.json` (`StartupDatabaseMigrator`); `Database__MigrateOnStartup=false` turns it off per environment. The key is absent from the code default (missing = off). `LinuxReadinessTests` pins the wiring.
 - **Open:** approval to use it against the NSG production database (the rule asked for approval before any apply); concurrent-instance locking if the service is ever scaled beyond one instance; a rollback procedure (migrations are forward-only here).
+
+### OQ-035: Grievance documents in Cloudflare R2 — data residency outside India (2026-10-22)
+- **Decision taken in code:** grievance documents (PDF/JPEG evidence that can contain medical, family, service and legal details of NSG personnel) are stored in a private Cloudflare R2 bucket behind `IFileStorageService` (ADR-018).
+- **Open, needs NSG approval before real data is stored:** (a) R2 has no India-only region; location hints and jurisdictions (EU, FedRAMP) do not guarantee storage inside India. Is storing NSG personnel grievance documents with a foreign-headquartered provider, possibly outside India, permitted under the SOW and the applicable data-localisation and security policy? (b) If not, which store replaces it (NIC or government cloud, on-premise S3-compatible such as MinIO)? Only a new `IFileStorageService` implementation and configuration should change. (c) Encryption: R2 encrypts at rest with provider-managed keys; documents are **not** additionally encrypted by the application (the AES field encryption covers PIS fields only). Is provider-managed encryption enough, or is application-level or customer-managed-key encryption required? (d) Retention and deletion: there is no way to delete or replace a document, and no retention period is defined.
+- **Until answered:** use the development bucket with test data only; do not enable R2 for production.
+
+### OQ-036: No push notifications — status changes are not real time (2026-10-22)
+- `IPushNotificationService` is still the FCM/APNs placeholder, so nothing notifies the employee when a Grievance Admin changes the status, and nothing notifies the nodal officer of a new grievance. The mobile app has to refresh `GET /api/v1/grievances` to see changes. The SOW (§3.5, §3.8) describes status tracking and notifications.
+- **Open:** FCM/APNs credentials and contract; which events notify whom (status change to the employee, new grievance to the assigned officer, SLA breach to admins); the polling interval the app should use meanwhile; whether a notification may carry the ticket number (personal data on a lock screen).
+
+### OQ-037: Grievance module — operational decisions to confirm (2026-10-22)
+- **`FileStorage__BasePath` with R2:** `Program.cs` still requires an absolute `FileStorage:BasePath` outside Development even when R2 is the provider, though R2 never uses it. Keep, or make the check conditional on R2 not being configured?
+- **Rate limiting:** the `grievance-write` policy (10 per minute) is keyed by client IP because the limiter runs before authentication and unvalidated token contents would be forgeable. Staff behind one NAT share a bucket, and behind the Render proxy all clients share one unless `ForwardedHeaders` is configured. A per-user limit would need the limiter after `UseAuthorization` (which would stop it counting unauthenticated requests) or an action filter. Also, a 429 (like a 401 or 403 from the framework) has an empty body, against the "no blank responses" rule.
+- **401 versus 403:** a token of the wrong kind (a mobile token on an admin route and the reverse) is 401 by design (separate schemes and audiences, ADR-017); 403 is only for an authenticated admin of another role. Confirm this is acceptable for the clients and the VAPT.
+- **Malware scanning:** uploads are checked for type and signature but not scanned for malware. Required?
+- **Admin visibility of identity:** Grievance Admins see employee name, NSG number and unit (audited per view). Confirm the legal basis, who may hold the role, and the audit retention period.
+- **Workflow gaps:** one forward-only path (no re-open, no rejection, no withdrawal by the employee), no escalation, no SLA per transition, documents cannot be added after creation or removed. Which of these does the client need?
+- **Seed values:** the optional category seed (`tools/sql/seed-grievance-categories.sql`) inserts only the five category names; the upload limits are fixed in code (OQ-038).
+- **Not yet verified:** repository SQL on MySQL, the migration, real R2, and Kestrel's behaviour for a request over the 16 MB cap (see `GRIEVANCE-MODULE.md` section 9).
+
+### OQ-038: Grievance module audit — decisions taken and to confirm (2026-10-22)
+- **Decided by the owner:** the unapplied grievance migration was regenerated (not corrected by a second migration), and the module keeps the project-wide IST timestamp convention (`created_at_ist`, `CreatedAtIst`) instead of the UTC names in the audit brief.
+- **Fixed upload limits (not configurable per category any more):** at most 3 files of 5 MB, PDF/JPEG only, description at least 10 characters. These are the previous defaults; the client has not approved them. Changing them is a code constant (`GrievanceLimits`).
+- **Single creation call is multipart only.** A JSON create no longer exists; attachments can only be added at creation. Confirm that no client needs to add documents later.
+- **"Description":** the creation call keeps both `subject` (required, 200 characters) and `note` (the description). Confirm whether the app wants a subject at all.
+- **Default assignee:** new grievances are unassigned until an admin forwards them. Confirm whether a default Grievance Admin (or HQ) should receive new grievances automatically.
+- **Comments are visible to the employee.** There are no internal-only admin notes. Confirm.
+- **Attachments live in `grievance.document_urls` (JSON)** rather than a table of their own; the keys and metadata are in MySQL but are not individually queryable.
+- **Dashboard:** kept (not in the audit brief's endpoint list) minus the SLA count that depended on removed category metadata. Confirm it is still wanted.
+- **Machine-readable error codes** (`title` such as `TOKEN_EXPIRED`) are no longer in error bodies since the global envelope has only `success`, `message` and `data`.
+
+### OQ-039: DG Message module — decisions taken and to confirm (2026-10-22)
+- **Single message or list:** no requirement document says whether the app shows one "current" DG message. `GET /api/v1/dg-messages` therefore follows the list convention (paged, newest first, active and not deleted only); the app can show the first item. Change to "latest active only" if the client wants exactly one.
+- **Role:** the admin endpoints use the existing `RequireMediaCellAdmin` policy (Media Cell Admin). Confirm that the DG message belongs to Media Cell and not to another role.
+- **No admin list:** only the four requested endpoints exist. An admin cannot list inactive messages (to find an id to reactivate one); add `GET /api/v1/admin/dg-messages` if needed.
+- **Image delivery:** the bucket stays private; the app reads the image with `GET /api/v1/dg-messages/{id}/image` and its normal bearer token (JPEG or PNG, at most 5 MB, checked by extension, content type and file signature). The response exposes only `hasImage`, never the key or a URL. A soft delete keeps the object in R2; a replaced image is deleted.
+- **Message length:** up to 5000 characters with line breaks kept (paragraphs); stored as MySQL `text`.
+- **Timestamps** use the project's IST convention (`created_at_ist`, `updated_at_ist`), not the UTC names in the brief.
+- **Not yet verified:** the migration `Add_Dg_Message` (generated, not applied), the repository SQL on MySQL and real R2.

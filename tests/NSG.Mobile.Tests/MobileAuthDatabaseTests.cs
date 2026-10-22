@@ -245,7 +245,7 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
         Assert.Equal("No mobile approval requests found.", JsonDocument.Parse(await empty.Content.ReadAsStringAsync()).RootElement.GetProperty("message").GetString());
 
         await SeedPendingAsync("NSG-77");
-        JsonElement page = JsonDocument.Parse(await (await _admin.GetAsync($"{Approvals}?status=Pending&search=77")).Content.ReadAsStringAsync()).RootElement;
+        JsonElement page = JsonDocument.Parse(await (await _admin.GetAsync($"{Approvals}?status=Pending&search=77")).Content.ReadAsStringAsync()).RootElement.GetProperty("data");
         Assert.Equal(1, page.GetProperty("totalCount").GetInt32());
         JsonElement item = page.GetProperty("items")[0];
         Assert.Equal("NSG-77", item.GetProperty("nsgNumber").GetString());

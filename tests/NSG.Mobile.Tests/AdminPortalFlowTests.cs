@@ -83,7 +83,7 @@ public class AdminPortalFlowTests : IAsyncLifetime
     private async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(HttpClient client, string url)
         => await ReadAsync(await client.GetAsync(url), "GET " + url);
 
-    private static string Detail(JsonElement body) => body.GetProperty("detail").GetString()!;
+    private static string Detail(JsonElement body) => body.GetProperty("message").GetString()!;
 
     private HttpClient Bearer(string accessToken)
     {

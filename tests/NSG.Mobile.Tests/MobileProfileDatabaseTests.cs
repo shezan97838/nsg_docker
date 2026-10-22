@@ -175,7 +175,7 @@ public class MobileProfileDatabaseTests : IAsyncLifetime
         HttpResponseMessage response = await Bearer(access).GetAsync(ProfileUrl);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("Your personnel record was not found.", (await ReadAsync(response)).GetProperty("detail").GetString());
+        Assert.Equal("Your personnel record was not found.", (await ReadAsync(response)).GetProperty("message").GetString());
     }
 
     [Fact]

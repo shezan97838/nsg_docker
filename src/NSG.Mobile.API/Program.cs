@@ -66,6 +66,9 @@ builder.Services.AddHttpContextAccessor();
 // ── Controllers ──
 builder.Services.AddControllers(options =>
 {
+    // One response envelope { success, message, data } for every controller result (see ApiResponseEnvelopeFilter)
+    options.Filters.Add<NSG.Mobile.API.Filters.ApiResponseEnvelopeFilter>();
+
     // Require HTTPS in production
     if (!builder.Environment.IsDevelopment())
     {
@@ -74,7 +77,7 @@ builder.Services.AddControllers(options =>
 })
 .ConfigureApiBehaviorOptions(options =>
 {
-    // Custom validation error response using ProblemDetails
+    // Validation failures are built as ValidationProblemDetails; ApiResponseEnvelopeFilter places them in the standard envelope
     options.InvalidModelStateResponseFactory = context =>
     {
         var errors = context.ModelState
@@ -217,6 +220,18 @@ builder.Services.AddRateLimiter(options =>
                 PermitLimit = otpPermitLimit,
                 Window = TimeSpan.FromMinutes(5)
             }));
+
+    // Grievance create and document upload (GrievancesController only): per client address, default 10 per minute
+    // (RateLimiting__GrievanceWritePermitLimit). The limiter runs before UseAuthentication, so token claims are not available
+    // here and the client address is the only key that cannot be forged.
+    options.AddPolicy("grievance-write", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = builder.Configuration.GetValue("RateLimiting:GrievanceWritePermitLimit", 10),
+                Window = TimeSpan.FromMinutes(1)
+            }));
 });
 
 // ── Swagger / OpenAPI ──
@@ -230,6 +245,9 @@ builder.Services.AddSwaggerGen(options =>
         Description = "National Security Guard Mobile Application API. SOW Version 2.0.",
         Contact = new OpenApiContact { Name = "IT Cell, NSG" }
     });
+
+    // Show the { success, message, data } envelope on every response
+    options.OperationFilter<NSG.Mobile.API.Filters.ApiEnvelopeOperationFilter>();
 
     // JWT Bearer authentication in Swagger
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme

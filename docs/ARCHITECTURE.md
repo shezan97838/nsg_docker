@@ -131,7 +131,7 @@ Order (top = first executed):
 
 1. `CorrelationIdMiddleware` — assigns/propagates X-Correlation-Id
 2. `SecurityHeadersMiddleware` — X-Content-Type-Options, X-Frame-Options, CSP, Cache-Control
-3. `GlobalExceptionHandlingMiddleware` — catches all exceptions, returns ProblemDetails
+3. `GlobalExceptionHandlingMiddleware` — catches all exceptions, returns the `{ success, message, data }` envelope (also writes it for bodyless 401/403/404/405/429); controller results are wrapped by `ApiResponseEnvelopeFilter`
 4. HTTPS Redirection / HSTS
 5. Swagger (all environments; `Swagger__Enabled=false` disables it)
 6. CORS

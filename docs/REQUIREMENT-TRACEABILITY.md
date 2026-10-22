@@ -101,13 +101,20 @@
 
 ## Module 9: Grievance Management — SOW §3.8
 
+Implemented 2026-10-22; see `docs/GRIEVANCE-MODULE.md`. **Status legend for this module:** "Implemented" means code complete and covered by automated tests that use fakes only. **None of it has been smoke-tested against a real MySQL database or a real R2 bucket**, and the migration `Add_Grievance_Management` (regenerated 2026-10-22) has not been applied anywhere.
+
 | SOW Requirement | Component | Entity | API | Security | Status |
 |-----------------|-----------|--------|-----|----------|--------|
-| Category-based submission | — | Grievance | POST /api/v1/grievances | Auth, file validation | **Phase 2** |
-| Secure document upload | IFileStorageService | — | — | Extension/MIME/size validation | **Stub** |
-| Routing to Nodal Officer/HQ | — | — | — | Configurable routing | **Phase 2** |
-| Status tracking workflow | — | — | GET /api/v1/grievances/{id} | Status state machine | **Phase 2** |
-| Reviewing officer dashboard | — | — | GET /api/v1/grievances/dashboard | NodalOfficer policy | **Phase 2** |
+| Category-based submission with attachments | GrievanceService, GrievanceCategoryService, GrievanceDocumentRules, IFileStorageService (R2FileStorageService, ADR-018) | GrievanceCategory, Grievance | GET /api/v1/grievance-categories, POST /api/v1/grievances (multipart, the only creation call) | RequireMobileProfile; ticket GRV-YYYY-000001; user from token; pdf/jpg only; extension + content type + magic bytes; max 3 files of 5 MB; 16 MB request cap; private bucket; all-or-nothing storage with orphan clean-up | Implemented (fake-tested; not smoke-tested) |
+| Category master maintenance | GrievanceCategoryService | GrievanceCategory | /api/v1/admin/grievance-categories (GET, GET by id, POST, PUT, DELETE = soft delete) | RequireGrievanceAdmin; real columns (name, department, is_active, is_deleted, created/updated by and at); deleted categories leave the dropdown and keep their grievances | Implemented (fake-tested; not smoke-tested) |
+| Document download | GrievanceDocumentAccess | — | GET /api/v1/grievances/{id}/documents/{index}, GET /api/v1/admin/grievances/{id}/documents/{index} | Owner or Grievance Admin; streamed, no URL; nosniff; every download audited | Implemented (fake-tested; R2 not smoke-tested) |
+| Forwarding / re-assignment | GrievanceAdminService | Grievance.assigned_to, GrievanceStatusLog | POST /api/v1/admin/grievances/{id}/forward | Target must be an active GRIEVANCE_ADMIN; recorded in the append-only history; refused on a closed grievance | Implemented (fake-tested; not smoke-tested). HQ escalation open (OQ-011, OQ-038) |
+| Admin comments | GrievanceAdminService | GrievanceStatusLog | POST /api/v1/admin/grievances/{id}/comments | Visible to the employee in the history; refused on a closed grievance | Implemented (fake-tested; not smoke-tested) |
+| Status tracking workflow (take action, resolve) and complete history | GrievanceAdminService, GrievanceService | Grievance, GrievanceStatusLog | GET /api/v1/grievances/{id}, PUT /api/v1/admin/grievances/{id}/status | Only 1→2→3→4; remarks required for Action Taken and for Closed (resolved); one transaction with the log row; history append-only | Implemented (fake-tested; not smoke-tested) |
+| Reviewing officer list and detail | GrievanceAdminService | — | GET /api/v1/admin/grievances, GET /api/v1/admin/grievances/{id} | RequireGrievanceAdmin; employee name, NSG number, unit shown; each view audited | Implemented (fake-tested; not smoke-tested) |
+| Reviewing officer dashboard | GrievanceDashboardService | — | GET /api/v1/admin/dashboard/summary | RequireGrievanceAdmin | Implemented (fake-tested; queries not run on MySQL) |
+| Push notification on status change | — | — | — | — | **Not implemented** (FCM is a placeholder; OQ-036) |
+| Audit of grievance actions | IAuditService | AuditLog | — | Ids only: GrievanceCreated, GrievanceStatusChanged, GrievanceDocumentUploaded, GrievanceCommentAdded, GrievanceForwarded, GrievanceCategoryChanged, GrievanceViewed, DocumentDownloaded | Implemented |
 
 ## Cross-Cutting Concerns
 
@@ -123,3 +130,12 @@
 | CERT-In VAPT readiness | OWASP API alignment, audit trail | ✅ (Architecture) |
 | Admin Portal accounts (schema only) | admin_roles (6 fixed roles), admin_profiles; see ADR-016 | Schema only: no endpoints |
 | Admin Portal accounts: provisioning, PIS-verified OTP activation, password + OTP sign-in, refresh rotation, logout, deactivation, role policies (SOW §3.8) | AdminAccountService, AdminActivationService, AdminAuthService, AdminBootstrapService; AdminAccountsController, AdminActivationController, AdminAuthController | AdminRole, AdminProfile, AdminRefreshToken (`admin_roles`, `admin_profiles`, `admin_refresh_tokens`) | `api/v1/admin/accounts`, `api/v1/admin/activation/*`, `api/v1/admin/auth/*`, `api/v1/admin/roles`; see ADR-017 | Separate `AdminBearer` scheme and audience; per-request session check; Super Admin only for account management; rate limited; audited | **Implemented; migration `Add_Admin_Refresh_Tokens` not yet applied to dev** |
+
+## Module 10: DG Message
+
+Implemented 2026-10-22; decisions in OQ-039. Covered by `DgMessageTests` (fakes only); the migration `Add_Dg_Message` is generated but **not applied**, and nothing was run against MySQL or R2.
+
+| Requirement | Component | Entity | API | Security | Status |
+|-------------|-----------|--------|-----|----------|--------|
+| Create / update / soft-delete DG message with optional image | DgMessageService, DgMessageRepository, IFileStorageService (R2) | DgMessage (`dg_message`) | POST, PUT, DELETE /api/v1/admin/dg-messages | RequireMediaCellAdmin; admin from token; JPEG/PNG, 5 MB, magic bytes; private bucket; ids-only audit | Implemented (fake-tested; not smoke-tested) |
+| Show active DG messages to employees | DgMessageService | DgMessage | GET /api/v1/dg-messages, GET /api/v1/dg-messages/{id}/image | RequireMobileProfile; inactive and deleted never returned; image streamed, no URL | Implemented (fake-tested; not smoke-tested) |

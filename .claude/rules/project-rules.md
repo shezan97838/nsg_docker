@@ -114,3 +114,12 @@ Adopted 2026-10-14. **Status: rule adopted; endpoints written before this date d
 - **Exempt:** `/health/*` and Swagger endpoints.
 - **Implementation:** one shared response type in the Application/API layers (`ApiMessageResponse` and `ApiResult<T>`) used by every controller; services return the message with the `Result`. Tests for every endpoint must assert the message for the empty-list and the mutation cases.
 - **Known deviations (to be migrated):** every paged list returns `items: []` when empty; every `DELETE` returns 204; `POST` and `PUT` return the bare resource without a message; `GET /api/v1/ranks/dropdown` and the other dropdowns return `[]` when empty.
+
+### Global response envelope (adopted 2026-10-22; supersedes the body shapes above)
+Every JSON response is `{ "success": true|false, "message": "...", "data": ... }` (`ApiResponse<T>`, Application layer). `data` is the payload on success and always `null` on failure or when there is nothing to return.
+- **Wrapped centrally, not per controller:** `ApiResponseEnvelopeFilter` (global MVC result filter) wraps controller results; `GlobalExceptionHandlingMiddleware` writes the envelope for unhandled exceptions and for bodyless 401/403/404/405/429. Controllers keep returning DTOs, `ApiResult<T>`, `ApiMessageResponse` or `ProblemDetails`; a body that is already an `ApiResponse<T>` is not wrapped twice.
+- **Status codes are preserved.** The only change: a bodyless 204 is sent as 200 with the envelope (`data: null`), because a 204 cannot carry a body.
+- **Not wrapped:** file downloads (`FileResult`), redirects, `/health/*`, `/swagger`.
+- **Errors:** `message` is client-safe. An unhandled exception is always "An unexpected error occurred." (logged with the correlation id, never returned). The RFC 7807 `title`/`type`/`traceId` fields and the machine-readable error code are no longer in the body; the correlation id is the `X-Correlation-Id` response header.
+- **Swagger:** `ApiEnvelopeOperationFilter` shows the envelope on every documented response.
+- **Tests:** `ApiResponseEnvelopeTests` (no database); the MySQL-backed API tests read bodies through `ReadDataAsync()`.

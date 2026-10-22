@@ -30,14 +30,14 @@ public class GeographyApiTests : IAsyncLifetime
     {
         HttpResponseMessage r = await _admin.PostAsJsonAsync("/api/v1/states", NewState(name, code, type));
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        return await r.Content.ReadFromJsonAsync<JsonElement>();
+        return await r.ReadDataAsync();
     }
 
     private async Task<JsonElement> CreateCityAsync(int stateId, string name, string? classification = "CensusTown")
     {
         HttpResponseMessage r = await _admin.PostAsJsonAsync("/api/v1/cities", new { name, stateId, classification, isActive = true });
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        return await r.Content.ReadFromJsonAsync<JsonElement>();
+        return await r.ReadDataAsync();
     }
 
     // ── Authorization ──
@@ -70,7 +70,7 @@ public class GeographyApiTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
         Assert.NotNull(r.Headers.Location);
-        JsonElement body = await r.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement body = await r.ReadDataAsync();
         Assert.Equal("UnionTerritory", body.GetProperty("administrativeType").GetString());
         Assert.Equal("07", body.GetProperty("code").GetString());
         Assert.EndsWith($"/api/v1/states/{body.GetProperty("id").GetInt32()}", r.Headers.Location!.AbsolutePath);
@@ -86,7 +86,7 @@ public class GeographyApiTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Conflict, dupCode.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, dupName.StatusCode);
-        Assert.Equal(409, (await dupCode.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32());
+        Assert.Equal(409, (int)dupCode.StatusCode);
     }
 
     [Theory]
@@ -108,7 +108,7 @@ public class GeographyApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await _admin.GetAsync($"/api/v1/states/{id}")).StatusCode);
         HttpResponseMessage missing = await _admin.GetAsync("/api/v1/states/999999");
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
-        Assert.Equal(404, (await missing.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32());
+        Assert.Equal(404, (int)missing.StatusCode);
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class GeographyApiTests : IAsyncLifetime
         HttpResponseMessage ok = await _admin.PutAsJsonAsync($"/api/v1/states/{id}",
             new { name = "Alpha Renamed", code = "11", administrativeType = "UnionTerritory", isActive = false });
         Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
-        JsonElement updated = await ok.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement updated = await ok.ReadDataAsync();
         Assert.Equal("Alpha Renamed", updated.GetProperty("name").GetString());
         Assert.False(updated.GetProperty("isActive").GetBoolean());
         Assert.NotEqual(JsonValueKind.Null, updated.GetProperty("updatedAtIst").ValueKind);
@@ -222,7 +222,7 @@ public class GeographyApiTests : IAsyncLifetime
         HttpResponseMessage upd = await _admin.PutAsJsonAsync($"/api/v1/cities/{cityId}",
             new { name = "Madgaon", stateId = goa, classification = "StatutoryTown", isActive = true });
         Assert.Equal(HttpStatusCode.OK, upd.StatusCode);
-        Assert.Equal("Madgaon", (await upd.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("name").GetString());
+        Assert.Equal("Madgaon", (await upd.ReadDataAsync()).GetProperty("name").GetString());
 
         Assert.Equal(HttpStatusCode.BadRequest,
             (await _admin.PutAsJsonAsync($"/api/v1/cities/{cityId}", new { name = "Madgaon", stateId = 424242, isActive = true })).StatusCode);
@@ -262,9 +262,9 @@ public class GeographyApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Conflict, (await _admin.DeleteAsync($"/api/v1/states/{stateId}")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await _admin.GetAsync($"/api/v1/cities/{cityId}")).StatusCode); // city untouched
 
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"/api/v1/cities/{cityId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"/api/v1/cities/{cityId}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await _admin.DeleteAsync($"/api/v1/cities/{cityId}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"/api/v1/states/{stateId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"/api/v1/states/{stateId}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await _admin.DeleteAsync($"/api/v1/states/{stateId}")).StatusCode);
     }
 
@@ -278,7 +278,7 @@ public class GeographyApiTests : IAsyncLifetime
             name = "Margao", stateId, id = 777, sourceSystem = "EVIL", sourceKey = "x", createdAtIst = "2000-01-01T00:00:00Z"
         });
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        JsonElement body = await r.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement body = await r.ReadDataAsync();
 
         Assert.NotEqual(777, body.GetProperty("id").GetInt32());
         Assert.True(body.GetProperty("createdAtIst").GetDateTime().Year >= 2025);

@@ -77,7 +77,7 @@ public class PdTradesController : ControllerBase
     /// <summary>"Delete" a PD trade: deactivates it (idempotent). Never hard-deletes; returns 409 while personnel use it.</summary>
     [HttpDelete("{id:int}")]
     [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Deactivate(int id, CancellationToken cancellationToken)

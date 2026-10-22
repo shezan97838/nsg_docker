@@ -76,6 +76,7 @@ See `appsettings.json` for all configuration sections.
 - [Security](docs/SECURITY.md)
 - [Requirement Traceability](docs/REQUIREMENT-TRACEABILITY.md)
 - [Open Questions](docs/OPEN-QUESTIONS.md)
+- [Grievance Management module](docs/GRIEVANCE-MODULE.md)
 - [Architecture Decision Records](docs/architecture/)
 
 ## License

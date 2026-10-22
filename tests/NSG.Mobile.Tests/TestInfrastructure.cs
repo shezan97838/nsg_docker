@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using System.Security.Cryptography;
@@ -137,3 +138,21 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
 [CollectionDefinition("mysql")]
 public class MySqlCollection : ICollectionFixture<DatabaseFixture> { }
+
+/// <summary>Helpers for the standard response envelope <c>{ success, message, data }</c>.</summary>
+public static class EnvelopeExtensions
+{
+    /// <summary>
+    /// Reads a response body, asserts that it is exactly the envelope (<c>success</c>, <c>message</c>, <c>data</c>) with a non-empty message,
+    /// and returns <c>data</c> for a successful response or the whole envelope for a failure (so a test can assert <c>message</c>).
+    /// </summary>
+    public static async Task<System.Text.Json.JsonElement> ReadDataAsync(this HttpResponseMessage response)
+    {
+        System.Text.Json.JsonElement body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(new[] { "success", "message", "data" }, body.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("message").GetString()));
+        bool success = body.GetProperty("success").GetBoolean();
+        Assert.Equal(response.IsSuccessStatusCode, success);
+        return success ? body.GetProperty("data") : body;
+    }
+}

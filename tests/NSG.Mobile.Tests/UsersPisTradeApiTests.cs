@@ -62,10 +62,10 @@ public class UsersPisTradeApiTests : IAsyncLifetime
     {
         HttpResponseMessage r = await _admin.PostAsJsonAsync(Url, body);
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        return (await r.ReadDataAsync()).GetProperty("id").GetInt64();
     }
 
-    private async Task<JsonElement> GetAsync(long id) => await (await _admin.GetAsync($"{Url}/{id}")).Content.ReadFromJsonAsync<JsonElement>();
+    private async Task<JsonElement> GetAsync(long id) => await (await _admin.GetAsync($"{Url}/{id}")).ReadDataAsync();
 
     private async Task<int> CountAsync() { await using AppDbContext c = _factory.CreateContext(); return await c.UsersPis.CountAsync(); }
 
@@ -79,7 +79,7 @@ public class UsersPisTradeApiTests : IAsyncLifetime
         HttpResponseMessage r = await _admin.PostAsJsonAsync(Url, body);
 
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        JsonElement created = await r.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement created = await r.ReadDataAsync();
         Assert.Equal(_nsgGd, created.GetProperty("nsgTradeId").GetInt32());
         Assert.Equal("GD", created.GetProperty("nsgTradeName").GetString());
         Assert.Equal(_pdGd, created.GetProperty("pdTradeId").GetInt32());
@@ -163,16 +163,16 @@ public class UsersPisTradeApiTests : IAsyncLifetime
         long id = await CreatePersonAsync(Create());
 
         Dictionary<string, object?> set = Update(); set["nsgTradeId"] = _nsgGd; set["pdTradeId"] = _pdGd;
-        JsonElement afterSet = await (await _admin.PutAsJsonAsync($"{Url}/{id}", set)).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement afterSet = await (await _admin.PutAsJsonAsync($"{Url}/{id}", set)).ReadDataAsync();
         Assert.Equal("GD", afterSet.GetProperty("nsgTradeName").GetString());
         Assert.Equal("GD", afterSet.GetProperty("pdTradeName").GetString());
 
         Dictionary<string, object?> changeNsgClearPd = Update(); changeNsgClearPd["nsgTradeId"] = _nsgTd;   // PUT replaces: the omitted PD trade is cleared
-        JsonElement afterChange = await (await _admin.PutAsJsonAsync($"{Url}/{id}", changeNsgClearPd)).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement afterChange = await (await _admin.PutAsJsonAsync($"{Url}/{id}", changeNsgClearPd)).ReadDataAsync();
         Assert.Equal("TD", afterChange.GetProperty("nsgTradeName").GetString());
         Assert.Equal(JsonValueKind.Null, afterChange.GetProperty("pdTradeId").ValueKind);
 
-        JsonElement afterClear = await (await _admin.PutAsJsonAsync($"{Url}/{id}", Update())).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement afterClear = await (await _admin.PutAsJsonAsync($"{Url}/{id}", Update())).ReadDataAsync();
         Assert.Equal(JsonValueKind.Null, afterClear.GetProperty("nsgTradeId").ValueKind);
     }
 
@@ -183,7 +183,7 @@ public class UsersPisTradeApiTests : IAsyncLifetime
         long id = await CreatePersonAsync(create);
 
         Dictionary<string, object?> moveRank = Update(); moveRank["nsgRankId"] = _rankB; moveRank["nsgTradeId"] = _nsgGd;
-        JsonElement moved = await (await _admin.PutAsJsonAsync($"{Url}/{id}", moveRank)).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement moved = await (await _admin.PutAsJsonAsync($"{Url}/{id}", moveRank)).ReadDataAsync();
 
         Assert.Equal(_rankB, moved.GetProperty("nsgRankId").GetInt32());
         Assert.Equal(_nsgGd, moved.GetProperty("nsgTradeId").GetInt32());
@@ -212,7 +212,7 @@ public class UsersPisTradeApiTests : IAsyncLifetime
         await CreatePersonAsync(body);
 
         string raw = await (await _admin.GetAsync(Url)).Content.ReadAsStringAsync();
-        JsonElement item = JsonDocument.Parse(raw).RootElement.GetProperty("items")[0];
+        JsonElement item = JsonDocument.Parse(raw).RootElement.GetProperty("data").GetProperty("items")[0];
 
         Assert.Equal(_nsgGd, item.GetProperty("nsgTradeId").GetInt32());
         Assert.Equal("GD", item.GetProperty("nsgTradeName").GetString());
@@ -228,11 +228,11 @@ public class UsersPisTradeApiTests : IAsyncLifetime
         long id = await CreatePersonAsync(body);
 
         Dictionary<string, object?> update = Update(); update["fullName"] = "Renamed"; update["mobileNumber"] = "9876543210";
-        JsonElement updated = await (await _admin.PutAsJsonAsync($"{Url}/{id}", update)).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement updated = await (await _admin.PutAsJsonAsync($"{Url}/{id}", update)).ReadDataAsync();
 
         Assert.Equal("Renamed", updated.GetProperty("fullName").GetString());
         Assert.Equal("Pending", updated.GetProperty("mobileAppActivationStatus").GetString());
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"{Url}/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"{Url}/{id}")).StatusCode);
     }
 
     [Fact]

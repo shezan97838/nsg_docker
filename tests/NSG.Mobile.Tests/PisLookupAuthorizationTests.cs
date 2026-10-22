@@ -124,8 +124,10 @@ public class PisLookupAuthorizationTests : IAsyncLifetime
         Assert.False(string.IsNullOrWhiteSpace(text), $"Response body for {endpoint} was empty.");
 
         using JsonDocument doc = JsonDocument.Parse(text);
-        Assert.True(doc.RootElement.ValueKind is JsonValueKind.Object or JsonValueKind.Array,
-            $"Expected JSON object or array for {endpoint}, but received {doc.RootElement.ValueKind}.");
+        Assert.True(doc.RootElement.GetProperty("success").GetBoolean(), $"Expected the success envelope for {endpoint}.");
+        JsonElement data = doc.RootElement.GetProperty("data");
+        Assert.True(data.ValueKind is JsonValueKind.Object or JsonValueKind.Array,
+            $"Expected JSON object or array in data for {endpoint}, but received {data.ValueKind}.");
     }
 
     [Theory]

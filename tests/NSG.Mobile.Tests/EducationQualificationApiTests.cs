@@ -88,7 +88,7 @@ public class EducationQualificationApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await _employee.PostAsJsonAsync(Url, Body("MBA"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await _employee.PutAsJsonAsync($"{Url}/{id}", Body("X"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await _employee.DeleteAsync($"{Url}/{id}")).StatusCode);
-        Assert.Equal("B.Tech", (await Json(await _admin.GetAsync($"{Url}/{id}"))).GetProperty("courseName").GetString());
+        Assert.Equal("B.Tech", (await Json(await _admin.GetAsync($"{Url}/{id}"))).GetProperty("data").GetProperty("courseName").GetString());
     }
 
     // ── Create ──
@@ -144,7 +144,7 @@ public class EducationQualificationApiTests : IAsyncLifetime
         {
             HttpResponseMessage resp = await _admin.PostAsJsonAsync(Url, Body(duplicate));
             Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
-            Assert.False(string.IsNullOrWhiteSpace((await Json(resp)).GetProperty("detail").GetString()));
+            Assert.False(string.IsNullOrWhiteSpace((await Json(resp)).GetProperty("message").GetString()));
         }
     }
 
@@ -157,13 +157,13 @@ public class EducationQualificationApiTests : IAsyncLifetime
 
         HttpResponseMessage found = await _admin.GetAsync($"{Url}/{id}");
         Assert.Equal(HttpStatusCode.OK, found.StatusCode);
-        Assert.Equal("B.Tech", (await Json(found)).GetProperty("courseName").GetString());
+        Assert.Equal("B.Tech", (await Json(found)).GetProperty("data").GetProperty("courseName").GetString());
 
         HttpResponseMessage missing = await _admin.GetAsync($"{Url}/{id + 999}");
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         JsonElement problem = await Json(missing);
-        Assert.Equal(404, problem.GetProperty("status").GetInt32());
-        Assert.Equal("Education qualification not found.", problem.GetProperty("detail").GetString());
+        Assert.False(problem.GetProperty("success").GetBoolean());
+        Assert.Equal("Education qualification not found.", problem.GetProperty("message").GetString());
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public class EducationQualificationApiTests : IAsyncLifetime
             await CreateAsync(name);
         await CreateAsync("Old B.Tech", isActive: false);
 
-        async Task<JsonElement> List(string query) => await Json(await _admin.GetAsync($"{Url}?{query}"));
+        async Task<JsonElement> List(string query) => (await Json(await _admin.GetAsync($"{Url}?{query}"))).GetProperty("data");
         string[] Names(JsonElement page) => page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("courseName").GetString()!).ToArray();
 
         JsonElement page1 = await List("pageNumber=1&pageSize=2");
@@ -198,7 +198,8 @@ public class EducationQualificationApiTests : IAsyncLifetime
 
             Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
             JsonElement body = await Json(resp);
-            Assert.Equal(new[] { "message" }, body.EnumerateObject().Select(p => p.Name).ToArray());
+            Assert.Equal(new[] { "success", "message", "data" }, body.EnumerateObject().Select(p => p.Name).ToArray());
+            Assert.Equal(JsonValueKind.Null, body.GetProperty("data").ValueKind);
             Assert.Equal("No education qualifications found.", body.GetProperty("message").GetString());
         }
 
@@ -230,7 +231,7 @@ public class EducationQualificationApiTests : IAsyncLifetime
         int id = (await CreateAsync("B.Tech")).GetProperty("id").GetInt32();
 
         Assert.Equal(HttpStatusCode.BadRequest, (await _admin.PutAsJsonAsync($"{Url}/{id}", Body("B.Tech", isActive: null))).StatusCode);
-        Assert.True((await Json(await _admin.GetAsync($"{Url}/{id}"))).GetProperty("isActive").GetBoolean());
+        Assert.True((await Json(await _admin.GetAsync($"{Url}/{id}"))).GetProperty("data").GetProperty("isActive").GetBoolean());
     }
 
     [Fact]
@@ -261,7 +262,7 @@ public class EducationQualificationApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         Assert.Equal("Education qualification is already inactive.", (await Json(second)).GetProperty("message").GetString());
 
-        Assert.False((await Json(await _admin.GetAsync($"{Url}/{id}"))).GetProperty("isActive").GetBoolean());
+        Assert.False((await Json(await _admin.GetAsync($"{Url}/{id}"))).GetProperty("data").GetProperty("isActive").GetBoolean());
         Assert.Equal(1, await AuditCountAsync(id, "EducationQualificationDeactivated"));
         await using AppDbContext ctx = _factory.CreateContext();
         Assert.Equal(1, await ctx.EducationQualifications.CountAsync(e => e.Id == id));   // never hard-deleted
@@ -273,7 +274,7 @@ public class EducationQualificationApiTests : IAsyncLifetime
         HttpResponseMessage resp = await _admin.DeleteAsync($"{Url}/987654");
 
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
-        Assert.Equal("Education qualification not found.", (await Json(resp)).GetProperty("detail").GetString());
+        Assert.Equal("Education qualification not found.", (await Json(resp)).GetProperty("message").GetString());
     }
 
     [Fact]
@@ -284,7 +285,7 @@ public class EducationQualificationApiTests : IAsyncLifetime
 
         HttpResponseMessage delete = await _admin.DeleteAsync($"{Url}/{id}");
         Assert.Equal(HttpStatusCode.Conflict, delete.StatusCode);
-        Assert.Contains("cannot be deactivated", (await Json(delete)).GetProperty("detail").GetString());
+        Assert.Contains("cannot be deactivated", (await Json(delete)).GetProperty("message").GetString());
         Assert.Equal(HttpStatusCode.Conflict, (await _admin.PutAsJsonAsync($"{Url}/{id}", Body("B.Tech", isActive: false))).StatusCode);
 
         JsonElement renamed = (await Json(await _admin.PutAsJsonAsync($"{Url}/{id}", Body("Bachelor of Technology")))).GetProperty("data");

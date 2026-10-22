@@ -603,6 +603,81 @@ namespace NSG.Mobile.Infrastructure.Migrations
                     b.ToTable("devices", (string)null);
                 });
 
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.DgMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Designation")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("designation");
+
+                    b.Property<string>("DgName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("dg_name");
+
+                    b.Property<string>("ImageStorageKey")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("image_storage_key");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("message");
+
+                    b.Property<DateTime?>("UpdatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at_ist");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_dg_message");
+
+                    b.HasIndex("IsDeleted", "IsActive", "CreatedAtIst")
+                        .HasDatabaseName("ix_dg_message_is_deleted_is_active_created_at_ist");
+
+                    b.ToTable("dg_message", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_dg_message_designation", "CHAR_LENGTH(`designation`) > 0");
+
+                            t.HasCheckConstraint("ck_dg_message_dg_name", "CHAR_LENGTH(`dg_name`) > 0");
+
+                            t.HasCheckConstraint("ck_dg_message_message", "CHAR_LENGTH(`message`) > 0");
+                        });
+                });
+
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.EducationQualification", b =>
                 {
                     b.Property<int>("Id")
@@ -636,6 +711,247 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasDatabaseName("ix_education_qualifications_course_name");
 
                     b.ToTable("education_qualifications", (string)null);
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.Grievance", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ActionRemarks")
+                        .HasMaxLength(2000)
+                        .HasColumnType("varchar(2000)")
+                        .HasColumnName("action_remarks");
+
+                    b.Property<DateTime?>("ActionTakenAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("action_taken_at_ist");
+
+                    b.Property<long?>("ActionTakenBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("action_taken_by");
+
+                    b.Property<long?>("AssignedTo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("assigned_to");
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("int")
+                        .HasColumnName("category_id");
+
+                    b.Property<DateTime?>("ClosedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("closed_at_ist");
+
+                    b.Property<long?>("ClosedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("closed_by");
+
+                    b.Property<string>("ClosedRemarks")
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)")
+                        .HasColumnName("closed_remarks");
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by");
+
+                    b.Property<int>("CurrentStatus")
+                        .HasColumnType("int")
+                        .HasColumnName("current_status");
+
+                    b.Property<string>("DocumentsJson")
+                        .HasColumnType("json")
+                        .HasColumnName("document_urls");
+
+                    b.Property<string>("GrievanceNote")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("varchar(2000)")
+                        .HasColumnName("grievance_note");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("subject");
+
+                    b.Property<string>("TicketNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("grievance_id");
+
+                    b.Property<DateTime?>("UpdatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at_ist");
+
+                    b.HasKey("Id")
+                        .HasName("pk_grievance");
+
+                    b.HasIndex("CategoryId")
+                        .HasDatabaseName("ix_grievance_category_id");
+
+                    b.HasIndex("TicketNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_grievance_grievance_id");
+
+                    b.HasIndex("CreatedBy", "CurrentStatus")
+                        .HasDatabaseName("ix_grievance_created_by_current_status");
+
+                    b.HasIndex("CurrentStatus", "CreatedAtIst")
+                        .HasDatabaseName("ix_grievance_current_status_created_at_ist");
+
+                    b.ToTable("grievance", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_grievance_action_fields", "`current_status` < 3 OR (`action_taken_by` IS NOT NULL AND `action_taken_at_ist` IS NOT NULL AND `action_remarks` IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_grievance_closed_fields", "`current_status` <> 4 OR (`closed_by` IS NOT NULL AND `closed_at_ist` IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_grievance_current_status", "`current_status` IN (1, 2, 3, 4)");
+
+                            t.HasCheckConstraint("ck_grievance_documents", "`document_urls` IS NULL OR JSON_VALID(`document_urls`)");
+
+                            t.HasCheckConstraint("ck_grievance_subject", "CHAR_LENGTH(`subject`) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.GrievanceCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by");
+
+                    b.Property<int?>("DepartmentId")
+                        .HasColumnType("int")
+                        .HasColumnName("department_id");
+
+                    b.Property<string>("GrievanceName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("grievance_name");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<DateTime?>("UpdatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at_ist");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_grievance_category");
+
+                    b.HasIndex("GrievanceName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_grievance_category_grievance_name");
+
+                    b.ToTable("grievance_category", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_grievance_category_name", "CHAR_LENGTH(`grievance_name`) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.GrievanceStatusLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("ChangedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("changed_at_ist");
+
+                    b.Property<long>("ChangedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("changed_by");
+
+                    b.Property<int>("ChangedByType")
+                        .HasColumnType("int")
+                        .HasColumnName("changed_by_type");
+
+                    b.Property<long?>("ForwardedTo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("forwarded_to");
+
+                    b.Property<int?>("FromStatus")
+                        .HasColumnType("int")
+                        .HasColumnName("from_status");
+
+                    b.Property<long>("GrievancePk")
+                        .HasColumnType("bigint")
+                        .HasColumnName("grievance_pk");
+
+                    b.Property<int>("LogAction")
+                        .HasColumnType("int")
+                        .HasColumnName("log_action");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)")
+                        .HasColumnName("remarks");
+
+                    b.Property<int>("ToStatus")
+                        .HasColumnType("int")
+                        .HasColumnName("to_status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_grievance_status_log");
+
+                    b.HasIndex("GrievancePk", "ChangedAtIst")
+                        .HasDatabaseName("ix_grievance_status_log_grievance_pk_changed_at_ist");
+
+                    b.ToTable("grievance_status_log", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_grievance_status_log_changed_by_type", "`changed_by_type` IN (1, 2)");
+
+                            t.HasCheckConstraint("ck_grievance_status_log_from_status", "`from_status` IS NULL OR `from_status` IN (1, 2, 3, 4)");
+
+                            t.HasCheckConstraint("ck_grievance_status_log_log_action", "`log_action` IN (1, 2, 3)");
+
+                            t.HasCheckConstraint("ck_grievance_status_log_to_status", "`to_status` IN (1, 2, 3, 4)");
+                        });
                 });
 
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.MobileAuthGrant", b =>
@@ -1780,6 +2096,35 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasConstraintName("fk_devices_users_user_id");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.Grievance", b =>
+                {
+                    b.HasOne("NSG.Mobile.Domain.Entities.GrievanceCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_grievance_grievance_category_category_id");
+
+                    b.HasOne("NSG.Mobile.Domain.Entities.MobileUserProfile", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_grievance_mobile_user_profiles_created_by");
+
+                    b.Navigation("Category");
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.GrievanceStatusLog", b =>
+                {
+                    b.HasOne("NSG.Mobile.Domain.Entities.Grievance", null)
+                        .WithMany()
+                        .HasForeignKey("GrievancePk")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_grievance_status_log_grievance_grievance_pk");
                 });
 
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.MobileRefreshToken", b =>

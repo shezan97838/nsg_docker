@@ -31,7 +31,12 @@ In an environment variable name, `__` stands for `:` (for example `ConnectionStr
 | `Redis__ConnectionString` | yes | optional | Empty means in-memory cache. |
 | `Sms__ApiKey`, `Hrms__ApiKey`, `Payroll__ApiKey` | **yes** | when those integrations go live | Currently stubs. |
 | `Fcm__CredentialPath` | path only | when push goes live | Path to the Firebase service-account file, which itself is a secret and stays outside the repository. |
-| `FileStorage__BasePath` | no | yes on Linux | The default in `appsettings.json` is a Windows path; set an absolute Linux path. |
+| `FileStorage__BasePath` | no | yes on Linux | The default in `appsettings.json` is a Windows path; set an absolute Linux path. Still required outside Development when R2 is used. |
+| `R2Storage__ServiceUrl` | no | to use R2 | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`. A real value switches grievance document storage to Cloudflare R2; the committed placeholder means off (ADR-018, `GRIEVANCE-MODULE.md`). |
+| `R2Storage__BucketName` | no | with R2 | The private bucket. |
+| `R2Storage__AccessKey`, `R2Storage__SecretKey` | **yes** | with R2 | Bucket-scoped R2 API token (Object Read & Write). User-secrets or environment only. Missing values stop startup when R2 is on. |
+| `R2Storage__KeyPrefix` | no | optional | Folder in front of every object, for example one per environment. |
+| `RateLimiting__GrievanceWritePermitLimit` | no | optional | Grievance creates + uploads per client IP per minute; default 10. |
 
 Tools and tests:
 

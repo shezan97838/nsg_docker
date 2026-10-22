@@ -88,13 +88,13 @@ public class UsersPisApiTests : IAsyncLifetime
     {
         HttpResponseMessage r = await _admin.PostAsJsonAsync(Url, body);
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        return await r.Content.ReadFromJsonAsync<JsonElement>();
+        return await r.ReadDataAsync();
     }
 
     private static long IdOf(JsonElement e) => e.GetProperty("id").GetInt64();
 
     private async Task<JsonElement> GetAsync(long id)
-        => await (await _admin.GetAsync($"{Url}/{id}")).Content.ReadFromJsonAsync<JsonElement>();
+        => await (await _admin.GetAsync($"{Url}/{id}")).ReadDataAsync();
 
     private async Task<int> CountAsync() { await using AppDbContext c = _factory.CreateContext(); return await c.UsersPis.CountAsync(); }
 
@@ -131,7 +131,7 @@ public class UsersPisApiTests : IAsyncLifetime
         HttpResponseMessage r = await _admin.PostAsJsonAsync(Url, Minimal());
 
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        JsonElement body = await r.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement body = await r.ReadDataAsync();
         long id = IdOf(body);
         Assert.EndsWith($"{Url}/{id}", r.Headers.Location!.AbsolutePath);
         Assert.Equal("N-1", body.GetProperty("nsgNumber").GetString());
@@ -148,7 +148,7 @@ public class UsersPisApiTests : IAsyncLifetime
         HttpResponseMessage r = await _admin.PostAsJsonAsync(Url, Full());
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
         string raw = await r.Content.ReadAsStringAsync();
-        JsonElement body = JsonDocument.Parse(raw).RootElement;
+        JsonElement body = JsonDocument.Parse(raw).RootElement.GetProperty("data");
 
         Assert.Equal("PIS test rank", body.GetProperty("nsgRankName").GetString());
         Assert.Equal("13 SRG", body.GetProperty("nsgUnitName").GetString());
@@ -353,11 +353,11 @@ public class UsersPisApiTests : IAsyncLifetime
 
         HttpResponseMessage found = await _admin.GetAsync($"{Url}/{id}");
         Assert.Equal(HttpStatusCode.OK, found.StatusCode);
-        Assert.Equal("123456", (await found.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("nsgNumber").GetString());
+        Assert.Equal("123456", (await found.ReadDataAsync()).GetProperty("nsgNumber").GetString());
 
         HttpResponseMessage missing = await _admin.GetAsync($"{Url}/{id + 9999}");
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
-        Assert.Equal(404, (await missing.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32());
+        Assert.Equal(404, (int)missing.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await _admin.GetAsync($"{Url}/abc")).StatusCode);
     }
 
@@ -372,7 +372,7 @@ public class UsersPisApiTests : IAsyncLifetime
 
         HttpResponseMessage r = await _admin.GetAsync($"{Url}?pageNumber=1&pageSize=2");
         string raw = await r.Content.ReadAsStringAsync();
-        JsonElement page = JsonDocument.Parse(raw).RootElement;
+        JsonElement page = JsonDocument.Parse(raw).RootElement.GetProperty("data");
 
         Assert.Equal(5, page.GetProperty("totalCount").GetInt32());
         Assert.Equal(3, page.GetProperty("totalPages").GetInt32());
@@ -381,7 +381,7 @@ public class UsersPisApiTests : IAsyncLifetime
         Assert.DoesNotContain("Masked", raw);
         Assert.DoesNotContain("AGIPR", raw);
         Assert.Equal(1, JsonDocument.Parse(await (await _admin.GetAsync($"{Url}?pageNumber=3&pageSize=2")).Content.ReadAsStringAsync())
-            .RootElement.GetProperty("items").GetArrayLength());
+            .RootElement.GetProperty("data").GetProperty("items").GetArrayLength());
     }
 
     [Fact]
@@ -391,12 +391,12 @@ public class UsersPisApiTests : IAsyncLifetime
         Dictionary<string, object?> b = Minimal("F-2"); b["fullName"] = "Bhanu Pratap"; b["mobileNumber"] = "9000000002"; b["nsgUnitId"] = _otherUnit; b["parentDepartmentRankId"] = _dept; b["category"] = "GEN";
         long idA = IdOf(await CreateAsync(a));
         long idB = IdOf(await CreateAsync(b));
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"{Url}/{idB}")).StatusCode);   // B becomes inactive
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"{Url}/{idB}")).StatusCode);   // B becomes inactive
         await using (AppDbContext ctx = _factory.CreateContext())
             await ctx.Database.ExecuteSqlRawAsync("UPDATE `users_pis` SET `mobile_app_activation_status` = 1 WHERE `id` = {0}", idA);
 
         async Task<string[]> Ids(string query)
-            => (await (await _admin.GetAsync($"{Url}?{query}")).Content.ReadFromJsonAsync<JsonElement>())
+            => (await (await _admin.GetAsync($"{Url}?{query}")).ReadDataAsync())
                 .GetProperty("items").EnumerateArray().Select(i => i.GetProperty("nsgNumber").GetString()!).ToArray();
 
         Assert.Equal(new[] { "F-1", "F-2" }, await Ids(""));                       // inactive records are listed by default
@@ -432,7 +432,7 @@ public class UsersPisApiTests : IAsyncLifetime
         HttpResponseMessage r = await _admin.PutAsJsonAsync($"{Url}/{id}", update);
 
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
-        JsonElement body = await r.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement body = await r.ReadDataAsync();
         Assert.Equal("123456", body.GetProperty("nsgNumber").GetString());
         Assert.Equal("NEW-SVC", body.GetProperty("serviceNumber").GetString());
         Assert.Equal("Changed Name", body.GetProperty("fullName").GetString());
@@ -459,7 +459,7 @@ public class UsersPisApiTests : IAsyncLifetime
             oldHash = (await ctx.UsersPis.AsNoTracking().SingleAsync()).PanNumberHash!;
 
         Dictionary<string, object?> update = new() { ["serviceNumber"] = "S", ["isActive"] = true, ["panNumber"] = "ABCDE1234F", ["salaryAccountNumber"] = "123456789012" };
-        JsonElement body = await (await _admin.PutAsJsonAsync($"{Url}/{id}", update)).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement body = await (await _admin.PutAsJsonAsync($"{Url}/{id}", update)).ReadDataAsync();
 
         Assert.Equal("XXXXXX234F", body.GetProperty("panNumberMasked").GetString());
         Assert.Equal("XXXXXXXX9012", body.GetProperty("salaryAccountNumberMasked").GetString());
@@ -512,8 +512,8 @@ public class UsersPisApiTests : IAsyncLifetime
     {
         long id = IdOf(await CreateAsync(Full()));
 
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"{Url}/{id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await _admin.DeleteAsync($"{Url}/{id}")).StatusCode);   // idempotent
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"{Url}/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"{Url}/{id}")).StatusCode);   // idempotent
 
         JsonElement after = await GetAsync(id);
         Assert.False(after.GetProperty("isActive").GetBoolean());
@@ -523,7 +523,7 @@ public class UsersPisApiTests : IAsyncLifetime
         Assert.Equal(1, await AuditCountAsync(id, "UserPisDeactivated"));
 
         Dictionary<string, object?> reactivate = new() { ["serviceNumber"] = "S", ["isActive"] = true };
-        Assert.True((await (await _admin.PutAsJsonAsync($"{Url}/{id}", reactivate)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("isActive").GetBoolean());
+        Assert.True((await (await _admin.PutAsJsonAsync($"{Url}/{id}", reactivate)).ReadDataAsync()).GetProperty("isActive").GetBoolean());
     }
 
     [Fact]

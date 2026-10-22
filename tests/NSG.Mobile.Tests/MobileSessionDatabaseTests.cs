@@ -98,7 +98,7 @@ public class MobileSessionDatabaseTests : IAsyncLifetime
     {
         (HttpStatusCode status, JsonElement body) = await PostAsync(Bearer(accessToken), $"{Auth}/mpin/change", new { currentMpin = "9999", newMpin = "1357", confirmNewMpin = "1357" });
         // A live session reaches the service, which answers with the "Invalid credentials." ProblemDetails; a dead one is rejected before it.
-        return status == HttpStatusCode.Unauthorized && body.TryGetProperty("title", out JsonElement title) && title.GetString() == "AUTH_INVALID_CREDENTIALS";
+        return status == HttpStatusCode.Unauthorized && body.TryGetProperty("message", out JsonElement message) && message.GetString() == NSG.Mobile.Application.MobileAuth.MobileAuthMessages.InvalidCredentials;
     }
 
     // ───── login and storage ─────
@@ -142,7 +142,7 @@ public class MobileSessionDatabaseTests : IAsyncLifetime
 
         (HttpStatusCode replayStatus, JsonElement replay) = await RefreshAsync(first.Refresh);
         Assert.Equal(HttpStatusCode.Unauthorized, replayStatus);
-        Assert.Equal("TOKEN_REUSE_DETECTED", replay.GetProperty("title").GetString());
+        Assert.Equal(NSG.Mobile.Application.MobileAuth.MobileAuthMessages.SessionEnded, replay.GetProperty("message").GetString());
 
         // The newest token and its access token died with the session.
         Assert.Equal(HttpStatusCode.Unauthorized, (await RefreshAsync(second.Refresh)).Status);
@@ -176,14 +176,14 @@ public class MobileSessionDatabaseTests : IAsyncLifetime
     {
         (HttpStatusCode unknown, JsonElement unknownBody) = await RefreshAsync("not-a-token");
         Assert.Equal(HttpStatusCode.Unauthorized, unknown);
-        Assert.Equal("TOKEN_INVALID", unknownBody.GetProperty("title").GetString());
+        Assert.Equal(NSG.Mobile.Application.MobileAuth.MobileAuthMessages.SessionInvalid, unknownBody.GetProperty("message").GetString());
 
         Tokens tokens = await LoginAsync();
         await using (AppDbContext ctx = _factory.CreateContext())
             await ctx.Database.ExecuteSqlRawAsync("UPDATE `mobile_refresh_tokens` SET `expires_at_ist` = `expires_at_ist` - INTERVAL 30 DAY");
         (HttpStatusCode expired, JsonElement expiredBody) = await RefreshAsync(tokens.Refresh);
         Assert.Equal(HttpStatusCode.Unauthorized, expired);
-        Assert.Equal("TOKEN_EXPIRED", expiredBody.GetProperty("title").GetString());
+        Assert.Equal(NSG.Mobile.Application.MobileAuth.MobileAuthMessages.SessionExpired, expiredBody.GetProperty("message").GetString());
 
         Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync(_anonymous, $"{Auth}/token/refresh", new { refreshToken = "" })).Status);
     }
@@ -263,7 +263,7 @@ public class MobileSessionDatabaseTests : IAsyncLifetime
 
         (HttpStatusCode refresh, JsonElement refreshBody) = await RefreshAsync(tokens.Refresh);
         Assert.Equal(HttpStatusCode.Forbidden, refresh);
-        Assert.Equal("Your access is unavailable. Please contact the IT Admin.", refreshBody.GetProperty("detail").GetString());
+        Assert.Equal("Your access is unavailable. Please contact the IT Admin.", refreshBody.GetProperty("message").GetString());
 
         Assert.Equal(HttpStatusCode.Forbidden, (await PostAsync(_anonymous, $"{Auth}/login", new { nsgNumber = Nsg, mobileNumber = Mobile, dateOfBirth = Dob, mpin = Mpin })).Status);
         await using AppDbContext check = _factory.CreateContext();

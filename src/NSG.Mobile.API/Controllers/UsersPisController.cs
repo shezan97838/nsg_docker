@@ -101,7 +101,7 @@ public class UsersPisController : ControllerBase
     /// "Delete" a personnel record. Records are never hard-deleted: this deactivates the record (idempotent).
     /// </summary>
     [HttpDelete("{id:long}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Deactivate(long id, CancellationToken cancellationToken)
     {

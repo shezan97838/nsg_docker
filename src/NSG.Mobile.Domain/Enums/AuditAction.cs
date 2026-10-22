@@ -50,5 +50,19 @@ public enum AuditAction
 
     // Administrative events
     AdminAction = 70,
-    ConfigurationChanged = 71
+    ConfigurationChanged = 71,
+
+    // Grievance management events
+    GrievanceCreated = 80,
+    GrievanceStatusChanged = 81,
+    GrievanceDocumentUploaded = 82,
+    GrievanceCategoryChanged = 83,
+    GrievanceViewed = 84,
+    GrievanceCommentAdded = 85,
+    GrievanceForwarded = 86,
+
+    // DG message events
+    DgMessageCreated = 90,
+    DgMessageUpdated = 91,
+    DgMessageDeleted = 92
 }

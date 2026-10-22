@@ -1,27 +1,28 @@
-using System.Net;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using NSG.Mobile.API.Filters;
+using NSG.Mobile.Application.Common;
 using NSG.Mobile.Domain.Exceptions;
 
 namespace NSG.Mobile.API.Middleware;
 
 /// <summary>
-/// Global exception handling middleware.
-/// Returns RFC 7807 ProblemDetails for all unhandled exceptions.
-/// NEVER exposes stack traces, SQL exceptions, or internal paths in production.
+/// Global exception handling middleware. Every unhandled exception, and every error status that ends a request without a body
+/// (401, 403, 404, 405, 429 from authentication, authorization, routing and the rate limiter), is answered with the standard
+/// <c>{ "success": false, "message": "...", "data": null }</c> envelope and the matching HTTP status.
+/// The exception itself is logged with the correlation id; the client never receives a stack trace, SQL or internal path.
 /// </summary>
 public class GlobalExceptionHandlingMiddleware
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
     private readonly RequestDelegate _next;
     private readonly ILogger<GlobalExceptionHandlingMiddleware> _logger;
-    private readonly IHostEnvironment _environment;
 
-    public GlobalExceptionHandlingMiddleware(RequestDelegate next, ILogger<GlobalExceptionHandlingMiddleware> logger, IHostEnvironment environment)
+    public GlobalExceptionHandlingMiddleware(RequestDelegate next, ILogger<GlobalExceptionHandlingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
-        _environment = environment;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -38,88 +39,49 @@ public class GlobalExceptionHandlingMiddleware
     }
 
     /// <summary>
-    /// Authentication, authorization and the rate limiter end a request with a bare status code and no body. No API may answer
-    /// with a blank response, so 401, 403 and 429 get an RFC 7807 body here when nothing else wrote one.
+    /// A request can end with an error status and no body (authentication, authorization, routing, the rate limiter). No API may
+    /// answer blank, so the envelope is written here when nothing else wrote a body. Health checks and Swagger are exempt.
     /// </summary>
     private static async Task WriteBodyForBareErrorAsync(HttpContext context)
     {
         HttpResponse response = context.Response;
-        if (response.HasStarted || response.ContentLength != null || !string.IsNullOrEmpty(response.ContentType)) return;
+        if (response.HasStarted || response.StatusCode < StatusCodes.Status400BadRequest) return;
+        if (response.ContentLength != null || !string.IsNullOrEmpty(response.ContentType)) return;
+        if (IsExempt(context.Request.Path)) return;
 
-        (string Title, string Detail, string Type)? body = response.StatusCode switch
-        {
-            StatusCodes.Status401Unauthorized => ("Unauthorized", "Authentication is required. Please sign in again.", "https://tools.ietf.org/html/rfc7235#section-3.1"),
-            StatusCodes.Status403Forbidden => ("Forbidden", "You do not have permission to perform this action.", "https://tools.ietf.org/html/rfc7231#section-6.5.3"),
-            StatusCodes.Status429TooManyRequests => ("Too Many Requests", "Too many requests. Please wait a moment and try again.", "https://tools.ietf.org/html/rfc6585#section-4"),
-            _ => null
-        };
-        if (body == null) return;
-
-        ProblemDetails problem = new() { Status = response.StatusCode, Title = body.Value.Title, Detail = body.Value.Detail, Type = body.Value.Type };
-        problem.Extensions["traceId"] = context.Items["CorrelationId"]?.ToString() ?? context.TraceIdentifier;
-
-        response.ContentType = "application/problem+json";
-        await response.WriteAsync(JsonSerializer.Serialize(problem, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        await WriteEnvelopeAsync(response, response.StatusCode, ApiResponse.Fail(ApiEnvelope.DefaultMessage(response.StatusCode)));
     }
 
     private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
-        var correlationId = context.Items["CorrelationId"]?.ToString();
-
+        string? correlationId = context.Items["CorrelationId"]?.ToString();
         _logger.LogError(exception, "Unhandled exception. CorrelationId: {CorrelationId}", correlationId);
 
-        var problemDetails = exception switch
+        // The response cannot be changed once it has started; the exception is already logged.
+        if (context.Response.HasStarted) return;
+
+        (int status, string message) = exception switch
         {
-            EntityNotFoundException ex => new ProblemDetails
-            {
-                Status = (int)HttpStatusCode.NotFound,
-                Title = "Resource Not Found",
-                Detail = ex.Message,
-                Type = "https://tools.ietf.org/html/rfc7231#section-6.5.4"
-            },
-            BusinessRuleException ex => new ProblemDetails
-            {
-                Status = (int)HttpStatusCode.BadRequest,
-                Title = "Business Rule Violation",
-                Detail = ex.Message,
-                Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1"
-            },
-            InvalidAccountStateException ex => new ProblemDetails
-            {
-                Status = (int)HttpStatusCode.Conflict,
-                Title = "Invalid Account State",
-                Detail = ex.Message,
-                Type = "https://tools.ietf.org/html/rfc7231#section-6.5.8"
-            },
-            DbUpdateConcurrencyException => new ProblemDetails
-            {
-                Status = (int)HttpStatusCode.Conflict,
-                Title = "Concurrency Conflict",
-                Detail = "The resource was modified by another request. Please retry.",
-                Type = "https://tools.ietf.org/html/rfc7231#section-6.5.8"
-            },
-            UnauthorizedAccessException => new ProblemDetails
-            {
-                Status = (int)HttpStatusCode.Forbidden,
-                Title = "Forbidden",
-                Detail = "You do not have permission to perform this action.",
-                Type = "https://tools.ietf.org/html/rfc7231#section-6.5.3"
-            },
-            _ => new ProblemDetails
-            {
-                Status = (int)HttpStatusCode.InternalServerError,
-                Title = "Internal Server Error",
-                Detail = _environment.IsDevelopment() ? exception.Message : "An unexpected error occurred.",
-                Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1"
-            }
+            // These domain exceptions carry messages written for clients.
+            EntityNotFoundException ex => (StatusCodes.Status404NotFound, ex.Message),
+            BusinessRuleException ex => (StatusCodes.Status400BadRequest, ex.Message),
+            InvalidAccountStateException ex => (StatusCodes.Status409Conflict, ex.Message),
+            DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "The resource was modified by another request. Please retry."),
+            UnauthorizedAccessException => (StatusCodes.Status403Forbidden, ApiEnvelope.DefaultMessage(StatusCodes.Status403Forbidden)),
+            BadHttpRequestException ex => (ex.StatusCode, ApiEnvelope.DefaultMessage(ex.StatusCode)),
+            _ => (StatusCodes.Status500InternalServerError, ApiEnvelope.DefaultMessage(StatusCodes.Status500InternalServerError))
         };
 
-        problemDetails.Extensions["traceId"] = correlationId ?? context.TraceIdentifier;
+        await WriteEnvelopeAsync(context.Response, status, ApiResponse.Fail(message));
+    }
 
-        context.Response.StatusCode = problemDetails.Status ?? 500;
-        context.Response.ContentType = "application/problem+json";
+    private static bool IsExempt(PathString path)
+        => path.StartsWithSegments("/health") || path.StartsWithSegments("/swagger");
 
-        var json = JsonSerializer.Serialize(problemDetails, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-        await context.Response.WriteAsync(json);
+    private static async Task WriteEnvelopeAsync(HttpResponse response, int status, ApiResponse<object> body)
+    {
+        response.StatusCode = status;
+        response.ContentType = "application/json; charset=utf-8";
+        await response.WriteAsync(JsonSerializer.Serialize(body, JsonOptions));
     }
 }
