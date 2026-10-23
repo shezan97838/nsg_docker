@@ -654,6 +654,10 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("message");
 
+                    b.Property<string>("MessageHindi")
+                        .HasColumnType("text")
+                        .HasColumnName("message_hindi");
+
                     b.Property<DateTime?>("UpdatedAtIst")
                         .HasColumnType("datetime(6)")
                         .HasColumnName("updated_at_ist");

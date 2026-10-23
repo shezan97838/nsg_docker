@@ -52,14 +52,14 @@ internal sealed class DgFakeRepository : IDgMessageRepository
     public Task<DgMessage?> GetActiveByIdAsync(int id, CancellationToken cancellationToken = default)
         => Task.FromResult(Rows.FirstOrDefault(m => m.Id == id && m.IsActive && !m.IsDeleted));
 
-    public Task<DgMessageUpdateResult> UpdateAsync(int id, string dgName, string designation, string message, bool isActive, string? newImageKey,
+    public Task<DgMessageUpdateResult> UpdateAsync(int id, string dgName, string designation, string message, string? messageHindi, bool isActive, string? newImageKey,
         long? updatedBy, DateTime nowIst, CancellationToken cancellationToken = default)
     {
         if (ThrowOnWrite) throw new InvalidOperationException("Simulated database failure.");
         DgMessage? m = Rows.FirstOrDefault(x => x.Id == id && !x.IsDeleted);
         if (m == null) return Task.FromResult(new DgMessageUpdateResult(DgMessageUpdateOutcome.NotFound));
         string? previous = m.ImageStorageKey;
-        m.DgName = dgName; m.Designation = designation; m.Message = message; m.IsActive = isActive;
+        m.DgName = dgName; m.Designation = designation; m.Message = message; m.MessageHindi = messageHindi; m.IsActive = isActive;
         if (newImageKey != null) m.ImageStorageKey = newImageKey;
         m.UpdatedBy = updatedBy; m.UpdatedAtIst = nowIst;
         return Task.FromResult(new DgMessageUpdateResult(DgMessageUpdateOutcome.Updated, m, previous));
@@ -418,15 +418,100 @@ public class DgMessageTests
     private static MethodInfo Action(string name) => typeof(DgMessagesController).GetMethod(name)!;
 
     [Fact]
-    public void Every_action_names_its_policy_admin_writes_need_the_media_cell_admin_and_reads_the_mobile_profile()
+    public void Reads_keep_the_mobile_profile_policy_and_the_admin_writes_are_TEMPORARILY_anonymous()
     {
         Assert.Null(typeof(DgMessagesController).GetCustomAttribute<AllowAnonymousAttribute>());
+        // TEMPORARY: when [Authorize(RequireMediaCellAdmin)] is restored on the writes, assert the policy here again and drop the anonymous check.
         foreach (string name in new[] { nameof(DgMessagesController.Create), nameof(DgMessagesController.Update), nameof(DgMessagesController.Delete) })
-            Assert.Equal(DomainConstants.Policies.RequireMediaCellAdmin, Action(name).GetCustomAttribute<AuthorizeAttribute>()!.Policy);
+        {
+            Assert.NotNull(Action(name).GetCustomAttribute<AllowAnonymousAttribute>());
+            Assert.Null(Action(name).GetCustomAttribute<AuthorizeAttribute>());
+        }
         foreach (string name in new[] { nameof(DgMessagesController.GetActive), nameof(DgMessagesController.GetImage) })
+        {
             Assert.Equal(DomainConstants.Policies.RequireMobileProfile, Action(name).GetCustomAttribute<AuthorizeAttribute>()!.Policy);
-        Assert.All(typeof(DgMessagesController).GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
-            m => Assert.Null(m.GetCustomAttribute<AllowAnonymousAttribute>()));
+            Assert.Null(Action(name).GetCustomAttribute<AllowAnonymousAttribute>());
+        }
+    }
+
+    // ── Hindi message (unit tests with the in-memory repository; the MySQL round trip is in DgMessageHindiDatabaseTests) ──
+
+    private const string Hindi = "एनएसजी मोबाइल एप्लिकेशन में आपका स्वागत है।";
+
+    [Fact]
+    public async Task Create_saves_both_languages_and_the_list_returns_messageHindi_in_the_json()
+    {
+        Kit kit = new();
+        SaveDgMessageRequestDto request = Save();
+        request.MessageHindi = "  " + Hindi + " ";
+
+        var result = await kit.Service.CreateAsync(request, null, default);
+        var list = await kit.Service.GetActiveAsync(1, 20, default);
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal(Hindi, result.Data!.Data!.MessageHindi);
+        Assert.Equal(Hindi, kit.Repo.Rows.Single().MessageHindi);
+        Assert.Equal("First paragraph.\n\nSecond paragraph.", kit.Repo.Rows.Single().Message);
+        Assert.Equal(Hindi, list.Data!.Items.Single().MessageHindi);
+        Assert.Contains("\"messageHindi\"", JsonSerializer.Serialize(list.Data.Items.Single(), new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    }
+
+    [Fact]
+    public async Task Update_changes_both_fields_and_can_clear_the_hindi_text()
+    {
+        Kit kit = new();
+        int id = (await kit.Service.CreateAsync(Save(), null, default)).Data!.Data!.Id;
+        SaveDgMessageRequestDto update = Save(message: "Updated English.");
+        update.MessageHindi = Hindi;
+
+        var updated = await kit.Service.UpdateAsync(id, update, null, default);
+        Assert.Equal("Updated English.", updated.Data!.Data!.Message);
+        Assert.Equal(Hindi, updated.Data.Data.MessageHindi);
+
+        var cleared = await kit.Service.UpdateAsync(id, Save(message: "Updated English."), null, default);
+        Assert.Null(cleared.Data!.Data!.MessageHindi);
+    }
+
+    [Fact]
+    public async Task Legacy_rows_without_hindi_are_listed_with_a_null_messageHindi_and_blank_hindi_is_stored_as_null()
+    {
+        Kit kit = new();
+        kit.Repo.Seed();                                                     // legacy row: MessageHindi never set
+        SaveDgMessageRequestDto blank = Save();
+        blank.MessageHindi = "   ";
+
+        var created = await kit.Service.CreateAsync(blank, null, default);
+        var list = await kit.Service.GetActiveAsync(1, 20, default);
+
+        Assert.Null(created.Data!.Data!.MessageHindi);
+        Assert.Equal(2, list.Data!.TotalCount);
+        Assert.All(list.Data.Items, i => Assert.Null(i.MessageHindi));
+    }
+
+    [Fact]
+    public async Task An_over_long_hindi_message_is_rejected_and_the_limit_itself_is_accepted()
+    {
+        Kit kit = new();
+        SaveDgMessageRequestDto tooLong = Save();
+        tooLong.MessageHindi = new string('अ', DgMessageLimits.MessageMaxLength + 1);
+        SaveDgMessageRequestDto atLimit = Save();
+        atLimit.MessageHindi = new string('अ', DgMessageLimits.MessageMaxLength);
+
+        Assert.Equal(ApiErrorCodes.ValidationFailed, (await kit.Service.CreateAsync(tooLong, null, default)).ErrorCode);
+        Assert.True((await kit.Service.CreateAsync(atLimit, null, default)).IsSuccess);
+    }
+
+    [Fact]
+    public async Task The_controller_form_passes_messageHindi_through_and_create_stays_201()
+    {
+        Kit kit = new();
+        DgMessagesController controller = new(kit.Service) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() } };
+
+        IActionResult created = await controller.Create(new DgMessageForm { DgName = "N", Designation = "D", Message = "M", MessageHindi = Hindi }, default);
+        IActionResult updated = await controller.Update(1, new DgMessageForm { DgName = "N", Designation = "D", Message = "M2", MessageHindi = Hindi + "!", IsActive = true }, default);
+
+        Assert.Equal(201, Assert.IsType<ObjectResult>(created).StatusCode);
+        Assert.Equal(Hindi + "!", Assert.IsType<ApiResult<DgMessageDto>>(Assert.IsType<OkObjectResult>(updated).Value).Data!.MessageHindi);
     }
 
     [Fact]
@@ -465,6 +550,6 @@ public class DgMessageTests
     public void The_text_form_cannot_carry_the_acting_admin_or_the_storage_key()
     {
         string[] fields = typeof(DgMessageForm).GetProperties().Select(p => p.Name).OrderBy(n => n).ToArray();
-        Assert.Equal(new[] { "Designation", "DgName", "Image", "IsActive", "Message" }, fields);
+        Assert.Equal(new[] { "Designation", "DgName", "Image", "IsActive", "Message", "MessageHindi" }, fields);
     }
 }

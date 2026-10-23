@@ -14,6 +14,9 @@ public class DgMessage
     /// <summary>The message text; paragraphs are separated by line breaks and kept as typed.</summary>
     public string Message { get; set; } = string.Empty;
 
+    /// <summary>Hindi (Devanagari) version of the message; null for messages created before Hindi support.</summary>
+    public string? MessageHindi { get; set; }
+
     /// <summary>Object key of the image in the private bucket (never a URL); null when there is no image.</summary>
     public string? ImageStorageKey { get; set; }
 

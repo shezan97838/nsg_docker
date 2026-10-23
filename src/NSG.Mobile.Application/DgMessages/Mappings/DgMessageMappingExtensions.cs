@@ -13,6 +13,7 @@ public static class DgMessageMappingExtensions
         DgName = m.DgName,
         Designation = m.Designation,
         Message = m.Message,
+        MessageHindi = m.MessageHindi,
         HasImage = !string.IsNullOrEmpty(m.ImageStorageKey),
         IsActive = m.IsActive,
         CreatedAt = IstTime.FromIst(m.CreatedAtIst),

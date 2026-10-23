@@ -16,5 +16,8 @@ public class SaveDgMessageRequestValidator : AbstractValidator<SaveDgMessageRequ
         RuleFor(x => x.Message).NotEmpty().WithMessage("Message is required.")
             .Must(v => v == null || v.Trim().Length <= DgMessageLimits.MessageMaxLength)
             .WithMessage($"Message must not exceed {DgMessageLimits.MessageMaxLength} characters.");
+        RuleFor(x => x.MessageHindi)
+            .Must(v => v == null || v.Trim().Length <= DgMessageLimits.MessageMaxLength)
+            .WithMessage($"Hindi message must not exceed {DgMessageLimits.MessageMaxLength} characters.");
     }
 }

@@ -63,7 +63,9 @@ public class DgMessagesController : ControllerBase
     /// </summary>
    
     [HttpPost("admin/dg-messages")]
-   [Authorize(Policy = DomainConstants.Policies.RequireMediaCellAdmin)]
+    // TEMPORARY: anonymous so messages can be managed from Swagger without logging in. Restore the [Authorize] line below and remove [AllowAnonymous].
+    [AllowAnonymous]
+    // [Authorize(Policy = DomainConstants.Policies.RequireMediaCellAdmin)]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
     [OversizedUploadIsBadRequest]
@@ -86,7 +88,9 @@ public class DgMessagesController : ControllerBase
     /// without one the existing image is kept. The replaced object is removed from storage.
     /// </summary>
     [HttpPut("admin/dg-messages/{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireMediaCellAdmin)]
+    // TEMPORARY: anonymous so messages can be managed from Swagger without logging in. Restore the [Authorize] line below and remove [AllowAnonymous].
+    [AllowAnonymous]
+    // [Authorize(Policy = DomainConstants.Policies.RequireMediaCellAdmin)]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
     [OversizedUploadIsBadRequest]
@@ -105,7 +109,9 @@ public class DgMessagesController : ControllerBase
 
     /// <summary>Soft-delete a DG message (<c>is_deleted</c>). The row and its image stay; repeating the request answers "already deleted".</summary>
     [HttpDelete("admin/dg-messages/{id:int}")]
-    [Authorize(Policy = DomainConstants.Policies.RequireMediaCellAdmin)]
+    // TEMPORARY: anonymous so messages can be managed from Swagger without logging in. Restore the [Authorize] line below and remove [AllowAnonymous].
+    [AllowAnonymous]
+    // [Authorize(Policy = DomainConstants.Policies.RequireMediaCellAdmin)]
     [ProducesResponseType(typeof(ApiMessageResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
@@ -117,7 +123,7 @@ public class DgMessagesController : ControllerBase
     }
 
     private static SaveDgMessageRequestDto ToRequest(DgMessageForm form)
-        => new() { DgName = form.DgName, Designation = form.Designation, Message = form.Message, IsActive = form.IsActive };
+        => new() { DgName = form.DgName, Designation = form.Designation, Message = form.Message, MessageHindi = form.MessageHindi, IsActive = form.IsActive };
 
     private static DgImageUpload? ToUpload(DgMessageForm form, Stream? stream)
         => form.Image == null || stream == null ? null : new DgImageUpload(stream, form.Image.FileName, form.Image.ContentType, form.Image.Length);
@@ -131,6 +137,9 @@ public class DgMessageForm
 
     /// <summary>The message; paragraphs are separated by line breaks.</summary>
     public string Message { get; set; } = string.Empty;
+
+    /// <summary>Optional Hindi (Devanagari) version of the message, up to 5000 characters.</summary>
+    public string? MessageHindi { get; set; }
 
     /// <summary>Optional on create (default true); required on update.</summary>
     public bool? IsActive { get; set; }

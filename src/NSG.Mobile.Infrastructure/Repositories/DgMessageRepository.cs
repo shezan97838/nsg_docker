@@ -32,7 +32,7 @@ public class DgMessageRepository : IDgMessageRepository
     public async Task<DgMessage?> GetActiveByIdAsync(int id, CancellationToken cancellationToken = default)
         => await _context.DgMessages.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id && m.IsActive && !m.IsDeleted, cancellationToken);
 
-    public async Task<DgMessageUpdateResult> UpdateAsync(int id, string dgName, string designation, string message, bool isActive, string? newImageKey,
+    public async Task<DgMessageUpdateResult> UpdateAsync(int id, string dgName, string designation, string message, string? messageHindi, bool isActive, string? newImageKey,
         long? updatedBy, DateTime nowIst, CancellationToken cancellationToken = default)
     {
         DgMessage? entity = await _context.DgMessages.FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted, cancellationToken);
@@ -42,6 +42,7 @@ public class DgMessageRepository : IDgMessageRepository
         entity.DgName = dgName;
         entity.Designation = designation;
         entity.Message = message;
+        entity.MessageHindi = messageHindi;
         entity.IsActive = isActive;
         if (newImageKey != null) entity.ImageStorageKey = newImageKey;   // null keeps the existing image
         entity.UpdatedBy = updatedBy;

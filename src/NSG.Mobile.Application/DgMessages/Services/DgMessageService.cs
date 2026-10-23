@@ -112,6 +112,7 @@ public class DgMessageService : IDgMessageService
             DgName = prepared.Data.DgName,
             Designation = prepared.Data.Designation,
             Message = prepared.Data.Message,
+            MessageHindi = prepared.Data.MessageHindi,
             ImageStorageKey = key,
             IsActive = prepared.Data.IsActive,
             IsDeleted = false,
@@ -150,7 +151,7 @@ public class DgMessageService : IDgMessageService
         DgMessageUpdateResult result;
         try
         {
-            result = await _repository.UpdateAsync(id, prepared.Data.DgName, prepared.Data.Designation, prepared.Data.Message,
+            result = await _repository.UpdateAsync(id, prepared.Data.DgName, prepared.Data.Designation, prepared.Data.Message, prepared.Data.MessageHindi,
                 prepared.Data.IsActive, newKey, _currentUser.AdminProfileId, NowIst(), cancellationToken);
         }
         catch
@@ -194,7 +195,7 @@ public class DgMessageService : IDgMessageService
     // ── Helpers ──
 
     /// <summary>Validated text fields plus the checked image (with the in-memory copy made for a non-seekable stream).</summary>
-    private sealed record Prepared(string DgName, string Designation, string Message, bool IsActive, DgImageUpload? Image, Stream? Content, MemoryStream? Buffer, string Extension);
+    private sealed record Prepared(string DgName, string Designation, string Message, string? MessageHindi, bool IsActive, DgImageUpload? Image, Stream? Content, MemoryStream? Buffer, string Extension);
 
     private async Task<Result<Prepared>> PrepareAsync(SaveDgMessageRequestDto request, DgImageUpload? image, bool requireIsActive, CancellationToken cancellationToken)
     {
@@ -204,7 +205,7 @@ public class DgMessageService : IDgMessageService
         if (requireIsActive && request.IsActive == null)
             return Result.Failure<Prepared>(ApiErrorCodes.ValidationFailed, "isActive is required.");
 
-        Prepared text = new(request.DgName.Trim(), request.Designation.Trim(), request.Message.Trim(), request.IsActive ?? true, null, null, null, string.Empty);
+        Prepared text = new(request.DgName.Trim(), request.Designation.Trim(), request.Message.Trim(), string.IsNullOrWhiteSpace(request.MessageHindi) ? null : request.MessageHindi.Trim(), request.IsActive ?? true, null, null, null, string.Empty);
         if (image == null) return Result.Success(text);
 
         // Everything about the image is checked BEFORE anything is sent to storage.

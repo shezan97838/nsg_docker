@@ -7,6 +7,7 @@ public class DgMessageDto
     public string DgName { get; set; } = string.Empty;
     public string Designation { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
+    public string? MessageHindi { get; set; }
     public bool HasImage { get; set; }
     public bool IsActive { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
@@ -21,6 +22,9 @@ public class SaveDgMessageRequestDto
     public string DgName { get; set; } = string.Empty;
     public string Designation { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
+
+    /// <summary>Optional Hindi version of <see cref="Message"/>.</summary>
+    public string? MessageHindi { get; set; }
     public bool? IsActive { get; set; }
 }
 

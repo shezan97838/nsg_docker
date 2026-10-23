@@ -22,6 +22,7 @@ public class DgMessageConfiguration : IEntityTypeConfiguration<DgMessage>
         builder.Property(m => m.DgName).IsRequired().HasMaxLength(150);
         builder.Property(m => m.Designation).IsRequired().HasMaxLength(150);
         builder.Property(m => m.Message).IsRequired().HasColumnType("text");
+        builder.Property(m => m.MessageHindi).HasColumnType("text");
         builder.Property(m => m.ImageStorageKey).HasMaxLength(500);
         builder.Property(m => m.IsActive).IsRequired().HasDefaultValue(true);
         builder.Property(m => m.IsDeleted).IsRequired().HasDefaultValue(false);

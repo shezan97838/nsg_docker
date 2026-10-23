@@ -24,7 +24,7 @@ public interface IDgMessageRepository
     /// Replaces name, designation, message and active flag of a non-deleted message and stamps the updater. The image key is replaced only when
     /// <paramref name="newImageKey"/> is not null; null keeps the existing image.
     /// </summary>
-    Task<DgMessageUpdateResult> UpdateAsync(int id, string dgName, string designation, string message, bool isActive, string? newImageKey,
+    Task<DgMessageUpdateResult> UpdateAsync(int id, string dgName, string designation, string message, string? messageHindi, bool isActive, string? newImageKey,
         long? updatedBy, DateTime nowIst, CancellationToken cancellationToken = default);
 
     /// <summary>Soft delete: sets <c>is_deleted</c>. The row and its image stay.</summary>

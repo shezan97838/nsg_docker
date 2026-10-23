@@ -139,3 +139,11 @@ Implemented 2026-10-22; decisions in OQ-039. Covered by `DgMessageTests` (fakes 
 |-------------|-----------|--------|-----|----------|--------|
 | Create / update / soft-delete DG message with optional image | DgMessageService, DgMessageRepository, IFileStorageService (R2) | DgMessage (`dg_message`) | POST, PUT, DELETE /api/v1/admin/dg-messages | RequireMediaCellAdmin; admin from token; JPEG/PNG, 5 MB, magic bytes; private bucket; ids-only audit | Implemented (fake-tested; not smoke-tested) |
 | Show active DG messages to employees | DgMessageService | DgMessage | GET /api/v1/dg-messages, GET /api/v1/dg-messages/{id}/image | RequireMobileProfile; inactive and deleted never returned; image streamed, no URL | Implemented (fake-tested; not smoke-tested) |
+
+### DG Message: Hindi text (added 2026-10-23)
+
+Optional `messageHindi` (nullable `message_hindi`, `text`, `utf8mb4`) on `dg_message`, accepted by POST/PUT `/api/v1/admin/dg-messages` (multipart field `messageHindi`, trimmed, blank stored as `NULL`, max 5000 characters like `message`) and returned by GET `/api/v1/dg-messages`. Migration `20261023110812_Add_Dg_Message_Hindi` (adds the column only).
+
+- **Verified 2026-10-23:** migration applied to the local development database `nsg_mobile_dev` (127.0.0.1:3306); the existing row kept `message_hindi = NULL`; a Devanagari string round-tripped exactly (rolled-back transaction); `DgMessageTests` (unit, in-memory) and `DgMessageHindiDatabaseTests` (MySQL, database `nsg_mobile_test`) pass.
+- **TEMPORARY, security risk:** POST, PUT and DELETE `/api/v1/admin/dg-messages` carry `[AllowAnonymous]` (the `RequireMediaCellAdmin` attribute is commented out in `DgMessagesController`). Anyone who can reach the API can create, change and delete DG messages. Restore the attribute and re-add the three routes to `AdminRoutes` in `GrievanceRouteSecurityTests` before real use. GET is unchanged (`RequireMobileProfile`).
+- **Not verified:** the Hindi migration has not been applied to any shared or production database; image upload/replacement was covered by unit tests with fake storage only (no R2).

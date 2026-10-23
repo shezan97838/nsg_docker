@@ -100,6 +100,7 @@ internal static class ExpectedDatabaseSchema
             "dg_name|varchar(150)|NOT NULL",
             "designation|varchar(150)|NOT NULL",
             "message|text|NOT NULL",
+            "message_hindi|text|NULL",
             "image_storage_key|varchar(500)|NULL",
             "is_active|tinyint(1)|NOT NULL",
             "is_deleted|tinyint(1)|NOT NULL",

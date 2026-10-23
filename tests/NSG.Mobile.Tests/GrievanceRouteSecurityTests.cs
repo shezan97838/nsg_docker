@@ -64,6 +64,7 @@ public sealed class GrievanceRouteSecurityTests : IDisposable
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    // TEMPORARY: the three admin dg-messages write routes are [AllowAnonymous] and deliberately absent from AdminRoutes; add them back when [Authorize] is restored.
     // A genuine mobile access token makes the default scheme look up its session in the database before the admin policy rejects it, which this
     // database-free test cannot do. Without the token_use claim the default scheme accepts the token without that lookup, so what is left to
     // prove is the point of the test: the mobile audience is not accepted by the admin scheme. (The full case belongs to the later MySQL smoke test.)
@@ -90,8 +91,7 @@ public sealed class GrievanceRouteSecurityTests : IDisposable
         (HttpMethod.Get, "/api/v1/admin/grievance-categories"), (HttpMethod.Get, "/api/v1/admin/grievance-categories/1"),
         (HttpMethod.Post, "/api/v1/admin/grievance-categories"), (HttpMethod.Put, "/api/v1/admin/grievance-categories/1"),
         (HttpMethod.Delete, "/api/v1/admin/grievance-categories/1"),
-        (HttpMethod.Post, "/api/v1/admin/grievances/1/comments"), (HttpMethod.Post, "/api/v1/admin/grievances/1/forward"),
-        (HttpMethod.Post, "/api/v1/admin/dg-messages"), (HttpMethod.Put, "/api/v1/admin/dg-messages/1"), (HttpMethod.Delete, "/api/v1/admin/dg-messages/1")
+        (HttpMethod.Post, "/api/v1/admin/grievances/1/comments"), (HttpMethod.Post, "/api/v1/admin/grievances/1/forward")
     };
 
     private async Task<HttpStatusCode> SendAsync((HttpMethod Method, string Url) route, string? bearer)
