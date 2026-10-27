@@ -70,6 +70,7 @@ public class GrievanceConfiguration : IEntityTypeConfiguration<Grievance>
         builder.Property(g => g.ClosedBy).HasColumnType("bigint");
         builder.Property(g => g.ClosedAtIst).HasColumnType("datetime(6)");
         builder.Property(g => g.ClosedRemarks).HasMaxLength(1000);
+        builder.Property(g => g.ResolutionDocument).HasColumnName("resolution_document").HasMaxLength(500);
 
         builder.Property(g => g.IsActive).IsRequired().HasDefaultValue(true);
 

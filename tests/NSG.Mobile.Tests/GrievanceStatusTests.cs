@@ -6,7 +6,7 @@ using NSG.Mobile.Domain.Enums;
 
 namespace NSG.Mobile.Tests;
 
-/// <summary>Status changes by a Grievance Admin: only 1→2, 2→3 (remarks required), 3→4 = resolved (remarks required); every change is logged in the same step.</summary>
+/// <summary>Status changes by a Grievance Admin: only 1→2 and 2→3 (remarks required); 3→4 is the resolve endpoint (see GrievanceResolutionTests). Every change is logged in the same step.</summary>
 public class GrievanceStatusTests
 {
     private static (GrvKit Kit, Grievance Grievance) Arrange(GrievanceStatus status)
@@ -21,7 +21,6 @@ public class GrievanceStatusTests
     [Theory]
     [InlineData(GrievanceStatus.Submitted, GrievanceStatus.UnderReview, null)]
     [InlineData(GrievanceStatus.UnderReview, GrievanceStatus.ActionTaken, "Inquiry completed.")]
-    [InlineData(GrievanceStatus.ActionTaken, GrievanceStatus.Closed, "Resolved after the inquiry.")]
     public async Task Each_allowed_step_succeeds_and_writes_a_status_log_row(GrievanceStatus from, GrievanceStatus to, string? remarks)
     {
         (GrvKit kit, Grievance g) = Arrange(from);
@@ -50,6 +49,7 @@ public class GrievanceStatusTests
     [InlineData(GrievanceStatus.Submitted, GrievanceStatus.Submitted)]      // staying put
     [InlineData(GrievanceStatus.UnderReview, GrievanceStatus.UnderReview)]
     [InlineData(GrievanceStatus.Closed, GrievanceStatus.Closed)]
+    [InlineData(GrievanceStatus.ActionTaken, GrievanceStatus.Closed)]       // resolving has its own endpoint (comment and file)
     public async Task Every_other_move_is_a_400_and_changes_nothing(GrievanceStatus from, GrievanceStatus to)
     {
         (GrvKit kit, Grievance g) = Arrange(from);
@@ -111,25 +111,6 @@ public class GrievanceStatusTests
         Assert.Equal("Counselling arranged.", stored.ActionRemarks);          // trimmed
         Assert.NotNull(stored.ActionTakenAtIst);
         Assert.Null(stored.ClosedBy);
-    }
-
-    [Fact]
-    public async Task Resolving_stores_who_when_and_the_resolution_and_needs_remarks()
-    {
-        (GrvKit kit, Grievance g) = Arrange(GrievanceStatus.ActionTaken);
-
-        var missing = await kit.Admins.UpdateStatusAsync(g.Id, Request(GrievanceStatus.Closed), default);
-        Assert.Equal(ApiErrorCodes.ValidationFailed, missing.ErrorCode);
-        Assert.Contains("resolving", missing.ErrorMessage);
-        Assert.Equal(GrievanceStatus.ActionTaken, kit.Repo.Grievances.Single().CurrentStatus);
-
-        var result = await kit.Admins.UpdateStatusAsync(g.Id, Request(GrievanceStatus.Closed, "Reimbursed in full."), default);
-
-        Assert.True(result.IsSuccess, result.ErrorMessage);
-        Grievance stored = kit.Repo.Grievances.Single();
-        Assert.Equal(GrvKit.Admin, stored.ClosedBy);
-        Assert.NotNull(stored.ClosedAtIst);
-        Assert.Equal("Reimbursed in full.", stored.ClosedRemarks);
     }
 
     [Fact]

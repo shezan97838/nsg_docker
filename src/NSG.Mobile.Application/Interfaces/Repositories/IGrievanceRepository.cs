@@ -80,7 +80,7 @@ public interface IGrievanceRepository
     // ── Grievances ──
 
     /// <summary>
-    /// Assigns the next ticket number of the grievance's IST year (<c>GRV-YYYY-000001</c>), inserts the grievance and its first status-log
+    /// Assigns the next ticket number of the grievance's IST year (<c>NSG-YYYY-000001</c>), inserts the grievance and its first status-log
     /// row in one transaction. A ticket-number collision with a concurrent request is retried, at most <paramref name="maxTicketAttempts"/> times.
     /// </summary>
     Task<GrievanceCreateResult> CreateAsync(Grievance grievance, long createdByProfileId, int maxTicketAttempts, CancellationToken cancellationToken = default);
@@ -101,6 +101,14 @@ public interface IGrievanceRepository
     /// </summary>
     Task<GrievanceStatusChangeResult> ChangeStatusAsync(
         long id, GrievanceStatus from, GrievanceStatus to, long adminProfileId, string? remarks, DateTime nowIst, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resolves a grievance: moves it from Action Taken to Closed, records who and when, the closing remarks and the resolution document
+    /// (<paramref name="resolutionDocument"/>, the storage key) and appends the status-log row, all in one transaction. The move happens only if the grievance
+    /// is still Action Taken, so of two simultaneous requests exactly one wins and nothing is half-written.
+    /// </summary>
+    Task<GrievanceStatusChangeResult> ResolveAsync(
+        long id, long adminProfileId, string remarks, string resolutionDocument, DateTime nowIst, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Appends a comment row (status unchanged) while the grievance is not Closed. The check and the insert are one transaction.

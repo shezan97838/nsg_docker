@@ -64,5 +64,10 @@ public enum AuditAction
     // DG message events
     DgMessageCreated = 90,
     DgMessageUpdated = 91,
-    DgMessageDeleted = 92
+    DgMessageDeleted = 92,
+
+    // Leave management events
+    LeaveRecordChanged = 100,
+    LeaveBulkUploadProcessed = 101,
+    LeaveRecordViewed = 102
 }

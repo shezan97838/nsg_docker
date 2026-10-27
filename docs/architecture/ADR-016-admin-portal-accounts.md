@@ -8,7 +8,7 @@ The Admin Portal needs accounts that are separate from mobile users (`mobile_use
 Personnel facts (NSG number, registered mobile number, date of birth) stay in `users_pis`, the authoritative source.
 
 ## Decision
-- `admin_roles`: six fixed rows seeded by the migration `Add_Admin_Roles_And_Profiles` (ids 1-6): `SUPER_ADMIN`, `REGISTRATION_ADMIN`,
+- `admin_roles`: six fixed rows seeded by the migration `Add_Admin_Roles_And_Profiles` (ids 1-6; a seventh, `LEAVE_ADMIN`, id 7, was added by ADR-019): `SUPER_ADMIN`, `REGISTRATION_ADMIN`,
   `PIS_ADMIN`, `GRIEVANCE_ADMIN`, `MEDIA_CELL_ADMIN`, `SALARY_MANAGEMENT_ADMIN`. `role_code` is unique. No API creates, renames or
   deletes roles; no permission table exists (authorization is by role code through fixed policies). Constants: `AdminRoleCodes`.
 - `admin_profiles`: one row per NSG number (unique), `role_id` -> `admin_roles.id` (Restrict), `password_hash` null until the person

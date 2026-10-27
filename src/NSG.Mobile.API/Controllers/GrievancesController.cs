@@ -51,7 +51,7 @@ public class GrievancesController : ControllerBase
     /// <summary>
     /// Raise a grievance: the only creation endpoint. Multipart form fields <c>categoryId</c>, <c>subject</c>, <c>note</c> (the description) and, optionally,
     /// up to 3 <c>files</c> (PDF or JPEG, at most 5 MB each; extension, content type and file signature must agree). Files go to private storage and are
-    /// recorded with the grievance in one step; nothing stays in storage if the grievance cannot be recorded. The ticket number (GRV-YYYY-000001),
+    /// recorded with the grievance in one step; nothing stays in storage if the grievance cannot be recorded. The ticket number (NSG-YYYY-000001),
     /// status (Submitted) and owner are set by the server; the grievance starts unassigned.
     /// </summary>
    
@@ -139,6 +139,22 @@ public class GrievancesController : ControllerBase
     public async Task<IActionResult> DownloadDocument(long id, int index, CancellationToken cancellationToken)
     {
         Result<GrievanceDocumentContent> result = await _grievances.OpenMyDocumentAsync(id, index, cancellationToken);
+        return result.IsSuccess ? GrievanceFileResult.From(this, result.Data!) : GrievanceProblem.From(this, result);
+    }
+
+    /// <summary>
+    /// Download the supporting file the Grievance Admin uploaded when resolving your grievance. Streamed through the API; there is no public or pre-signed link.
+    /// 404 when the grievance is not yours or has no resolution file.
+    /// </summary>
+    [HttpGet("grievances/{id:long}/resolution-document")]
+    [Produces("application/pdf", "image/jpeg", "image/png", "application/json")]
+    [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> DownloadResolutionDocument(long id, CancellationToken cancellationToken)
+    {
+        Result<GrievanceDocumentContent> result = await _grievances.OpenMyResolutionDocumentAsync(id, cancellationToken);
         return result.IsSuccess ? GrievanceFileResult.From(this, result.Data!) : GrievanceProblem.From(this, result);
     }
 }

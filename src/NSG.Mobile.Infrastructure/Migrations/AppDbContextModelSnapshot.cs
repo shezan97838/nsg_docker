@@ -281,6 +281,15 @@ namespace NSG.Mobile.Infrastructure.Migrations
                             IsActive = true,
                             RoleCode = "SALARY_MANAGEMENT_ADMIN",
                             RoleName = "Salary Management Admin"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            CreatedAtIst = new DateTime(2026, 10, 18, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            Description = "Maintains personnel leave records (manual entry and Excel bulk upload).",
+                            IsActive = true,
+                            RoleCode = "LEAVE_ADMIN",
+                            RoleName = "Leave Admin"
                         });
                 });
 
@@ -787,6 +796,11 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasColumnType("tinyint(1)")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
+
+                    b.Property<string>("ResolutionDocument")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("resolution_document");
 
                     b.Property<string>("Subject")
                         .IsRequired()
@@ -1390,6 +1404,255 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasDatabaseName("ix_pd_trade_pd_trade_name");
 
                     b.ToTable("pd_trade", (string)null);
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PersonnelLeaveHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ChangeSource")
+                        .HasColumnType("int")
+                        .HasColumnName("change_source");
+
+                    b.Property<DateTime>("ChangedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("changed_at_ist");
+
+                    b.Property<long>("ChangedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("changed_by");
+
+                    b.Property<long>("LeaveRecordId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("leave_record_id");
+
+                    b.Property<int>("LeaveYear")
+                        .HasColumnType("int")
+                        .HasColumnName("leave_year");
+
+                    b.Property<int>("NewLeaveTaken")
+                        .HasColumnType("int")
+                        .HasColumnName("new_leave_taken");
+
+                    b.Property<string>("NsgNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("nsg_number");
+
+                    b.Property<int?>("OldLeaveTaken")
+                        .HasColumnType("int")
+                        .HasColumnName("old_leave_taken");
+
+                    b.Property<long?>("UploadBatchId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("upload_batch_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_personnel_leave_history");
+
+                    b.HasIndex("LeaveRecordId")
+                        .HasDatabaseName("ix_personnel_leave_history_leave_record_id");
+
+                    b.HasIndex("UploadBatchId")
+                        .HasDatabaseName("ix_personnel_leave_history_upload_batch_id");
+
+                    b.HasIndex("NsgNumber", "ChangedAtIst")
+                        .HasDatabaseName("ix_personnel_leave_history_nsg_number_changed_at_ist");
+
+                    b.ToTable("personnel_leave_history", null, t =>
+                        {
+
+                            t.HasCheckConstraint("ck_personnel_leave_history_change_source", "`change_source` IN (1, 2)");
+
+                            t.HasCheckConstraint("ck_personnel_leave_history_counts", "(`old_leave_taken` IS NULL OR `old_leave_taken` >= 0) AND `new_leave_taken` >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PersonnelLeaveRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by");
+
+                    b.Property<int>("LeaveTaken")
+                        .HasColumnType("int")
+                        .HasColumnName("leave_taken");
+
+                    b.Property<int>("LeaveYear")
+                        .HasColumnType("int")
+                        .HasColumnName("leave_year");
+
+                    b.Property<string>("NsgNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("nsg_number");
+
+                    b.Property<int>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1)
+                        .HasColumnName("row_version");
+
+                    b.Property<DateTime>("UpdatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at_ist");
+
+                    b.Property<long>("UpdatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_personnel_leave_records");
+
+                    b.HasIndex("NsgNumber", "LeaveYear")
+                        .IsUnique()
+                        .HasDatabaseName("ix_personnel_leave_records_nsg_number_leave_year");
+
+                    b.ToTable("personnel_leave_records", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_personnel_leave_records_leave_taken", "`leave_taken` >= 0 AND `leave_taken` <= 366");
+
+                            t.HasCheckConstraint("ck_personnel_leave_records_leave_year", "`leave_year` >= 2000 AND `leave_year` <= 2999");
+                        });
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PersonnelLeaveUploadBatch", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("CompletedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("completed_at_ist");
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by");
+
+                    b.Property<int>("CreatedCount")
+                        .HasColumnType("int")
+                        .HasColumnName("created_count");
+
+                    b.Property<int>("FailedCount")
+                        .HasColumnType("int")
+                        .HasColumnName("failed_count");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("file_name");
+
+                    b.Property<int>("LeaveYear")
+                        .HasColumnType("int")
+                        .HasColumnName("leave_year");
+
+                    b.Property<bool?>("ProcessingLock")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("processing_lock");
+
+                    b.Property<int>("TotalRows")
+                        .HasColumnType("int")
+                        .HasColumnName("total_rows");
+
+                    b.Property<int>("UnchangedCount")
+                        .HasColumnType("int")
+                        .HasColumnName("unchanged_count");
+
+                    b.Property<int>("UpdatedCount")
+                        .HasColumnType("int")
+                        .HasColumnName("updated_count");
+
+                    b.Property<int>("UploadStatus")
+                        .HasColumnType("int")
+                        .HasColumnName("upload_status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_personnel_leave_upload_batches");
+
+                    b.HasIndex("CreatedAtIst")
+                        .HasDatabaseName("ix_personnel_leave_upload_batches_created_at_ist");
+
+                    b.HasIndex("ProcessingLock")
+                        .IsUnique()
+                        .HasDatabaseName("ix_personnel_leave_upload_batches_processing_lock");
+
+                    b.ToTable("personnel_leave_upload_batches", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_personnel_leave_upload_batches_counts", "`total_rows` >= 0 AND `created_count` >= 0 AND `updated_count` >= 0 AND `unchanged_count` >= 0 AND `failed_count` >= 0");
+
+                            t.HasCheckConstraint("ck_personnel_leave_upload_batches_processing_lock", "(`upload_status` = 1 AND `processing_lock` = 1) OR (`upload_status` <> 1 AND `processing_lock` IS NULL)");
+
+                            t.HasCheckConstraint("ck_personnel_leave_upload_batches_upload_status", "`upload_status` IN (1, 2, 3, 4)");
+                        });
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PersonnelLeaveUploadError", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BatchId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("batch_id");
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<string>("ErrorMessage")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("NsgNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("nsg_number");
+
+                    b.Property<int?>("RowNumber")
+                        .HasColumnType("int")
+                        .HasColumnName("excel_row_number");
+
+                    b.HasKey("Id")
+                        .HasName("pk_personnel_leave_upload_errors");
+
+                    b.HasIndex("BatchId", "RowNumber")
+                        .HasDatabaseName("ix_personnel_leave_upload_errors_batch_id_excel_row_number");
+
+                    b.ToTable("personnel_leave_upload_errors", (string)null);
                 });
 
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.RankHierarchy", b =>
@@ -2141,6 +2404,32 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasConstraintName("fk_mobile_refresh_tokens_mobile_user_profiles_profile_id");
                 });
 
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PersonnelLeaveHistory", b =>
+                {
+                    b.HasOne("NSG.Mobile.Domain.Entities.PersonnelLeaveRecord", null)
+                        .WithMany()
+                        .HasForeignKey("LeaveRecordId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_personnel_leave_history_leave_record_id");
+
+                    b.HasOne("NSG.Mobile.Domain.Entities.PersonnelLeaveUploadBatch", null)
+                        .WithMany()
+                        .HasForeignKey("UploadBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_personnel_leave_history_upload_batch_id");
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PersonnelLeaveUploadError", b =>
+                {
+                    b.HasOne("NSG.Mobile.Domain.Entities.PersonnelLeaveUploadBatch", null)
+                        .WithMany("Errors")
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_personnel_leave_upload_errors_batch_id");
+                });
+
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.RefreshToken", b =>
                 {
                     b.HasOne("NSG.Mobile.Domain.Entities.Device", "Device")
@@ -2248,6 +2537,11 @@ namespace NSG.Mobile.Infrastructure.Migrations
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.Device", b =>
                 {
                     b.Navigation("RefreshTokens");
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PersonnelLeaveUploadBatch", b =>
+                {
+                    b.Navigation("Errors");
                 });
 
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.State", b =>

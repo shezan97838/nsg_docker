@@ -29,7 +29,7 @@ public class GrievanceEmployeeTests
         Assert.True(result.IsSuccess, result.ErrorMessage);
         GrievanceDetailDto dto = result.Data!.Data!;
         Assert.True(dto.Id > 0);                                             // numeric key for routes
-        Assert.Matches(@"^GRV-\d{4}-\d{6}$", dto.GrievanceId);               // the ticket number
+        Assert.Matches(@"^NSG-\d{4}-\d{6}$", dto.GrievanceId);               // the ticket number
         Assert.Contains(dto.GrievanceId, result.Data.Message);
         Assert.Equal((int)GrievanceStatus.Submitted, dto.Status);
         Assert.Equal("Leave not granted", dto.Subject);                      // trimmed
@@ -232,7 +232,7 @@ public class GrievanceEmployeeTests
         Assert.True((await kit.Admins.AddCommentAsync(id, new AddGrievanceCommentRequestDto { Comment = "Checking with the unit." }, default)).IsSuccess);
         Assert.True((await kit.Admins.ForwardAsync(id, new ForwardGrievanceRequestDto { ToAdminId = 42, Remarks = "Please handle." }, default)).IsSuccess);
         Assert.True((await kit.Admins.UpdateStatusAsync(id, new UpdateGrievanceStatusRequestDto { ToStatus = 3, Remarks = "Claim processed." }, default)).IsSuccess);
-        Assert.True((await kit.Admins.UpdateStatusAsync(id, new UpdateGrievanceStatusRequestDto { ToStatus = 4, Remarks = "Paid." }, default)).IsSuccess);
+        Assert.True((await kit.Admins.ResolveAsync(id, new ResolveGrievanceRequestDto { Remarks = "Paid." }, GrvKit.Pdf("proof.pdf"), default)).IsSuccess);
 
         var detail = (await kit.Employees.GetMineByIdAsync(id, default)).Data!;
 
@@ -245,6 +245,8 @@ public class GrievanceEmployeeTests
         Assert.Equal("Claim processed.", detail.ActionRemarks);
         Assert.Equal("Paid.", detail.ClosedRemarks);
         Assert.NotNull(detail.ClosedAt);
+        Assert.Equal(kit.Repo.Grievances.Single().ResolutionDocument, detail.ResolutionDocument);
+        Assert.StartsWith("grievances/", detail.ResolutionDocument);
     }
 
     [Fact]

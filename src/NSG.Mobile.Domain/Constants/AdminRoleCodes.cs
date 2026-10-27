@@ -9,4 +9,5 @@ public static class AdminRoleCodes
     public const string GrievanceAdmin = "GRIEVANCE_ADMIN";
     public const string MediaCellAdmin = "MEDIA_CELL_ADMIN";
     public const string SalaryManagementAdmin = "SALARY_MANAGEMENT_ADMIN";
+    public const string LeaveAdmin = "LEAVE_ADMIN";
 }

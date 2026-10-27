@@ -227,3 +227,21 @@
 - **Message length:** up to 5000 characters with line breaks kept (paragraphs); stored as MySQL `text`.
 - **Timestamps** use the project's IST convention (`created_at_ist`, `updated_at_ist`), not the UTC names in the brief.
 - **Not yet verified:** the migration `Add_Dg_Message` (generated, not applied), the repository SQL on MySQL and real R2.
+
+### OQ-040: Leave Management — value rules to confirm (2026-10-26)
+- **Type and range of `leave_taken`:** the brief says "count", so it is a whole number stored as `int`, accepted from 0 to 366 (a calendar year has at most 366 days). No document says whether half days exist or whether the figure may exceed a year (for example accumulated or encashed leave). If half days are needed the column and the validation change to `decimal(5,1)`.
+- **Which people:** a leave record needs an **active** `users_pis` row. Confirm that retired, repatriated or otherwise inactive personnel must not receive leave entries.
+- **NSG number format:** no approved format exists, so only "required, at most 30 characters, no spaces or control characters" is checked before the lookup in `users_pis`. Spreadsheet users should store the number as text so leading zeros survive.
+- **Corrections to past years:** the API only ever writes the current calendar year (as required). A mistake in a previous year can only be fixed directly in the database or by a future, separately authorised endpoint.
+- **Unchanged totals:** writing the stored value again (manual or in a file) is accepted but changes nothing and writes no history row.
+- **Excel limits:** 2 MB, 5000 rows, first worksheet only, `.xlsx` only (configuration section `Leave`). Confirm the real workbook size and whether a downloadable template endpoint is wanted (none exists).
+
+### OQ-041: Leave Management — missing record is "not found", not zero (2026-10-26)
+`GET /api/v1/leave/my-record` answers 404 with a message ("No leave record has been entered for you for 2026 yet.") when no record exists for the current year. It does not return `leaveTaken = 0` because no document says that "no record" means "no leave taken", and the endpoint never fabricates a row. Confirm the business rule; if a missing record does mean zero, the service returns 200 with `leaveTaken: 0` and no `lastUpdatedAt`. The mobile app must handle the 404 (for example by showing "not updated yet") either way, and at the start of every new year every user is in this state until HQ uploads the new totals.
+
+### OQ-042: Leave Management — operational points (2026-10-26)
+- **Role:** `LEAVE_ADMIN` is a new seventh role. Super Admin is deliberately **not** a Leave Admin; the owner must provision at least one Leave Admin account (`POST /api/v1/admin/accounts`, `roleCode: LEAVE_ADMIN`) once the migration is applied.
+- **Failed batches in the envelope:** the response envelope has `data: null` on failures, so a rejected upload reports its batch id in the message and the row-level report is read from `GET /api/v1/admin/leave-uploads/{id}/errors`.
+- **A batch can stay `Processing`** if the host dies or the database outcome cannot be confirmed; it blocks other uploads for `Leave:StaleBatchMinutes` (default 15), then the next upload closes it as `ProcessingFailed`. Someone must check the leave records of such a batch before re-uploading.
+- **Audit retention** of `personnel_leave_history` and the batch tables is undefined (nothing is purged).
+- **Not yet verified:** the migration `Add_Leave_Management` is applied to the local development database `nsg_mobile_dev` only (2026-10-26, structure confirmed by MySQL); all repository SQL, whether the CHECK constraints reject bad rows, the transaction rollback, races and the upload lock are untested on MySQL. `LeaveDatabaseTests` exist but have not been run (see `docs/LEAVE-MANAGEMENT.md`, sections 8 and 8.1). No `LEAVE_ADMIN` account exists yet.

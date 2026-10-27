@@ -6,7 +6,7 @@ using NSG.Mobile.Domain.Enums;
 
 namespace NSG.Mobile.Infrastructure.Persistence.Configurations;
 
-/// <summary>Table <c>admin_roles</c>: the six fixed Admin Portal roles, seeded here and changed only by a reviewed migration.</summary>
+/// <summary>Table <c>admin_roles</c>: the seven fixed Admin Portal roles, seeded here and changed only by a reviewed migration.</summary>
 public class AdminRoleConfiguration : IEntityTypeConfiguration<AdminRole>
 {
     /// <summary>Constant seed timestamp (IST). HasData needs fixed values so the model snapshot stays stable.</summary>
@@ -38,7 +38,8 @@ public class AdminRoleConfiguration : IEntityTypeConfiguration<AdminRole>
             Role(3, AdminRoleCodes.PisAdmin, "PIS Admin", "Maintains personnel information system records."),
             Role(4, AdminRoleCodes.GrievanceAdmin, "Grievance Admin", "Handles grievances."),
             Role(5, AdminRoleCodes.MediaCellAdmin, "Media Cell Admin", "Manages media cell content."),
-            Role(6, AdminRoleCodes.SalaryManagementAdmin, "Salary Management Admin", "Manages salary information."));
+            Role(6, AdminRoleCodes.SalaryManagementAdmin, "Salary Management Admin", "Manages salary information."),
+            Role(7, AdminRoleCodes.LeaveAdmin, "Leave Admin", "Maintains personnel leave records (manual entry and Excel bulk upload)."));
     }
 
     private static AdminRole Role(int id, string code, string name, string description) => new()

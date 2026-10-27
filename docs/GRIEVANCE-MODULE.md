@@ -12,7 +12,7 @@ Module guide: setup, API reference, Flutter contract, tests and open points. Wri
 | **Migration `20261022103033_Add_Grievance_Management`** | Generated; **not applied anywhere and its SQL not yet reviewed against a database.** It replaces the earlier, never-applied `20261022052101_Add_Grievance_Management` (regenerated on request, see section 11). |
 | **Real R2** | **Not smoke-tested.** `R2FileStorageService` has only been exercised through its pure parts. |
 | **Upload limits in Kestrel** | The 400 for an oversized file is tested. The path for a request body over the 16 MB cap (HTTP 413 turned into a 400 by a filter) is tested only with synthetic exceptions. |
-| **Authorization with real tokens** | Anonymous, wrong-audience and forged tokens are tested through the real pipeline (401). Genuine sessions need a database; a wrong-role admin (403) is untested. |
+| **Authorization with real tokens** | Tested through the real pipeline (JWT validation, policies, controllers, services) with in-memory fakes standing in for the repositories and the session look-ups: GRIEVANCE_ADMIN allowed, every other admin role 403, mobile/missing/forged/expired/ended-session tokens 401. The real session SQL (`IsSessionActiveAsync` checking role and account state) is untested. |
 
 Smoke-test checklist: section 9. Run later against a local Docker MySQL and a development bucket, never against a shared database or the production bucket.
 
@@ -33,9 +33,9 @@ The user is always taken from the token (`profile_id` / `admin_profile_id`); no 
 | 1 | Submitted | the system, on creation |
 | 2 | Under Review | admin ("take action": start review) |
 | 3 | Action Taken | admin (remarks **required**) |
-| 4 | Closed = **resolved** | admin (remarks **required**: the resolution) |
+| 4 | Closed = **resolved** | admin, only through `POST /admin/grievances/{id}/resolve`: a resolution comment **and** a supporting file (PDF, JPEG or PNG, max 5 MB) are both **required** |
 
-Only 1→2, 2→3, 3→4 are allowed. A simultaneous change by another admin is a 409 naming the current status.
+Only 1→2, 2→3, 3→4 are allowed. `PUT .../status` accepts 2 and 3 only; a 4 there is a 400 that points to the resolve endpoint. A simultaneous change by another admin is a 409 naming the current status.
 
 ### History (append-only)
 Every action appends one `grievance_status_log` row in the same transaction as the change; rows are never updated or deleted. Each row records the kind of action, the status (from/to), the remarks or comment, the actor (type and id, from the token) and the IST time.
@@ -67,7 +67,7 @@ One migration creates three tables (lowercase snake_case, IST `*_ist` timestamps
 | Table | Purpose |
 |---|---|
 | `grievance_category` | `grievance_name` (unique, also among inactive and deleted), `department_id` (nullable, unused), `is_active`, `is_deleted`, `created_at_ist`, `created_by`, `updated_at_ist`, `updated_by` (`created_by`/`updated_by` = `admin_profiles.id`, no foreign key). **Soft delete only:** rows are never removed. No metadata, display order or SLA. |
-| `grievance` | `grievance_id` is the ticket `GRV-YYYY-000001` (unique); `current_status` 1-4; `document_urls` JSON; `assigned_to`, `action_taken_*`, `closed_*`; soft delete by `is_active`. Check constraints tie status 3/4 to their action/closing fields. |
+| `grievance` | `grievance_id` is the ticket `NSG-YYYY-000001` (unique); `current_status` 1-4; `document_urls` JSON; `assigned_to`, `action_taken_*`, `closed_*`; soft delete by `is_active`. Check constraints tie status 3/4 to their action/closing fields. |
 | `grievance_status_log` | Append-only history: `log_action` (1 status change, 2 comment, 3 forward), `forwarded_to`, from/to status, `remarks`, `changed_by` with `changed_by_type` (1 employee = `mobile_user_profiles.id`, 2 admin = `admin_profiles.id`), `changed_at_ist`. |
 
 Timestamps are IST (`*_ist`), per the project-wide rule in `CLAUDE.md`; they are exposed with the fixed `+05:30` offset. (The audit brief asked for UTC names such as `CreatedAtUtc`; IST was kept on the owner's decision.)
@@ -149,6 +149,7 @@ Base path `/api/v1`. Timestamps are IST with a fixed `+05:30` offset. `$BASE`, `
 | `GET /grievances?pageNumber=&pageSize=&status=` | My grievances, newest first (`status` optional 1-4). None: message "No grievances found.". |
 | `GET /grievances/{id}` | One of mine with documents and the **complete history**. 404 when it is not mine. |
 | `GET /grievances/{id}/documents/{index}` | Download a document of mine (zero-based index). |
+| `GET /grievances/{id}/resolution-document` | Download the supporting file the admin uploaded when resolving my grievance. 404 when the grievance is not mine or has no resolution file. The detail shows its name, type, size and date in `resolutionDocument` (never a key or URL). |
 
 ```
 curl -X POST $BASE/api/v1/grievances -H "Authorization: Bearer $MOBILE" \
@@ -156,8 +157,8 @@ curl -X POST $BASE/api/v1/grievances -H "Authorization: Bearer $MOBILE" \
   -F "files=@report.pdf;type=application/pdf" -F "files=@scan.jpg;type=image/jpeg"
 ```
 ```json
-{ "success": true, "message": "Grievance submitted successfully. Your ticket number is GRV-2026-000001.",
-  "data": { "id": 101, "grievanceId": "GRV-2026-000001", "categoryId": 2, "categoryName": "Medical",
+{ "success": true, "message": "Grievance submitted successfully. Your ticket number is NSG-2026-000001.",
+  "data": { "id": 101, "grievanceId": "NSG-2026-000001", "categoryId": 2, "categoryName": "Medical",
             "subject": "Medical reimbursement pending", "status": 1, "statusName": "Submitted", "documentCount": 2,
             "createdAt": "2026-10-22T11:30:00+05:30",
             "note": "My claim from August has not been processed yet.",
@@ -176,7 +177,9 @@ curl -X POST $BASE/api/v1/grievances -H "Authorization: Bearer $MOBILE" \
 | `GET /admin/grievances?pageNumber=&pageSize=&status=&categoryId=&fromDate=&toDate=&search=&assignedTo=` | All grievances, newest first. `fromDate`/`toDate` inclusive IST days; `search` a ticket-number fragment. Rows carry `createdBy`, `assignedTo` and `employee` (NSG number, name, unit). |
 | `GET /admin/grievances/{id}` | Detail (audited `GrievanceViewed`): adds the history with `changedBy` and `forwardedTo`. |
 | `GET /admin/grievances/{id}/documents/{index}` | Download any document (audited). |
-| `PUT /admin/grievances/{id}/status` | Take action / resolve: `{ "toStatus": 2\|3\|4, "remarks": "..." }`. Remarks required for 3 and 4 (4 = resolved). |
+| `PUT /admin/grievances/{id}/status` | Start review / take action: `{ "toStatus": 2\|3, "remarks": "..." }`. Remarks required for 3. A 4 is refused (400): use `resolve`. |
+| `POST /admin/grievances/{id}/resolve` | **Resolve** (3 → 4). Multipart form: `remarks` (the resolution comment, required, max 1000 characters) and `file` (required: one PDF, JPEG or PNG, max 5 MB; extension, content type and file signature must agree). The file is stored first, then status, `closed_by/at/remarks`, the file reference and the history row are written in one transaction; if that fails the stored file is deleted again. 400 for a missing comment or file or an invalid file, 409 when already closed or changed by someone else, 503 when storage is down. Rate limited (`grievance-write`). |
+| `GET /admin/grievances/{id}/resolution-document` | Download the resolution file (audited). 404 when there is none. |
 | `POST /admin/grievances/{id}/comments` | `{ "comment": "..." }`. Appended to the history, visible to the employee; status unchanged. 409 when closed. |
 | `POST /admin/grievances/{id}/forward` | `{ "toAdminId": 7, "remarks": "optional" }`. Assigns/reassigns to an active Grievance Admin; status unchanged. 409 when closed or already assigned to that admin. |
 | `GET /admin/dashboard/summary?fromDate=&toDate=` | Counts by status, category and month, average resolution days. |
@@ -249,3 +252,20 @@ See `OPEN-QUESTIONS.md` OQ-011 and OQ-035 to OQ-038. In short:
 - **History:** `grievance_status_log` gained `log_action` and `forwarded_to`; the employee detail returns the complete history.
 - **Security:** `[Authorize(RequireMobileProfile)]` on `GrievancesController` had been commented out and `[AllowAnonymous]` set on the employee download; both were restored.
 - **Migration:** the never-applied migration was regenerated as `20261022103033_Add_Grievance_Management`.
+
+## 12. Change 2026-10-26 — admin authorization restored, resolution file
+- **Security (root cause of "valid admin token, some APIs fail"):** `GrievanceAdminController` carried `[AllowAnonymous]` with the `[Authorize(Policy = RequireGrievanceAdmin)]` line commented out. No policy named the `AdminBearer` scheme, so only the default (mobile) scheme ran and rejected the admin token; `admin_profile_id` was never loaded and every action that needs the acting admin answered 401 "identity missing", while list, dashboard and category reads (which do not need it) worked for anybody, with or without a token. `[Authorize(Policy = RequireGrievanceAdmin)]` is restored: only an `AdminBearer` token with `token_use=admin_access`, a live session and role `GRIEVANCE_ADMIN` passes; other admin roles get 403, mobile tokens and missing/invalid tokens 401. `DgMessagesController` still has the same temporary `[AllowAnonymous]` on its three write routes (not changed here; it is a different module).
+- **Resolution:** `POST /admin/grievances/{id}/resolve` (comment + file, see 4.2) replaces closing through `PUT .../status`. New nullable column `grievance.resolution_document` (JSON, same shape as one `document_urls` entry), migration `20261026132631_Add_Grievance_Resolution_Document` (additive, not applied anywhere). Grievances closed earlier have no resolution file: `resolutionDocument` is null for them.
+- **Allowed types:** the resolution file may also be PNG; employee attachments stay PDF/JPEG only.
+- **Tests:** `GrievanceAuthorizationHostTests` (real JWT, policies, controllers and services over in-memory fakes) and `GrievanceResolutionTests`. They do not cover the real repository SQL, MySQL or R2.
+
+## 13. Change 2026-10-26 (later) — `resolution_document` is a plain string
+- `grievance.resolution_document` is now a nullable `varchar(500)` holding only the **storage key** of the resolution file (for example `grievances/2026/10/<guid>.pdf`). No JSON, no JSON check constraint, no name/size/date metadata. It is a reference into the private bucket, not a public URL: the file is only served by `GET /grievances/{id}/resolution-document` (owner) and `GET /admin/grievances/{id}/resolution-document` (GRIEVANCE_ADMIN).
+- The employee and admin detail return `"resolutionDocument": "<that string>"` (or `null`). The download takes its content type from the key's extension (only pdf, jpg and png are ever stored) and names the file `resolution-<ticket>.<ext>`.
+- Migration `20261026135357_Change_Grievance_Resolution_Document_To_Varchar` (drops the check constraint, `MODIFY COLUMN varchar(500)`). The earlier migration had already been applied to the local dev database, so it was left untouched. Rolling the new one back (`Down`) turns the column back into `json` and fails if any row holds a value that is not valid JSON.
+
+## 14. Change 2026-10-26 (later) — ticket numbers are `NSG-YYYY-NNNNNN`
+- New tickets are `NSG-<IST year>-<six digits>` (`NSG-2026-000001`). The sequence is per year: the first ticket of a new year is `…-000001` whatever the last number of the old year was (`GrievanceTicketNumber`, pure rule, unit-tested). The year is the IST year of `created_at_ist`.
+- **Existing tickets keep their `GRV-` number** and are not renamed; they never take part in the `NSG-` sequence, so the first `NSG-2026-` ticket is `NSG-2026-000001` even if `GRV-2026-0000nn` tickets exist. No data migration, no schema change (`grievance_id` is `varchar(30)` with the unique index `ix_grievance_grievance_id`).
+- **Uniqueness under concurrency** comes from that unique index, not from the read: the repository reads the highest ticket of the year (not `COUNT(*)`, no in-memory counter), inserts `last + 1` in a transaction together with the first history row, and on a duplicate-key error from a simultaneous request retries with a fresh read (`MaxTicketAttempts` raised from 3 to 10). A duplicate can never be stored. Limit: if more than ten requests collide in the same instant, the unlucky one gets the retryable 503 `TICKET_UNAVAILABLE`. A strict gap-free serialisation (a counter row or `GET_LOCK`) was not added.
+- **Verified only with fakes** (`GrievanceTicketNumberTests`). `GrievanceTicketDatabaseTests` runs the real repository against MySQL with eight simultaneous requests and the year restart, but needs `NSG_TEST_MYSQL` and has **not been run**.

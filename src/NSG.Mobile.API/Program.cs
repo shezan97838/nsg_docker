@@ -123,12 +123,13 @@ builder.Services.AddAuthorization(options =>
 
     AddAdminPolicy(DomainConstants.Policies.RequireAdminAccount,
         AdminRoleCodes.SuperAdmin, AdminRoleCodes.RegistrationAdmin, AdminRoleCodes.PisAdmin,
-        AdminRoleCodes.GrievanceAdmin, AdminRoleCodes.MediaCellAdmin, AdminRoleCodes.SalaryManagementAdmin);
+        AdminRoleCodes.GrievanceAdmin, AdminRoleCodes.MediaCellAdmin, AdminRoleCodes.SalaryManagementAdmin, AdminRoleCodes.LeaveAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireSuperAdmin, AdminRoleCodes.SuperAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireRegistrationAdmin, AdminRoleCodes.RegistrationAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireGrievanceAdmin, AdminRoleCodes.GrievanceAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireMediaCellAdmin, AdminRoleCodes.MediaCellAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireSalaryManagementAdmin, AdminRoleCodes.SalaryManagementAdmin);
+    AddAdminPolicy(DomainConstants.Policies.RequireLeaveAdmin, AdminRoleCodes.LeaveAdmin);
 
     // PIS Admin: accepts Admin Portal callers with PIS_ADMIN role (AdminBearer) and authenticated callers with PisAdmin role (Bearer).
     options.AddPolicy(DomainConstants.Policies.RequirePisAdmin, policy =>

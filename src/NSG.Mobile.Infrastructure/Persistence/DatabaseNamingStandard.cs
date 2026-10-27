@@ -72,6 +72,14 @@ public static class DatabaseNamingStandard
 
             foreach (IMutableForeignKey foreignKey in entity.GetForeignKeys())
             {
+                // A name set explicitly with HasConstraintName is kept (still length- and format-checked): the generated
+                // fk_{table}_{principal}_{columns} form exceeds 64 characters between long table names.
+                if (((IConventionForeignKey)foreignKey).GetConstraintNameConfigurationSource() == ConfigurationSource.Explicit)
+                {
+                    foreignKey.SetConstraintName(Checked(foreignKey.GetConstraintName()!, entity));
+                    continue;
+                }
+
                 string principalTable = foreignKey.PrincipalEntityType.GetTableName()!;
                 string columns = string.Join("_", foreignKey.Properties.Select(p => p.GetColumnName(store)));
                 foreignKey.SetConstraintName(Checked($"fk_{table}_{principalTable}_{columns}", entity));

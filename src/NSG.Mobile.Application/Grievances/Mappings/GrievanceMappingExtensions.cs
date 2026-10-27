@@ -83,7 +83,8 @@ public static class GrievanceMappingExtensions
             ActionRemarks = g.ActionRemarks,
             ActionTakenAt = g.ActionTakenAtIst.HasValue ? IstTime.FromIst(g.ActionTakenAtIst.Value) : null,
             ClosedRemarks = g.ClosedRemarks,
-            ClosedAt = g.ClosedAtIst.HasValue ? IstTime.FromIst(g.ClosedAtIst.Value) : null
+            ClosedAt = g.ClosedAtIst.HasValue ? IstTime.FromIst(g.ClosedAtIst.Value) : null,
+            ResolutionDocument = g.ResolutionDocument
         };
         FillSummary(dto, g, categoryName);
         return dto;
@@ -110,7 +111,8 @@ public static class GrievanceMappingExtensions
             ActionTakenAt = g.ActionTakenAtIst.HasValue ? IstTime.FromIst(g.ActionTakenAtIst.Value) : null,
             ClosedBy = g.ClosedBy,
             ClosedRemarks = g.ClosedRemarks,
-            ClosedAt = g.ClosedAtIst.HasValue ? IstTime.FromIst(g.ClosedAtIst.Value) : null
+            ClosedAt = g.ClosedAtIst.HasValue ? IstTime.FromIst(g.ClosedAtIst.Value) : null,
+            ResolutionDocument = g.ResolutionDocument
         };
         FillSummary(dto, g, categoryName);
         return dto;

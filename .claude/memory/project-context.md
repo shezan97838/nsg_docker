@@ -27,7 +27,7 @@ Foundation layer complete:
 ## Not Yet Implemented
 - EF Core initial migration
 - Password setup flow (SOW §3.7 Step 3)
-- Leave Management (SOW §3.2)
+- Leave Management (SOW §3.2): IMPLEMENTED 2026-10-26, see docs/LEAVE-MANAGEMENT.md (migration applied to local nsg_mobile_dev only; not functionally tested on MySQL)
 - Salary Integration (SOW §3.3)
 - Form-16 (SOW §3.4)
 - Engagement & Communications (SOW §3.5)

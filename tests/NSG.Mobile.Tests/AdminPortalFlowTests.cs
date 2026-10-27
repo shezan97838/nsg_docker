@@ -313,7 +313,7 @@ public class AdminPortalFlowTests : IAsyncLifetime
         (HttpStatusCode rolesStatus, JsonElement roles) = await GetAsync(superAdmin, "/api/v1/admin/roles");
         Assert.Equal(HttpStatusCode.OK, rolesStatus);
         string[] codes = roles.GetProperty("data").EnumerateArray().Select(r => r.GetProperty("roleCode").GetString()!).ToArray();
-        Assert.Equal(new[] { "SUPER_ADMIN", "REGISTRATION_ADMIN", "PIS_ADMIN", "GRIEVANCE_ADMIN", "MEDIA_CELL_ADMIN", "SALARY_MANAGEMENT_ADMIN" }, codes);
+        Assert.Equal(new[] { "SUPER_ADMIN", "REGISTRATION_ADMIN", "PIS_ADMIN", "GRIEVANCE_ADMIN", "MEDIA_CELL_ADMIN", "SALARY_MANAGEMENT_ADMIN", "LEAVE_ADMIN" }, codes);
 
         (HttpStatusCode listStatus, JsonElement list) = await GetAsync(superAdmin, Accounts);
         Assert.Equal(HttpStatusCode.OK, listStatus);

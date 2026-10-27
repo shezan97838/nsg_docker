@@ -39,10 +39,17 @@ public class CreateGrievanceRequestDto
     public string Note { get; set; } = string.Empty;
 }
 
-/// <summary>Body of the admin status change. <see cref="ToStatus"/>: 2 Under Review, 3 Action Taken (remarks required), 4 Closed = resolved (remarks required: the resolution).</summary>
+/// <summary>Body of the admin status change. <see cref="ToStatus"/>: 2 Under Review, 3 Action Taken (remarks required). Resolving (status 4) is a separate request: it needs a resolution comment and a supporting file (see <see cref="ResolveGrievanceRequestDto"/>).</summary>
 public class UpdateGrievanceStatusRequestDto
 {
     public int? ToStatus { get; set; }
+    public string? Remarks { get; set; }
+}
+
+/// <summary>Text part of the admin resolve request (multipart form). The supporting file travels beside it as an upload.</summary>
+public class ResolveGrievanceRequestDto
+{
+    /// <summary>The resolution comment: required, at most 1000 characters. Stored as the closing remarks and in the history.</summary>
     public string? Remarks { get; set; }
 }
 
@@ -99,7 +106,7 @@ public class GrievanceAdminStatusEntryDto : GrievanceStatusEntryDto
 public class GrievanceSummaryDto
 {
     public long Id { get; set; }
-    /// <summary>The ticket number, format <c>GRV-YYYY-000001</c> (database column <c>grievance_id</c>). <see cref="Id"/> is the numeric key used in routes.</summary>
+    /// <summary>The ticket number, format <c>NSG-YYYY-000001</c> (database column <c>grievance_id</c>). <see cref="Id"/> is the numeric key used in routes.</summary>
     public string GrievanceId { get; set; } = string.Empty;
     public int CategoryId { get; set; }
     public string CategoryName { get; set; } = string.Empty;
@@ -119,6 +126,9 @@ public class GrievanceDetailDto : GrievanceSummaryDto
     public DateTimeOffset? ActionTakenAt { get; set; }
     public string? ClosedRemarks { get; set; }
     public DateTimeOffset? ClosedAt { get; set; }
+
+    /// <summary>Reference (storage key) of the supporting file the admin uploaded at resolution; not a downloadable link. The file is downloaded with <c>GET grievances/{id}/resolution-document</c>. Null while open and for older closed grievances.</summary>
+    public string? ResolutionDocument { get; set; }
 }
 
 /// <summary>Minimum identity of the employee, shown to Grievance Admins only.</summary>
@@ -152,6 +162,9 @@ public class GrievanceAdminDetailDto : GrievanceAdminSummaryDto
     public long? ClosedBy { get; set; }
     public string? ClosedRemarks { get; set; }
     public DateTimeOffset? ClosedAt { get; set; }
+
+    /// <summary>Reference (storage key) of the supporting file uploaded at resolution; not a downloadable link. Download: <c>GET admin/grievances/{id}/resolution-document</c>. Null while open and for older closed grievances.</summary>
+    public string? ResolutionDocument { get; set; }
 }
 
 // ── Dashboard ──

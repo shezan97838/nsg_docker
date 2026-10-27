@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using NSG.Mobile.Application.Common;
 using NSG.Mobile.Application.Grievances;
 using NSG.Mobile.Application.Grievances.DTOs;
@@ -15,11 +16,13 @@ namespace NSG.Mobile.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/admin")]
-[AllowAnonymous]
-//[Authorize(Policy = DomainConstants.Policies.RequireGrievanceAdmin)]
+[Authorize(Policy = DomainConstants.Policies.RequireGrievanceAdmin)]
 [Produces("application/json")]
 public class GrievanceAdminController : ControllerBase
 {
+    /// <summary>Largest accepted resolve request: the largest file plus 1 MB for the comment and multipart framing.</summary>
+    internal const long MaxResolveRequestBytes = (GrievanceLimits.MaxFileSizeMb + 1L) * 1024L * 1024L;
+
     private readonly IGrievanceAdminService _grievances;
     private readonly IGrievanceCategoryService _categories;
     private readonly IGrievanceDashboardService _dashboard;
@@ -96,7 +99,7 @@ public class GrievanceAdminController : ControllerBase
     }
 
     /// <summary>
-    /// Move a grievance one step forward: 1→2, 2→3 (remarks required), 3→4 = resolved (remarks required: the resolution). Anything else is a 400. The change and its status-log row are one transaction;
+    /// Move a grievance one step forward: 1→2, 2→3 (remarks required). Resolving (3→4) is <c>POST grievances/{id}/resolve</c>, which also needs a supporting file; a 4 here is a 400. Anything else is a 400. The change and its status-log row are one transaction;
     /// the acting admin and the time are set by the server. 409 when someone else changed the grievance first.
     /// </summary>
     [HttpPut("grievances/{id:long}/status")]
@@ -110,6 +113,59 @@ public class GrievanceAdminController : ControllerBase
     {
         Result<ApiResult<GrievanceAdminDetailDto>> result = await _grievances.UpdateStatusAsync(id, request, cancellationToken);
         return result.IsSuccess ? Ok(result.Data) : GrievanceProblem.From(this, result);
+    }
+
+    /// <summary>
+    /// Resolve a grievance that is in Action Taken (status 3 → 4 Closed). Multipart form: <c>remarks</c> (the resolution comment, required, at most 1000 characters)
+    /// and <c>file</c> (the supporting document: one PDF, JPEG or PNG, at most 5 MB; extension, content type and file signature must agree). The file goes to
+    /// private storage and is recorded with the status change, the comment and the history row in one transaction; nothing stays in storage if that fails.
+    /// The acting admin and the time are set by the server. The employee downloads the file with <c>GET api/v1/grievances/{id}/resolution-document</c>.
+    /// </summary>
+    [HttpPost("grievances/{id:long}/resolve")]
+    [Consumes("multipart/form-data")]
+    [EnableRateLimiting(GrievanceRateLimit.WritePolicy)]
+    [RequestSizeLimit(MaxResolveRequestBytes)]
+    [OversizedUploadIsBadRequest]
+    [ProducesResponseType(typeof(ApiResult<GrievanceAdminDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> Resolve(long id, [FromForm] ResolveGrievanceForm form, CancellationToken cancellationToken)
+    {
+        Stream? stream = null;
+        try
+        {
+            GrievanceUploadFile? upload = null;
+            if (form.File != null)
+            {
+                stream = form.File.OpenReadStream();
+                upload = new GrievanceUploadFile(stream, form.File.FileName, form.File.ContentType, form.File.Length);
+            }
+
+            Result<ApiResult<GrievanceAdminDetailDto>> result = await _grievances.ResolveAsync(id, new ResolveGrievanceRequestDto { Remarks = form.Remarks }, upload, cancellationToken);
+            return result.IsSuccess ? Ok(result.Data) : GrievanceProblem.From(this, result);
+        }
+        finally
+        {
+            if (stream != null) await stream.DisposeAsync();
+        }
+    }
+
+    /// <summary>Download the supporting file uploaded when the grievance was resolved. Streamed through the API; every download is audited. 404 when there is none.</summary>
+    [HttpGet("grievances/{id:long}/resolution-document")]
+    [Produces("application/pdf", "image/jpeg", "image/png", "application/json")]
+    [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> DownloadResolutionDocument(long id, CancellationToken cancellationToken)
+    {
+        Result<GrievanceDocumentContent> result = await _grievances.OpenResolutionDocumentAsync(id, cancellationToken);
+        return result.IsSuccess ? GrievanceFileResult.From(this, result.Data!) : GrievanceProblem.From(this, result);
     }
 
     /// <summary>
@@ -246,4 +302,14 @@ public class GrievanceAdminController : ControllerBase
         Result<ApiMessageResponse> result = await _categories.DeleteAsync(id, cancellationToken);
         return result.IsSuccess ? Ok(result.Data) : GrievanceProblem.From(this, result);
     }
+}
+
+/// <summary>Multipart form of the resolve endpoint.</summary>
+public class ResolveGrievanceForm
+{
+    /// <summary>The resolution comment. Required.</summary>
+    public string? Remarks { get; set; }
+
+    /// <summary>The supporting document: one PDF, JPEG or PNG. Required.</summary>
+    public IFormFile? File { get; set; }
 }

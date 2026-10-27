@@ -33,6 +33,9 @@ public interface IGrievanceService
     Task<Result<GrievanceDetailDto>> GetMineByIdAsync(long id, CancellationToken cancellationToken);
 
     Task<Result<GrievanceDocumentContent>> OpenMyDocumentAsync(long id, int index, CancellationToken cancellationToken);
+
+    /// <summary>Opens the resolution file the admin uploaded for the caller's own grievance. Someone else's grievance, or one without a resolution file, is reported as not found.</summary>
+    Task<Result<GrievanceDocumentContent>> OpenMyResolutionDocumentAsync(long id, CancellationToken cancellationToken);
 }
 
 public class GrievanceService : IGrievanceService
@@ -90,7 +93,7 @@ public class GrievanceService : IGrievanceService
             // Phase 1: everything is checked BEFORE anything is sent to storage.
             foreach (GrievanceUploadFile file in files)
             {
-                Result<PreparedDocument> checkedFile = await PrepareAsync(file, cancellationToken);
+                Result<PreparedDocument> checkedFile = await GrievanceUploadPreparer.PrepareAsync(file, GrievanceLimits.Upload, cancellationToken);
                 if (!checkedFile.IsSuccess)
                     return Result.Failure<ApiResult<GrievanceDetailDto>>(checkedFile.ErrorCode!, checkedFile.ErrorMessage!);
                 prepared.Add(checkedFile.Data!);
@@ -179,50 +182,6 @@ public class GrievanceService : IGrievanceService
         }
     }
 
-    /// <summary>A file that passed every check and is ready to be stored. <see cref="Buffer"/> is the in-memory copy made for a non-seekable stream.</summary>
-    private sealed record PreparedDocument(ValidatedDocument Validated, Stream Content, long Size, MemoryStream? Buffer);
-
-    private async Task<Result<PreparedDocument>> PrepareAsync(GrievanceUploadFile file, CancellationToken cancellationToken)
-    {
-        EffectiveUploadLimits limits = GrievanceLimits.Upload;
-        Result<ValidatedDocument> validated = GrievanceDocumentRules.Validate(file.FileName, file.ContentType, file.Length, limits);
-        if (!validated.IsSuccess)
-            return Result.Failure<PreparedDocument>(validated.ErrorCode!, validated.ErrorMessage!);
-
-        // The signature check needs a seekable stream; a bounded in-memory copy covers the rare stream that is not.
-        Stream content = file.Content;
-        MemoryStream? buffer = null;
-        try
-        {
-            if (!content.CanSeek)
-            {
-                buffer = new MemoryStream();
-                await content.CopyToAsync(buffer, cancellationToken);
-                buffer.Position = 0;
-                content = buffer;
-            }
-
-            long size = content.Length - content.Position;
-            if (size > limits.MaxFileSizeBytes)
-            {
-                buffer?.Dispose();
-                return Result.Failure<PreparedDocument>(ApiErrorCodes.ValidationFailed, "The file is larger than allowed.");
-            }
-            if (!await GrievanceDocumentRules.HasExpectedSignatureAsync(content, validated.Data!.Type, cancellationToken))
-            {
-                buffer?.Dispose();
-                return Result.Failure<PreparedDocument>(ApiErrorCodes.ValidationFailed, "The file's content does not match its type.");
-            }
-
-            return Result.Success(new PreparedDocument(validated.Data, content, size, buffer));
-        }
-        catch
-        {
-            buffer?.Dispose();
-            throw;
-        }
-    }
-
     public async Task<Result<PaginatedResponse<GrievanceSummaryDto>>> GetMineAsync(
         int pageNumber, int pageSize, GrievanceStatus? status, CancellationToken cancellationToken)
     {
@@ -262,6 +221,19 @@ public class GrievanceService : IGrievanceService
             return Result.Failure<GrievanceDocumentContent>(ApiErrorCodes.NotFound, GrievanceMessages.GrievanceNotFound);
 
         return await _documentAccess.OpenAsync(grievance, index, GrievanceActorType.Employee, profileId.Value, cancellationToken);
+    }
+
+    public async Task<Result<GrievanceDocumentContent>> OpenMyResolutionDocumentAsync(long id, CancellationToken cancellationToken)
+    {
+        long? profileId = _currentUser.ProfileId;
+        if (profileId == null)
+            return Result.Failure<GrievanceDocumentContent>(ApiErrorCodes.Unauthorized, GrievanceMessages.IdentityMissing);
+
+        Grievance? grievance = await _repository.GetByIdAsync(id, profileId.Value, cancellationToken);
+        if (grievance == null)
+            return Result.Failure<GrievanceDocumentContent>(ApiErrorCodes.NotFound, GrievanceMessages.GrievanceNotFound);
+
+        return await _documentAccess.OpenResolutionAsync(grievance, GrievanceActorType.Employee, profileId.Value, cancellationToken);
     }
 
     private async Task RemoveOrphansAsync(IReadOnlyCollection<string> keys)

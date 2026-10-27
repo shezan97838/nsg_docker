@@ -10,11 +10,12 @@ public sealed record ValidatedDocument(string Type, string ContentType, string S
 /// <summary>One entry of <c>grievance.document_urls</c>. <see cref="Key"/> is an object key in the private bucket, never a URL.</summary>
 public sealed record GrievanceDocumentRecord(string Key, string Name, string ContentType, long SizeBytes, DateTime UploadedAtIst);
 
-/// <summary>Upload validation (pdf and jpg only) and file-name sanitising. Pure functions; no I/O except reading the first bytes of the stream.</summary>
+/// <summary>Upload validation (pdf and jpg; png only where the limits allow it, which is the resolution file) and file-name sanitising. Pure functions; no I/O except reading the first bytes of the stream.</summary>
 public static class GrievanceDocumentRules
 {
     private static readonly byte[] PdfMagic = { 0x25, 0x50, 0x44, 0x46 };   // %PDF
     private static readonly byte[] JpegMagic = { 0xFF, 0xD8, 0xFF };
+    private static readonly byte[] PngMagic = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -36,26 +37,42 @@ public static class GrievanceDocumentRules
         {
             ".pdf" => "pdf",
             ".jpg" or ".jpeg" => "jpg",
+            ".png" => "png",
             _ => null
         };
         if (type == null || !limits.AllowedTypes.Contains(type))
-            return Failure($"Only {string.Join(" and ", limits.AllowedTypes.Select(t => t.ToUpperInvariant()))} files are accepted for this category.");
+            return Failure($"Only {DescribeTypes(limits.AllowedTypes)} files are accepted for this category.");
 
         string declared = (contentType ?? string.Empty).Split(';')[0].Trim().ToLowerInvariant();
-        bool contentTypeMatches = type == "pdf"
-            ? declared == "application/pdf"
-            : declared is "image/jpeg" or "image/jpg";
+        bool contentTypeMatches = type switch
+        {
+            "pdf" => declared == "application/pdf",
+            "png" => declared == "image/png",
+            _ => declared is "image/jpeg" or "image/jpg"
+        };
         if (!contentTypeMatches)
             return Failure("The file's content type does not match its extension.");
 
-        string canonicalContentType = type == "pdf" ? "application/pdf" : "image/jpeg";
-        return Result.Success(new ValidatedDocument(type, canonicalContentType, SanitizeFileName(fileName, type == "pdf" ? ".pdf" : ".jpg")));
+        (string canonicalContentType, string canonicalExtension) = type switch
+        {
+            "pdf" => ("application/pdf", ".pdf"),
+            "png" => ("image/png", ".png"),
+            _ => ("image/jpeg", ".jpg")
+        };
+        return Result.Success(new ValidatedDocument(type, canonicalContentType, SanitizeFileName(fileName, canonicalExtension)));
     }
 
-    /// <summary>True when the stream starts with the signature of the claimed type (%PDF, or FF D8 FF). Restores the stream position.</summary>
+    // "PDF and JPG" for two types, "PDF, JPG and PNG" for three.
+    private static string DescribeTypes(IReadOnlyList<string> types)
+    {
+        List<string> names = types.Select(t => t.ToUpperInvariant()).ToList();
+        return names.Count <= 1 ? string.Join(string.Empty, names) : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1];
+    }
+
+    /// <summary>True when the stream starts with the signature of the claimed type (%PDF, FF D8 FF, or the PNG signature). Restores the stream position.</summary>
     public static async Task<bool> HasExpectedSignatureAsync(Stream stream, string type, CancellationToken cancellationToken)
     {
-        byte[] expected = type == "pdf" ? PdfMagic : JpegMagic;
+        byte[] expected = type switch { "pdf" => PdfMagic, "png" => PngMagic, _ => JpegMagic };
         long start = stream.Position;
         byte[] head = new byte[expected.Length];
         int read = 0;
@@ -107,6 +124,22 @@ public static class GrievanceDocumentRules
     }
 
     public static string SerializeDocuments(IReadOnlyList<GrievanceDocumentRecord> documents) => JsonSerializer.Serialize(documents, JsonOptions);
+
+    /// <summary>
+    /// The resolution file is stored as a bare reference (its object key), so its download type and name are derived from it: only pdf, jpg and png
+    /// are ever stored, hence the extension of the key decides the content type, and the name is <c>resolution-&lt;ticket&gt;.&lt;ext&gt;</c>.
+    /// </summary>
+    public static GrievanceDocumentRecord DescribeResolutionReference(string key, string ticketNumber)
+    {
+        (string contentType, string extension) = Path.GetExtension(key).ToLowerInvariant() switch
+        {
+            ".pdf" => ("application/pdf", ".pdf"),
+            ".jpg" or ".jpeg" => ("image/jpeg", ".jpg"),
+            ".png" => ("image/png", ".png"),
+            _ => ("application/octet-stream", ".bin")
+        };
+        return new GrievanceDocumentRecord(key, SanitizeFileName($"resolution-{ticketNumber}", extension), contentType, 0, default);
+    }
 
     // Vowel signs and viram marks (Devanagari and other Indic scripts) are combining marks, not letters; dropping them would mangle ordinary Hindi names.
     private static bool IsCombiningMark(char c)

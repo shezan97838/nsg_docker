@@ -25,8 +25,11 @@ public static class GrievanceLimits
     public const int TicketSearchMaxLength = 30;
     public const int FileNameStemMaxLength = 80;
 
-    /// <summary>How often a ticket-number collision is retried.</summary>
-    public const int MaxTicketAttempts = 3;
+    /// <summary>Length of the <c>grievance.resolution_document</c> column (the storage key of the resolution file).</summary>
+    public const int ResolutionReferenceMaxLength = 500;
+
+    /// <summary>How often a ticket-number collision with a simultaneous request is retried (each round, one of the competing requests wins).</summary>
+    public const int MaxTicketAttempts = 10;
 
     /// <summary>Storage category, which makes object keys start with <c>grievances/</c>.</summary>
     public const string StorageCategory = "grievances";
@@ -36,6 +39,10 @@ public static class GrievanceLimits
 
     /// <summary>The limits every submission is checked against.</summary>
     public static readonly EffectiveUploadLimits Upload = new(true, MaxFiles, MaxFileSizeMb * 1024L * 1024L, AllowedTypes);
+
+    /// <summary>The supporting file of a resolution: exactly one PDF or image (JPEG or PNG), at most <see cref="MaxFileSizeMb"/> MB.</summary>
+    public static readonly EffectiveUploadLimits ResolutionUpload =
+        new(true, 1, MaxFileSizeMb * 1024L * 1024L, new[] { "pdf", "jpg", "png" });
 }
 
 /// <summary>Error codes of the Grievance module that have no equivalent in <c>ApiErrorCodes</c>.</summary>
@@ -57,6 +64,11 @@ public static class GrievanceMessages
     public const string DocumentFileMissing = "The document file is no longer available.";
     public const string StorageUnavailable = "File storage is temporarily unavailable. Please try again later.";
     public const string GrievanceClosed = "A closed grievance can no longer be changed.";
+    public const string ResolutionDocumentNotFound = "No resolution document is available for this grievance.";
+    public const string ResolutionRemarksRequired = "A resolution comment is required when resolving a grievance.";
+    public const string ResolutionFileRequired = "A supporting document (PDF, JPG or PNG) is required when resolving a grievance.";
+    public const string ResolveViaResolveEndpoint =
+        "A grievance is resolved with POST /api/v1/admin/grievances/{id}/resolve, which needs a resolution comment and a supporting document.";
     public const string DuplicateCategory =
         "A grievance category with this name already exists. If it is deactivated or deleted, reuse the existing category instead of creating a new one.";
     public const string IdentityMissing = "Your identity could not be established. Please sign in again.";

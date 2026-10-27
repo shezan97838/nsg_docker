@@ -27,6 +27,8 @@ internal sealed class GrvFakeRepository : IGrievanceRepository
     // Test controls
     public bool TicketsUnavailable { get; set; }
     public bool ThrowOnCreate { get; set; }
+    public bool ThrowOnResolve { get; set; }
+    public int ResolveCalls { get; private set; }
 
     /// <summary>When set, ChangeStatus answers as if another admin had already moved the grievance to this status.</summary>
     public GrievanceStatus? ReportStatusChangedByOthers { get; set; }
@@ -146,7 +148,11 @@ internal sealed class GrvFakeRepository : IGrievanceRepository
         if (TicketsUnavailable) return Task.FromResult(new GrievanceCreateResult(GrievanceCreateOutcome.TicketNumberUnavailable));
 
         grievance.Id = _nextGrievanceId++;
-        grievance.TicketNumber = $"GRV-{grievance.CreatedAtIst.Year:D4}-{Grievances.Count + 1:D6}";
+        // Same rule as GrievanceRepository: the highest ticket of this year (length first, then text) decides the next one; other years and the legacy GRV- tickets never count.
+        string prefix = NSG.Mobile.Application.Grievances.GrievanceTicketNumber.PrefixFor(grievance.CreatedAtIst.Year);
+        string? last = Grievances.Where(g => g.TicketNumber.StartsWith(prefix, StringComparison.Ordinal))
+            .OrderByDescending(g => g.TicketNumber.Length).ThenByDescending(g => g.TicketNumber, StringComparer.Ordinal).Select(g => g.TicketNumber).FirstOrDefault();
+        grievance.TicketNumber = NSG.Mobile.Application.Grievances.GrievanceTicketNumber.Next(grievance.CreatedAtIst.Year, last);
         Grievances.Add(grievance);
         Logs.Add(new GrievanceStatusLog
         {
@@ -233,6 +239,26 @@ internal sealed class GrvFakeRepository : IGrievanceRepository
         return Task.FromResult(new GrievanceStatusChangeResult(GrievanceStatusChangeOutcome.Changed));
     }
 
+    public Task<GrievanceStatusChangeResult> ResolveAsync(long id, long adminProfileId, string remarks, string resolutionDocument, DateTime nowIst, CancellationToken cancellationToken = default)
+    {
+        ResolveCalls++;
+        if (ThrowOnResolve) throw new InvalidOperationException("Simulated database failure.");
+        if (ReportStatusChangedByOthers.HasValue) return Task.FromResult(new GrievanceStatusChangeResult(GrievanceStatusChangeOutcome.StatusChanged, ReportStatusChangedByOthers));
+        Grievance? g = Grievances.FirstOrDefault(x => x.Id == id && x.IsActive);
+        if (g == null) return Task.FromResult(new GrievanceStatusChangeResult(GrievanceStatusChangeOutcome.NotFound));
+        if (g.CurrentStatus != GrievanceStatus.ActionTaken) return Task.FromResult(new GrievanceStatusChangeResult(GrievanceStatusChangeOutcome.StatusChanged, g.CurrentStatus));
+
+        g.CurrentStatus = GrievanceStatus.Closed;
+        g.UpdatedAtIst = nowIst;
+        g.ClosedBy = adminProfileId; g.ClosedAtIst = nowIst; g.ClosedRemarks = remarks; g.ResolutionDocument = resolutionDocument;
+        Logs.Add(new GrievanceStatusLog
+        {
+            GrievancePk = id, FromStatus = GrievanceStatus.ActionTaken, ToStatus = GrievanceStatus.Closed, Remarks = remarks,
+            ChangedBy = adminProfileId, ChangedByType = GrievanceActorType.Admin, ChangedAtIst = nowIst
+        });
+        return Task.FromResult(new GrievanceStatusChangeResult(GrievanceStatusChangeOutcome.Changed));
+    }
+
     // ── Dashboard and lookups ──
 
     public Task<IReadOnlyDictionary<long, GrievanceEmployeeInfo>> GetEmployeeInfoAsync(IReadOnlyCollection<long> profileIds, CancellationToken cancellationToken = default)
@@ -263,7 +289,7 @@ internal sealed class GrvFakeRepository : IGrievanceRepository
             Id = g.Id, TicketNumber = g.TicketNumber, CategoryId = g.CategoryId, Subject = g.Subject, GrievanceNote = g.GrievanceNote,
             DocumentsJson = g.DocumentsJson, CurrentStatus = g.CurrentStatus, CreatedBy = g.CreatedBy, CreatedAtIst = g.CreatedAtIst,
             UpdatedAtIst = g.UpdatedAtIst, AssignedTo = g.AssignedTo, ActionTakenBy = g.ActionTakenBy, ActionTakenAtIst = g.ActionTakenAtIst,
-            ActionRemarks = g.ActionRemarks, ClosedBy = g.ClosedBy, ClosedAtIst = g.ClosedAtIst, ClosedRemarks = g.ClosedRemarks, IsActive = g.IsActive,
+            ActionRemarks = g.ActionRemarks, ClosedBy = g.ClosedBy, ClosedAtIst = g.ClosedAtIst, ClosedRemarks = g.ClosedRemarks, ResolutionDocument = g.ResolutionDocument, IsActive = g.IsActive,
             Category = Categories.FirstOrDefault(c => c.Id == g.CategoryId)
         };
         return copy;
@@ -370,7 +396,7 @@ internal sealed class GrvKit
     {
         Access = new GrievanceDocumentAccess(Storage, Availability, Audit, User, new GrvLogger<GrievanceDocumentAccess>());
         Employees = new GrievanceService(Repo, Storage, Availability, Access, Audit, User, Clock, EmployeeLog);
-        Admins = new GrievanceAdminService(Repo, Access, Audit, User, Clock, AdminLog);
+        Admins = new GrievanceAdminService(Repo, Storage, Availability, Access, Audit, User, Clock, AdminLog);
         Categories = new GrievanceCategoryService(Repo, Audit, User, Clock);
         Dashboard = new GrievanceDashboardService(Repo);
     }
@@ -382,6 +408,7 @@ internal sealed class GrvKit
     public static GrievanceUploadFile Upload(byte[] bytes, string name, string contentType) => new(new MemoryStream(bytes), name, contentType, bytes.Length);
     public static GrievanceUploadFile Pdf(string name = "report.pdf") => Upload(PdfBytes, name, "application/pdf");
     public static GrievanceUploadFile Jpeg(string name = "photo.jpg") => Upload(JpegBytes, name, "image/jpeg");
+    public static GrievanceUploadFile Png(string name = "scan.png") => Upload(PngBytes, name, "image/png");
 
     /// <summary>A valid PDF of the given size (the signature plus padding), without allocating more than needed.</summary>
     public static GrievanceUploadFile PdfOfSize(long size)

@@ -35,7 +35,7 @@ public class Grievance
 {
     public long Id { get; set; }
 
-    /// <summary>Ticket number, format <c>GRV-YYYY-000001</c> (column <c>grievance_id</c>). Required, unique.</summary>
+    /// <summary>Ticket number, format <c>NSG-YYYY-000001</c> (column <c>grievance_id</c>). Required, unique.</summary>
     public string TicketNumber { get; set; } = string.Empty;
 
     public int CategoryId { get; set; }
@@ -67,6 +67,14 @@ public class Grievance
     public long? ClosedBy { get; set; }
     public DateTime? ClosedAtIst { get; set; }
     public string? ClosedRemarks { get; set; }
+
+
+    /// <summary>
+    /// Object key (reference) of the supporting file the Grievance Admin uploaded when resolving, in the private bucket (column <c>resolution_document</c>,
+    /// varchar). Never a public URL: the file is served only through the authenticated download endpoints. Null on open grievances and on
+    /// grievances closed before resolution files existed.
+    /// </summary>
+    public string? ResolutionDocument { get; set; }
 
     public bool IsActive { get; set; } = true;
 }

@@ -86,6 +86,11 @@ public static class DependencyInjection
         configuration.GetSection("MobileAuth").Bind(mobileAuthSettings);
         services.AddSingleton(mobileAuthSettings);
 
+        // Leave module limits (Leave section; defaults in LeaveSettings).
+        var leaveSettings = new NSG.Mobile.Application.Leave.LeaveSettings();
+        configuration.GetSection("Leave").Bind(leaveSettings);
+        services.AddSingleton(leaveSettings);
+
         // JWT Authentication
         var jwtSection = configuration.GetSection(JwtOptions.SectionName);
         var secret = jwtSection.GetValue<string>("Secret") ?? throw new InvalidOperationException("JWT Secret is not configured.");
@@ -230,6 +235,7 @@ public static class DependencyInjection
         services.AddScoped<IAdminRefreshTokenRepository, AdminRefreshTokenRepository>();
         services.AddScoped<IGrievanceRepository, GrievanceRepository>();
         services.AddScoped<IDgMessageRepository, DgMessageRepository>();
+        services.AddScoped<ILeaveRepository, LeaveRepository>();
     }
 
     private static void AddInfrastructureServices(this IServiceCollection services)

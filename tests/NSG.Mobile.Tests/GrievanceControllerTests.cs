@@ -74,7 +74,7 @@ public class GrievanceControllerTests
         using JsonDocument json = JsonDocument.Parse(JsonSerializer.Serialize(body, Web));
         JsonElement data = json.RootElement.GetProperty("data");
         Assert.True(data.GetProperty("id").GetInt64() > 0);
-        Assert.Matches(@"^GRV-\d{4}-\d{6}$", data.GetProperty("grievanceId").GetString());
+        Assert.Matches(@"^NSG-\d{4}-\d{6}$", data.GetProperty("grievanceId").GetString());
         Assert.Equal(1, data.GetProperty("status").GetInt32());
     }
 
@@ -321,15 +321,15 @@ public class GrievanceControllerTests
     }
 
     [Fact]
-    public void Only_the_create_action_has_a_request_size_limit_and_is_rate_limited()
+    public void Only_the_two_upload_actions_have_a_request_size_limit_and_are_rate_limited()
     {
         List<MethodInfo> all = Actions(typeof(GrievancesController)).Concat(Actions(typeof(GrievanceAdminController))).ToList();
 
-        Assert.Equal(new[] { nameof(GrievancesController.Create) },
+        Assert.Equal(new[] { nameof(GrievancesController.Create), nameof(GrievanceAdminController.Resolve) },
             all.Where(m => m.GetCustomAttribute<RequestSizeLimitAttribute>() != null).Select(m => m.Name).ToArray());
 
         List<MethodInfo> limited = all.Where(m => m.GetCustomAttribute<EnableRateLimitingAttribute>() != null).ToList();
-        Assert.Equal(new[] { nameof(GrievancesController.Create) }, limited.Select(m => m.Name).ToArray());
+        Assert.Equal(new[] { nameof(GrievancesController.Create), nameof(GrievanceAdminController.Resolve) }, limited.Select(m => m.Name).ToArray());
         Assert.All(limited, m => Assert.Equal("grievance-write", m.GetCustomAttribute<EnableRateLimitingAttribute>()!.PolicyName));
     }
 

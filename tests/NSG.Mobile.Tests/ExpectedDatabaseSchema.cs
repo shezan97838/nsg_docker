@@ -67,6 +67,7 @@ internal static class ExpectedDatabaseSchema
             "closed_by|bigint|NULL",
             "closed_at_ist|datetime(6)|NULL",
             "closed_remarks|varchar(1000)|NULL",
+            "resolution_document|varchar(500)|NULL",
             "is_active|tinyint(1)|NOT NULL",
         },
         ["grievance_category"] = new[]
@@ -93,6 +94,56 @@ internal static class ExpectedDatabaseSchema
             "changed_by|bigint|NOT NULL",
             "changed_by_type|int|NOT NULL",
             "changed_at_ist|datetime(6)|NOT NULL",
+        },
+        ["personnel_leave_records"] = new[]
+        {
+            "id|bigint|NOT NULL",
+            "nsg_number|varchar(30)|NOT NULL",
+            "leave_year|int|NOT NULL",
+            "leave_taken|int|NOT NULL",
+            "row_version|int|NOT NULL",
+            "created_at_ist|datetime(6)|NOT NULL",
+            "created_by|bigint|NOT NULL",
+            "updated_at_ist|datetime(6)|NOT NULL",
+            "updated_by|bigint|NOT NULL",
+        },
+        ["personnel_leave_history"] = new[]
+        {
+            "id|bigint|NOT NULL",
+            "leave_record_id|bigint|NOT NULL",
+            "nsg_number|varchar(30)|NOT NULL",
+            "leave_year|int|NOT NULL",
+            "old_leave_taken|int|NULL",
+            "new_leave_taken|int|NOT NULL",
+            "change_source|int|NOT NULL",
+            "upload_batch_id|bigint|NULL",
+            "changed_by|bigint|NOT NULL",
+            "changed_at_ist|datetime(6)|NOT NULL",
+        },
+        ["personnel_leave_upload_batches"] = new[]
+        {
+            "id|bigint|NOT NULL",
+            "file_name|varchar(255)|NOT NULL",
+            "leave_year|int|NOT NULL",
+            "total_rows|int|NOT NULL",
+            "created_count|int|NOT NULL",
+            "updated_count|int|NOT NULL",
+            "unchanged_count|int|NOT NULL",
+            "failed_count|int|NOT NULL",
+            "upload_status|int|NOT NULL",
+            "processing_lock|tinyint(1)|NULL",
+            "created_at_ist|datetime(6)|NOT NULL",
+            "created_by|bigint|NOT NULL",
+            "completed_at_ist|datetime(6)|NULL",
+        },
+        ["personnel_leave_upload_errors"] = new[]
+        {
+            "id|bigint|NOT NULL",
+            "batch_id|bigint|NOT NULL",
+            "excel_row_number|int|NULL",
+            "nsg_number|varchar(30)|NULL",
+            "error_message|varchar(500)|NOT NULL",
+            "created_at_ist|datetime(6)|NOT NULL",
         },
         ["dg_message"] = new[]
         {

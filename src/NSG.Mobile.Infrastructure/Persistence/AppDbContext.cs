@@ -39,6 +39,10 @@ public class AppDbContext : DbContext
     public DbSet<Grievance> Grievances => Set<Grievance>();
     public DbSet<DgMessage> DgMessages => Set<DgMessage>();
     public DbSet<GrievanceStatusLog> GrievanceStatusLogs => Set<GrievanceStatusLog>();
+    public DbSet<PersonnelLeaveRecord> PersonnelLeaveRecords => Set<PersonnelLeaveRecord>();
+    public DbSet<PersonnelLeaveHistory> PersonnelLeaveHistory => Set<PersonnelLeaveHistory>();
+    public DbSet<PersonnelLeaveUploadBatch> PersonnelLeaveUploadBatches => Set<PersonnelLeaveUploadBatch>();
+    public DbSet<PersonnelLeaveUploadError> PersonnelLeaveUploadErrors => Set<PersonnelLeaveUploadError>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -37,7 +37,7 @@ public class AdminPortalModelTests
         {
             DomainConstants.Policies.RequireAdminAccount, DomainConstants.Policies.RequireSuperAdmin, DomainConstants.Policies.RequireRegistrationAdmin,
             DomainConstants.Policies.RequirePisAdmin, DomainConstants.Policies.RequireGrievanceAdmin, DomainConstants.Policies.RequireMediaCellAdmin,
-            DomainConstants.Policies.RequireSalaryManagementAdmin
+            DomainConstants.Policies.RequireSalaryManagementAdmin, DomainConstants.Policies.RequireLeaveAdmin
         };
 
         List<string> problems = new();

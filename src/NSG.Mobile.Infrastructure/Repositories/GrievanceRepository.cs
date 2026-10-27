@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
+using NSG.Mobile.Application.Grievances;
 using NSG.Mobile.Application.Interfaces.Repositories;
 using NSG.Mobile.Domain.Constants;
 using NSG.Mobile.Domain.Entities;
@@ -11,8 +12,6 @@ namespace NSG.Mobile.Infrastructure.Repositories;
 /// <summary>EF Core implementation of <see cref="IGrievanceRepository"/>. Transactions run inside the execution strategy (retry on transient failure is enabled).</summary>
 public class GrievanceRepository : IGrievanceRepository
 {
-    private const string TicketPrefix = "GRV-";
-
     private readonly AppDbContext _context;
 
     public GrievanceRepository(AppDbContext context) => _context = context;
@@ -112,14 +111,13 @@ public class GrievanceRepository : IGrievanceRepository
 
                 await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
-                string prefix = $"{TicketPrefix}{grievance.CreatedAtIst.Year:D4}-";
+                string prefix = GrievanceTicketNumber.PrefixFor(grievance.CreatedAtIst.Year);
                 string? last = await _context.Grievances.AsNoTracking()
                     .Where(g => g.TicketNumber.StartsWith(prefix))
                     .OrderByDescending(g => g.TicketNumber.Length).ThenByDescending(g => g.TicketNumber)
                     .Select(g => g.TicketNumber)
                     .FirstOrDefaultAsync(cancellationToken);
-                int next = last != null && int.TryParse(last[prefix.Length..], out int lastNumber) ? lastNumber + 1 : 1;
-                grievance.TicketNumber = prefix + next.ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
+                grievance.TicketNumber = GrievanceTicketNumber.Next(grievance.CreatedAtIst.Year, last);
 
                 _context.Grievances.Add(grievance);
                 try
@@ -190,6 +188,9 @@ public class GrievanceRepository : IGrievanceRepository
     public async Task<GrievanceStatusChangeResult> ChangeStatusAsync(
         long id, GrievanceStatus from, GrievanceStatus to, long adminProfileId, string? remarks, DateTime nowIst, CancellationToken cancellationToken = default)
     {
+        // Closing carries the resolution document and is its own operation; a plain status move never closes.
+        if (to == GrievanceStatus.Closed) throw new ArgumentException("Use ResolveAsync to close a grievance.", nameof(to));
+
         return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
             await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
@@ -203,12 +204,6 @@ public class GrievanceRepository : IGrievanceRepository
                     .SetProperty(g => g.ActionTakenBy, (long?)adminProfileId)
                     .SetProperty(g => g.ActionTakenAtIst, (DateTime?)nowIst)
                     .SetProperty(g => g.ActionRemarks, remarks), cancellationToken),
-                GrievanceStatus.Closed => await target.ExecuteUpdateAsync(s => s
-                    .SetProperty(g => g.CurrentStatus, to)
-                    .SetProperty(g => g.UpdatedAtIst, (DateTime?)nowIst)
-                    .SetProperty(g => g.ClosedBy, (long?)adminProfileId)
-                    .SetProperty(g => g.ClosedAtIst, (DateTime?)nowIst)
-                    .SetProperty(g => g.ClosedRemarks, remarks), cancellationToken),
                 _ => await target.ExecuteUpdateAsync(s => s
                     .SetProperty(g => g.CurrentStatus, to)
                     .SetProperty(g => g.UpdatedAtIst, (DateTime?)nowIst), cancellationToken)
@@ -231,6 +226,53 @@ public class GrievanceRepository : IGrievanceRepository
                 LogAction = GrievanceLogAction.StatusChange,
                 FromStatus = from,
                 ToStatus = to,
+                Remarks = remarks,
+                ChangedBy = adminProfileId,
+                ChangedByType = GrievanceActorType.Admin,
+                ChangedAtIst = nowIst
+            });
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return new GrievanceStatusChangeResult(GrievanceStatusChangeOutcome.Changed);
+        });
+    }
+
+    public async Task<GrievanceStatusChangeResult> ResolveAsync(
+        long id, long adminProfileId, string remarks, string resolutionDocument, DateTime nowIst, CancellationToken cancellationToken = default)
+    {
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            // One conditional statement: only a grievance that is still Action Taken is closed; status, who, when, remarks and the file
+            // reference are written together or not at all.
+            int updated = await _context.Grievances
+                .Where(g => g.Id == id && g.IsActive && g.CurrentStatus == GrievanceStatus.ActionTaken)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(g => g.CurrentStatus, GrievanceStatus.Closed)
+                    .SetProperty(g => g.UpdatedAtIst, (DateTime?)nowIst)
+                    .SetProperty(g => g.ClosedBy, (long?)adminProfileId)
+                    .SetProperty(g => g.ClosedAtIst, (DateTime?)nowIst)
+                    .SetProperty(g => g.ClosedRemarks, remarks)
+                    .SetProperty(g => g.ResolutionDocument, resolutionDocument), cancellationToken);
+
+            if (updated == 0)
+            {
+                GrievanceStatus? current = await _context.Grievances.AsNoTracking()
+                    .Where(g => g.Id == id && g.IsActive)
+                    .Select(g => (GrievanceStatus?)g.CurrentStatus)
+                    .FirstOrDefaultAsync(cancellationToken);
+                return current == null
+                    ? new GrievanceStatusChangeResult(GrievanceStatusChangeOutcome.NotFound)
+                    : new GrievanceStatusChangeResult(GrievanceStatusChangeOutcome.StatusChanged, current);
+            }
+
+            _context.GrievanceStatusLogs.Add(new GrievanceStatusLog
+            {
+                GrievancePk = id,
+                LogAction = GrievanceLogAction.StatusChange,
+                FromStatus = GrievanceStatus.ActionTaken,
+                ToStatus = GrievanceStatus.Closed,
                 Remarks = remarks,
                 ChangedBy = adminProfileId,
                 ChangedByType = GrievanceActorType.Admin,

@@ -41,7 +41,7 @@ MySQL on Linux treats database and table names as case-sensitive (`lower_case_ta
 - Always verify behaviour on the supported MySQL version, not by reasoning about another engine.
 
 ### E. Constraints and indexes
-- Names: primary key `pk_<table>` (cosmetic: MySQL calls it `PRIMARY`), foreign key `fk_<table>_<referenced_table>_<column>`, index `ix_<table>_<columns>` (unique indexes too), check `ck_<table>_<rule>`. All generated or validated by `DatabaseNamingStandard`; names stay within 64 characters.
+- Names: primary key `pk_<table>` (cosmetic: MySQL calls it `PRIMARY`), foreign key `fk_<table>_<referenced_table>_<column>`, index `ix_<table>_<columns>` (unique indexes too), check `ck_<table>_<rule>`. All generated or validated by `DatabaseNamingStandard`; names stay within 64 characters. An explicit `HasConstraintName(...)` on a foreign key is kept by the standard (still checked for format and length); use it only when the generated name would exceed 64 characters (the leave errors -> batches key).
 - Foreign keys use `Restrict` delete behaviour (no cascades); every foreign key column is covered by an index.
 - Uniqueness is enforced **in the database** as well as in validation. MySQL allows several `NULL`s in a unique index; remember that the default collation makes unique comparisons case- and accent-insensitive.
 - No duplicate or redundant indexes (an index whose columns are a prefix of, or a superset of uniques of, another).

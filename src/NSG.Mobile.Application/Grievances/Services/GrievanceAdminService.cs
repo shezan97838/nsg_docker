@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using NSG.Mobile.Application.Common;
 using NSG.Mobile.Application.Grievances.DTOs;
 using NSG.Mobile.Application.Grievances.Mappings;
+using NSG.Mobile.Application.Interfaces.Infrastructure;
 using NSG.Mobile.Application.Interfaces.Repositories;
 using NSG.Mobile.Application.Interfaces.Services;
 using NSG.Mobile.Domain.Common;
@@ -30,8 +31,18 @@ public interface IGrievanceAdminService
     /// <summary>Forwards or reassigns the grievance to another active Grievance Admin and records it in the history. Not allowed on a closed grievance.</summary>
     Task<Result<ApiResult<GrievanceAdminDetailDto>>> ForwardAsync(long id, ForwardGrievanceRequestDto request, CancellationToken cancellationToken);
 
-    /// <summary>Moves a grievance one step forward (1→2, 2→3, 3→4; 4 = resolved). The acting admin and the time come from the server.</summary>
+    /// <summary>Moves a grievance one step forward (1→2, 2→3). Resolving (3→4) is <see cref="ResolveAsync"/>. The acting admin and the time come from the server.</summary>
     Task<Result<ApiResult<GrievanceAdminDetailDto>>> UpdateStatusAsync(long id, UpdateGrievanceStatusRequestDto request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Resolves a grievance that is in Action Taken: requires a resolution comment and one supporting file (PDF, JPEG or PNG, at most 5 MB). The file
+    /// goes to private storage first; then status, closing fields, file reference and history row are written in one transaction. If recording fails,
+    /// the stored file is removed again.
+    /// </summary>
+    Task<Result<ApiResult<GrievanceAdminDetailDto>>> ResolveAsync(long id, ResolveGrievanceRequestDto request, GrievanceUploadFile? file, CancellationToken cancellationToken);
+
+    /// <summary>Opens the resolution file of any grievance (audited).</summary>
+    Task<Result<GrievanceDocumentContent>> OpenResolutionDocumentAsync(long id, CancellationToken cancellationToken);
 }
 
 public class GrievanceAdminService : IGrievanceAdminService
@@ -39,16 +50,20 @@ public class GrievanceAdminService : IGrievanceAdminService
     private static readonly Regex TicketSearchPattern = new("^[A-Za-z0-9-]+$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private readonly IGrievanceRepository _repository;
+    private readonly IFileStorageService _storage;
+    private readonly IStorageAvailability _availability;
     private readonly GrievanceDocumentAccess _documentAccess;
     private readonly IAuditService _audit;
     private readonly ICurrentUserService _currentUser;
     private readonly TimeProvider _time;
     private readonly ILogger<GrievanceAdminService> _logger;
 
-    public GrievanceAdminService(IGrievanceRepository repository, GrievanceDocumentAccess documentAccess, IAuditService audit,
-        ICurrentUserService currentUser, TimeProvider time, ILogger<GrievanceAdminService> logger)
+    public GrievanceAdminService(IGrievanceRepository repository, IFileStorageService storage, IStorageAvailability availability,
+        GrievanceDocumentAccess documentAccess, IAuditService audit, ICurrentUserService currentUser, TimeProvider time, ILogger<GrievanceAdminService> logger)
     {
         _repository = repository;
+        _storage = storage;
+        _availability = availability;
         _documentAccess = documentAccess;
         _audit = audit;
         _currentUser = currentUser;
@@ -66,7 +81,7 @@ public class GrievanceAdminService : IGrievanceAdminService
         string? term = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
         if (term != null && (term.Length > GrievanceLimits.TicketSearchMaxLength || !TicketSearchPattern.IsMatch(term)))
             return Result.Failure<PaginatedResponse<GrievanceAdminSummaryDto>>(ApiErrorCodes.ValidationFailed,
-                "Search accepts a ticket number such as GRV-2026-000001 (letters, digits and hyphens, at most 30 characters).");
+                "Search accepts a ticket number such as NSG-2026-000001 (letters, digits and hyphens, at most 30 characters).");
 
         // Dates are IST calendar days: from the start of fromDate up to, not including, the day after toDate.
         GrievanceListFilter filter = new(
@@ -136,16 +151,18 @@ public class GrievanceAdminService : IGrievanceAdminService
             return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.Unauthorized, GrievanceMessages.IdentityMissing);
 
         if (request.ToStatus is not int rawStatus || !Enum.IsDefined(typeof(GrievanceStatus), rawStatus))
-            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed, "toStatus must be 2 (Under Review), 3 (Action Taken) or 4 (Closed).");
+            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed, "toStatus must be 2 (Under Review) or 3 (Action Taken).");
         GrievanceStatus to = (GrievanceStatus)rawStatus;
+
+        // Closing needs a resolution file, which a JSON status change cannot carry: it has its own endpoint.
+        if (to == GrievanceStatus.Closed)
+            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed, GrievanceMessages.ResolveViaResolveEndpoint);
 
         string? remarks = string.IsNullOrWhiteSpace(request.Remarks) ? null : request.Remarks.Trim();
         if (remarks is { Length: > GrievanceLimits.RemarksMaxLength })
             return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed, $"Remarks must not exceed {GrievanceLimits.RemarksMaxLength} characters.");
         if (to == GrievanceStatus.ActionTaken && remarks == null)
             return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed, "Remarks are required when action is taken.");
-        if (to == GrievanceStatus.Closed && remarks == null)
-            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed, "Remarks are required when resolving a grievance.");
 
         Grievance? grievance = await _repository.GetByIdAsync(id, null, cancellationToken);
         if (grievance == null)
@@ -179,6 +196,122 @@ public class GrievanceAdminService : IGrievanceAdminService
         return updated.IsSuccess
             ? Result.Success(new ApiResult<GrievanceAdminDetailDto>($"Grievance status updated to {to.DisplayName()} successfully.", updated.Data))
             : Result.Failure<ApiResult<GrievanceAdminDetailDto>>(updated.ErrorCode!, updated.ErrorMessage!);
+    }
+
+    public async Task<Result<ApiResult<GrievanceAdminDetailDto>>> ResolveAsync(
+        long id, ResolveGrievanceRequestDto request, GrievanceUploadFile? file, CancellationToken cancellationToken)
+    {
+        long? adminId = _currentUser.AdminProfileId;
+        if (adminId == null)
+            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.Unauthorized, GrievanceMessages.IdentityMissing);
+
+        // Everything that can be checked without touching storage or the database is checked first.
+        string? remarks = string.IsNullOrWhiteSpace(request.Remarks) ? null : request.Remarks.Trim();
+        if (remarks == null)
+            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed, GrievanceMessages.ResolutionRemarksRequired);
+        if (remarks.Length > GrievanceLimits.RemarksMaxLength)
+            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed, $"Remarks must not exceed {GrievanceLimits.RemarksMaxLength} characters.");
+        if (file == null)
+            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed, GrievanceMessages.ResolutionFileRequired);
+
+        Grievance? grievance = await _repository.GetByIdAsync(id, null, cancellationToken);
+        if (grievance == null)
+            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.NotFound, GrievanceMessages.GrievanceNotFound);
+        if (grievance.CurrentStatus == GrievanceStatus.Closed)
+            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.Conflict, GrievanceMessages.GrievanceClosed);
+        if (!IsAllowedTransition(grievance.CurrentStatus, GrievanceStatus.Closed))
+            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed,
+                $"A grievance can only be resolved after action has been taken; this one is {grievance.CurrentStatus.DisplayName()}.");
+
+        // Outside Development only private R2 may receive documents; a host without it must never write to the local disk.
+        if (!_availability.IsAvailable)
+            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(GrievanceErrorCodes.StorageUnavailable, GrievanceMessages.StorageUnavailable);
+
+        Result<PreparedDocument> prepared = await GrievanceUploadPreparer.PrepareAsync(file, GrievanceLimits.ResolutionUpload, cancellationToken);
+        if (!prepared.IsSuccess)
+            return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(prepared.ErrorCode!, prepared.ErrorMessage!);
+
+        PreparedDocument document = prepared.Data!;
+        try
+        {
+            // Step 1: store the object. If this fails nothing else has happened.
+            string key;
+            try
+            {
+                key = await _storage.StoreAsync(document.Content, document.Validated.SafeName, document.Validated.ContentType, GrievanceLimits.StorageCategory, cancellationToken);
+            }
+            catch (FileStorageUnavailableException)
+            {
+                return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(GrievanceErrorCodes.StorageUnavailable, GrievanceMessages.StorageUnavailable);
+            }
+
+            // Step 2: record status, closing fields, file reference and history row in one transaction. Whatever goes wrong, the object is removed again.
+            DateTime now = NowIst();
+            if (key.Length > GrievanceLimits.ResolutionReferenceMaxLength)
+            {
+                await RemoveOrphanAsync(key);
+                throw new InvalidOperationException("The storage key is longer than the resolution_document column.");
+            }
+
+            GrievanceStatusChangeResult change;
+            try
+            {
+                change = await _repository.ResolveAsync(id, adminId.Value, remarks, key, now, cancellationToken);
+            }
+            catch
+            {
+                await RemoveOrphanAsync(key);
+                throw;
+            }
+
+            if (change.Outcome != GrievanceStatusChangeOutcome.Changed)
+            {
+                await RemoveOrphanAsync(key);
+                return change.Outcome == GrievanceStatusChangeOutcome.NotFound
+                    ? Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.NotFound, GrievanceMessages.GrievanceNotFound)
+                    : Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.Conflict,
+                        $"The grievance was changed by someone else and is now {change.CurrentStatus?.DisplayName()}. Reload it and try again.");
+            }
+
+            // From here the grievance is closed and the object must stay, whatever happens to the audit writes.
+            _logger.LogInformation("Grievance {GrievanceId} resolved by admin {AdminId} with a {ContentType} document", id, adminId.Value, document.Validated.ContentType);
+            await _audit.LogAsync(AuditAction.GrievanceStatusChanged, DomainConstants.AuditResults.Success,
+                entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
+                additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = adminId.Value, from = (int)GrievanceStatus.ActionTaken, to = (int)GrievanceStatus.Closed, resolved = true }),
+                cancellationToken: cancellationToken);
+            await _audit.LogAsync(AuditAction.GrievanceDocumentUploaded, DomainConstants.AuditResults.Success,
+                entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
+                additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = adminId.Value, resolutionDocument = true, sizeBytes = document.Size }),
+                cancellationToken: cancellationToken);
+
+            return await AnswerAsync("Grievance resolved successfully.", id, cancellationToken);
+        }
+        finally
+        {
+            document.Buffer?.Dispose();
+        }
+    }
+
+    public async Task<Result<GrievanceDocumentContent>> OpenResolutionDocumentAsync(long id, CancellationToken cancellationToken)
+    {
+        long? adminId = _currentUser.AdminProfileId;
+        if (adminId == null)
+            return Result.Failure<GrievanceDocumentContent>(ApiErrorCodes.Unauthorized, GrievanceMessages.IdentityMissing);
+
+        Grievance? grievance = await _repository.GetByIdAsync(id, null, cancellationToken);
+        if (grievance == null)
+            return Result.Failure<GrievanceDocumentContent>(ApiErrorCodes.NotFound, GrievanceMessages.GrievanceNotFound);
+
+        return await _documentAccess.OpenResolutionAsync(grievance, GrievanceActorType.Admin, adminId.Value, cancellationToken);
+    }
+
+    private async Task RemoveOrphanAsync(string key)
+    {
+        // Not tied to the request token: the cleanup must still run when the request was cancelled.
+        bool deleted = false;
+        try { deleted = await _storage.DeleteAsync(key, CancellationToken.None); }
+        catch (Exception ex) { _logger.LogError(ex, "Compensating delete of {StorageKey} threw", key); }
+        if (!deleted) _logger.LogError("Orphaned resolution document {StorageKey} could not be removed and needs manual clean-up", key);
     }
 
     public async Task<Result<ApiResult<GrievanceAdminDetailDto>>> AddCommentAsync(long id, AddGrievanceCommentRequestDto request, CancellationToken cancellationToken)

@@ -24,16 +24,13 @@ public class UpdateGrievanceStatusRequestValidator : AbstractValidator<UpdateGri
     public UpdateGrievanceStatusRequestValidator()
     {
         RuleFor(x => x.ToStatus).NotNull().WithMessage("toStatus is required.")
-            .InclusiveBetween(2, 4).WithMessage("toStatus must be 2 (Under Review), 3 (Action Taken) or 4 (Closed).");
+            .InclusiveBetween(2, 3).WithMessage("toStatus must be 2 (Under Review) or 3 (Action Taken). Resolve a grievance with the resolve endpoint, which needs a comment and a supporting document.");
         RuleFor(x => x.Remarks)
             .Must(r => r == null || r.Trim().Length <= GrievanceLimits.RemarksMaxLength)
             .WithMessage($"Remarks must not exceed {GrievanceLimits.RemarksMaxLength} characters.");
         RuleFor(x => x.Remarks).Must(r => !string.IsNullOrWhiteSpace(r))
             .When(x => x.ToStatus == 3)
             .WithMessage("Remarks are required when action is taken.");
-        RuleFor(x => x.Remarks).Must(r => !string.IsNullOrWhiteSpace(r))
-            .When(x => x.ToStatus == 4)
-            .WithMessage("Remarks are required when resolving a grievance.");
     }
 }
 

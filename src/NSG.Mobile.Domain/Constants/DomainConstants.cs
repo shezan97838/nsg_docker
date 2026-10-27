@@ -16,6 +16,7 @@ public static class DomainConstants
         public const string GrievanceAdmin = nameof(GrievanceAdmin);
         public const string MediaCellAdmin = nameof(MediaCellAdmin);
         public const string SalaryManagementAdmin = nameof(SalaryManagementAdmin);
+        public const string LeaveAdmin = nameof(LeaveAdmin);
     }
 
     /// <summary>Authorization policy names.</summary>
@@ -37,6 +38,7 @@ public static class DomainConstants
         public const string RequireGrievanceAdmin = nameof(RequireGrievanceAdmin);
         public const string RequireMediaCellAdmin = nameof(RequireMediaCellAdmin);
         public const string RequireSalaryManagementAdmin = nameof(RequireSalaryManagementAdmin);
+        public const string RequireLeaveAdmin = nameof(RequireLeaveAdmin);
 
         /// <summary>PIS lookup data: open to mobile and staff callers via the default scheme, and to Admin Portal callers with the PIS_ADMIN role.</summary>
         public const string RequirePisLookupRead = nameof(RequirePisLookupRead);

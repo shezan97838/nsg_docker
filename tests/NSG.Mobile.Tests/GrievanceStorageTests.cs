@@ -132,7 +132,7 @@ public class GrievanceStorageTests
         Assert.Equal(3, GrievanceLimits.MaxFiles);
         Assert.Equal(5, GrievanceLimits.MaxFileSizeMb);
         Assert.Equal(new[] { "pdf", "jpg" }, GrievanceLimits.AllowedTypes);
-        Assert.Equal(3, GrievanceLimits.MaxTicketAttempts);
+        Assert.Equal(10, GrievanceLimits.MaxTicketAttempts);
         Assert.Equal(1000, GrievanceLimits.RemarksMaxLength);
     }
 }

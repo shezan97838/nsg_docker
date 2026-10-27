@@ -5,6 +5,7 @@ using NSG.Mobile.Application.EducationQualifications.Services;
 using NSG.Mobile.Application.Geography.Services;
 using NSG.Mobile.Application.Grievances.Services;
 using NSG.Mobile.Application.DgMessages.Services;
+using NSG.Mobile.Application.Leave.Services;
 using NSG.Mobile.Application.Lookups.Services;
 using NSG.Mobile.Application.MobileAuth.Services;
 using NSG.Mobile.Application.Onboarding.Services;
@@ -49,6 +50,8 @@ public static class DependencyInjection
         services.AddScoped<IGrievanceCategoryService, GrievanceCategoryService>();
         services.AddScoped<IGrievanceDashboardService, GrievanceDashboardService>();
         services.AddScoped<IDgMessageService, DgMessageService>();
+        services.AddScoped<ILeaveService, LeaveService>();
+        services.AddScoped<ILeaveBulkUploadService, LeaveBulkUploadService>();
         services.TryAddSingleton(TimeProvider.System);
 
         // FluentValidation — auto-discover all validators in this assembly
