@@ -1,5 +1,6 @@
 using FluentValidation;
 using NSG.Mobile.Application.Pis.DTOs;
+using NSG.Mobile.Application.Pis.Mappings;
 using NSG.Mobile.Domain.Common;
 using NSG.Mobile.Domain.Constants;
 
@@ -13,7 +14,7 @@ namespace NSG.Mobile.Application.Pis.Validators;
 /// </summary>
 public abstract class UserPisWriteDtoValidator<T> : AbstractValidator<T> where T : UserPisWriteDto
 {
-    protected UserPisWriteDtoValidator()
+    protected UserPisWriteDtoValidator(bool allowMaskedSensitive)
     {
         RuleFor(x => x.ServiceNumber).MustBeRequiredTrimmedIdentifier(30);
 
@@ -51,10 +52,12 @@ public abstract class UserPisWriteDtoValidator<T> : AbstractValidator<T> where T
         RuleFor(x => x.PermanentDistrict).MaximumLength(100);
         RuleFor(x => x.PermanentPinCode).MustBePinCode();
 
-        RuleFor(x => x.AadhaarNumber).MustBeAadhaar();
-        RuleFor(x => x.PanNumber).MustBePan();
-        RuleFor(x => x.PranNumber).MustBePran();
-        RuleFor(x => x.SalaryAccountNumber).MustBeSalaryAccountNumber();
+        // On update a mask-shaped value is let through here only so the service can compare it with the mask of the
+        // stored value (it rejects any mask that does not match). Create never accepts masks.
+        RuleFor(x => x.AadhaarNumber).MustBeAadhaar().When(x => !(allowMaskedSensitive && PisMasking.LooksMasked(x.AadhaarNumber?.Trim())));
+        RuleFor(x => x.PanNumber).MustBePan().When(x => !(allowMaskedSensitive && PisMasking.LooksMasked(PisNormalizer.Pan(x.PanNumber))));
+        RuleFor(x => x.PranNumber).MustBePran().When(x => !(allowMaskedSensitive && PisMasking.LooksMasked(x.PranNumber?.Trim())));
+        RuleFor(x => x.SalaryAccountNumber).MustBeSalaryAccountNumber().When(x => !(allowMaskedSensitive && PisMasking.LooksMasked(PisNormalizer.SalaryAccountNumber(x.SalaryAccountNumber))));
 
         // Foreign-key ids must be positive; existence is checked by the service.
         RuleFor(x => x.NsgRankId).GreaterThan(0).When(x => x.NsgRankId.HasValue).WithMessage("Reference id must be a positive number.");
@@ -88,7 +91,7 @@ public abstract class UserPisWriteDtoValidator<T> : AbstractValidator<T> where T
 
 public class CreateUserPisRequestValidator : UserPisWriteDtoValidator<CreateUserPisRequestDto>
 {
-    public CreateUserPisRequestValidator()
+    public CreateUserPisRequestValidator() : base(allowMaskedSensitive: false)
     {
         RuleFor(x => x.NsgNumber).MustBeRequiredTrimmedIdentifier(30);
     }
@@ -96,4 +99,7 @@ public class CreateUserPisRequestValidator : UserPisWriteDtoValidator<CreateUser
 
 public class UpdateUserPisRequestValidator : UserPisWriteDtoValidator<UpdateUserPisRequestDto>
 {
+    public UpdateUserPisRequestValidator() : base(allowMaskedSensitive: true)
+    {
+    }
 }

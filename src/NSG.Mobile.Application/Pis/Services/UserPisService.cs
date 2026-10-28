@@ -79,7 +79,9 @@ public class UserPisService : IUserPisService
             CreatedBy = _currentUser.UserId
         };
         request.ApplyTo(entity);
-        ApplySensitive(request, entity);
+        Result<UserPisResponseDto>? maskRejected = ApplySensitive(request, entity);
+        if (maskRejected != null)
+            return maskRejected;
 
         Result<UserPisResponseDto>? invalid = await CheckReferencesAsync(entity, cancellationToken);
         if (invalid != null)
@@ -102,7 +104,10 @@ public class UserPisService : IUserPisService
         // NSG number, activation status, hashes/ciphertext (unless re-supplied) and creation metadata are left untouched.
         request.ApplyTo(entity);
         entity.IsActive = request.IsActive;
-        ApplySensitive(request, entity);
+        Result<UserPisResponseDto>? maskRejected = ApplySensitive(request, entity);
+        if (maskRejected != null)
+            return maskRejected;
+
         entity.UpdatedAtIst = IndianStandardTime.Now;
         entity.UpdatedBy = _currentUser.UserId;
 
@@ -137,27 +142,80 @@ public class UserPisService : IUserPisService
         return Result.Success();
     }
 
-    /// <summary>Encrypts and hashes each sensitive identifier that was supplied; omitted ones keep their stored value.</summary>
-    private void ApplySensitive(UserPisWriteDto request, UserPis entity)
+    private enum SensitiveChange { None, Keep, Replace, Reject }
+
+    /// <summary>
+    /// Encrypts and hashes each sensitive identifier that was supplied; omitted ones keep their stored value. A value
+    /// equal to the exact mask of the currently stored value is a round-tripped GET value and leaves the ciphertext and
+    /// blind index untouched. Any other mask-shaped value is rejected, so a placeholder is never stored. All four
+    /// fields are checked before any is applied. Returns a failure, or null when the request may proceed.
+    /// </summary>
+    private Result<UserPisResponseDto>? ApplySensitive(UserPisWriteDto request, UserPis entity)
     {
-        if (request.AadhaarNumber != null)
-            entity.AadhaarNumberEncrypted = _encryption.Encrypt(request.AadhaarNumber);
-
-        if (request.PranNumber != null)
-            entity.PranNumberEncrypted = _encryption.Encrypt(request.PranNumber);
-
+        string? aadhaar = request.AadhaarNumber?.Trim();
+        string? pran = request.PranNumber?.Trim();
         string? pan = PisNormalizer.Pan(request.PanNumber);
-        if (pan != null)
+        string? account = PisNormalizer.SalaryAccountNumber(request.SalaryAccountNumber);
+
+        SensitiveChange aadhaarChange = Classify(aadhaar, entity.AadhaarNumberEncrypted);
+        SensitiveChange panChange = Classify(pan, entity.PanNumberEncrypted);
+        SensitiveChange pranChange = Classify(pran, entity.PranNumberEncrypted);
+        SensitiveChange accountChange = Classify(account, entity.SalaryAccountNumberEncrypted);
+
+        List<string> rejected = new();
+        if (aadhaarChange == SensitiveChange.Reject) rejected.Add("Aadhaar number");
+        if (panChange == SensitiveChange.Reject) rejected.Add("PAN");
+        if (pranChange == SensitiveChange.Reject) rejected.Add("PRAN");
+        if (accountChange == SensitiveChange.Reject) rejected.Add("Salary account number");
+        if (rejected.Count > 0)
+            return Result.Failure<UserPisResponseDto>(ApiErrorCodes.ValidationFailed,
+                string.Join(", ", rejected) + ": a masked value does not match the stored value; send the full value or omit the field.");
+
+        if (aadhaarChange == SensitiveChange.Replace)
+            entity.AadhaarNumberEncrypted = _encryption.Encrypt(request.AadhaarNumber!);
+
+        if (pranChange == SensitiveChange.Replace)
+            entity.PranNumberEncrypted = _encryption.Encrypt(request.PranNumber!);
+
+        if (panChange == SensitiveChange.Replace)
         {
-            entity.PanNumberEncrypted = _encryption.Encrypt(pan);
-            entity.PanNumberHash = _blindIndex.ForPan(pan);
+            entity.PanNumberEncrypted = _encryption.Encrypt(pan!);
+            entity.PanNumberHash = _blindIndex.ForPan(pan!);
         }
 
-        string? account = PisNormalizer.SalaryAccountNumber(request.SalaryAccountNumber);
-        if (account != null)
+        if (accountChange == SensitiveChange.Replace)
         {
-            entity.SalaryAccountNumberEncrypted = _encryption.Encrypt(account);
-            entity.SalaryAccountNumberHash = _blindIndex.ForSalaryAccountNumber(account);
+            entity.SalaryAccountNumberEncrypted = _encryption.Encrypt(account!);
+            entity.SalaryAccountNumberHash = _blindIndex.ForSalaryAccountNumber(account!);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Decides what a submitted (normalised) value means. The stored value is decrypted and masked with the same logic
+    /// GET uses; only an exact match counts as unchanged. A mask-shaped value that does not match, or that cannot be
+    /// checked because nothing is stored or the stored value is unreadable, is rejected.
+    /// </summary>
+    private SensitiveChange Classify(string? submitted, string? storedCipher)
+    {
+        if (submitted == null)
+            return SensitiveChange.None;
+
+        if (!PisMasking.LooksMasked(submitted))
+            return SensitiveChange.Replace;
+
+        if (storedCipher == null)
+            return SensitiveChange.Reject;
+
+        try
+        {
+            return PisMasking.IsMaskOf(submitted, _encryption.Decrypt(storedCipher)) ? SensitiveChange.Keep : SensitiveChange.Reject;
+        }
+        catch (Exception ex) when (ex is CryptographicException or FormatException)
+        {
+            _logger.LogWarning("A stored sensitive personnel value could not be decrypted to check a submitted mask.");
+            return SensitiveChange.Reject;
         }
     }
 
