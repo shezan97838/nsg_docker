@@ -141,3 +141,16 @@ public class OtpOptions
     /// <summary>Explicit approval to run demo mode in a Staging/Demo environment (for an approved presentation). Ignored in Production.</summary>
     public bool AllowDemoOutsideDevelopment { get; set; }
 }
+
+/// <summary>
+/// Public address of this API as the mobile app reaches it (for example the nginx/Cloudflare host in UAT or production). Used to build absolute
+/// links such as banner image URLs. Leave <see cref="BaseUrl"/> empty to derive it from the incoming request (scheme, host and path base, which honours
+/// the <c>ForwardedHeaders</c> settings behind a proxy). No host name is ever hard-coded.
+/// </summary>
+public class PublicApiOptions
+{
+    public const string SectionName = "PublicApi";
+
+    /// <summary>Absolute http(s) address without a trailing path, for example <c>https://api.example.org</c> (a path prefix is allowed). Empty = from the request.</summary>
+    public string BaseUrl { get; set; } = string.Empty;
+}

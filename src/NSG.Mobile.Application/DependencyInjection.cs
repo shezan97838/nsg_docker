@@ -4,6 +4,7 @@ using NSG.Mobile.Application.Admin.Services;
 using NSG.Mobile.Application.EducationQualifications.Services;
 using NSG.Mobile.Application.Geography.Services;
 using NSG.Mobile.Application.Grievances.Services;
+using NSG.Mobile.Application.Banners.Services;
 using NSG.Mobile.Application.DgMessages.Services;
 using NSG.Mobile.Application.Leave.Services;
 using NSG.Mobile.Application.Lookups.Services;
@@ -50,6 +51,7 @@ public static class DependencyInjection
         services.AddScoped<IGrievanceCategoryService, GrievanceCategoryService>();
         services.AddScoped<IGrievanceDashboardService, GrievanceDashboardService>();
         services.AddScoped<IDgMessageService, DgMessageService>();
+        services.AddScoped<IBannerService, BannerService>();
         services.AddScoped<ILeaveService, LeaveService>();
         services.AddScoped<ILeaveBulkUploadService, LeaveBulkUploadService>();
         services.TryAddSingleton(TimeProvider.System);

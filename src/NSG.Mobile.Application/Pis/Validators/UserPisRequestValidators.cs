@@ -71,6 +71,7 @@ public abstract class UserPisWriteDtoValidator<T> : AbstractValidator<T> where T
         RuleFor(x => x.PermanentStateId).GreaterThan(0).When(x => x.PermanentStateId.HasValue).WithMessage("Reference id must be a positive number.");
 
         // Undefined numeric enum values (e.g. 99) are rejected.
+        RuleFor(x => x.Gender).IsInEnum().When(x => x.Gender.HasValue);
         RuleFor(x => x.Category).IsInEnum().When(x => x.Category.HasValue);
         RuleFor(x => x.BloodGroup).IsInEnum().When(x => x.BloodGroup.HasValue);
 
@@ -94,6 +95,9 @@ public class CreateUserPisRequestValidator : UserPisWriteDtoValidator<CreateUser
     public CreateUserPisRequestValidator() : base(allowMaskedSensitive: false)
     {
         RuleFor(x => x.NsgNumber).MustBeRequiredTrimmedIdentifier(30);
+
+        // Gender is mandatory for new records only; update keeps the stored value when it is omitted.
+        RuleFor(x => x.Gender).NotNull().WithMessage("Gender is required.");
     }
 }
 

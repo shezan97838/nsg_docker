@@ -35,6 +35,7 @@ public static class UserPisMappingExtensions
         DateOfBirth = p.DateOfBirth,
         DateOfEnrollmentInGovtService = p.DateOfEnrollmentInGovtService,
         DateOfSuperannuation = p.DateOfSuperannuation,
+        Gender = p.Gender,
         Category = p.Category,
         ReligionId = p.ReligionId,
         ReligionName = p.Religion?.Name,
@@ -92,6 +93,7 @@ public static class UserPisMappingExtensions
         DateOfBirth = p.DateOfBirth,
         DateOfEnrollmentInGovtService = p.DateOfEnrollmentInGovtService,
         DateOfSuperannuation = p.DateOfSuperannuation,
+        Gender = p.Gender,
         Category = p.Category,
         ReligionId = p.ReligionId,
         ReligionName = p.Religion?.Name,
@@ -151,6 +153,7 @@ public static class UserPisMappingExtensions
         p.DateOfBirth = r.DateOfBirth;
         p.DateOfEnrollmentInGovtService = r.DateOfEnrollmentInGovtService;
         p.DateOfSuperannuation = r.DateOfSuperannuation;
+        if (r.Gender.HasValue) p.Gender = r.Gender; // a PUT that omits gender keeps the stored value
         p.Category = r.Category;
         p.ReligionId = r.ReligionId;
         p.FatherName = Clean(r.FatherName);

@@ -147,7 +147,7 @@ public class PisSensitiveRoundTripTests
     {
         CreateUserPisRequestDto create = new()
         {
-            NsgNumber = "N-2", ServiceNumber = "S-2",
+            NsgNumber = "N-2", ServiceNumber = "S-2", Gender = NSG.Mobile.Domain.Enums.Gender.Male,
             AadhaarNumber = "XXXXXXXX9532", PanNumber = "XXXXXX625F", PranNumber = "XXXXXXXX7321", SalaryAccountNumber = "XXXXXXX9329"
         };
 

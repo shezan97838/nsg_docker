@@ -459,6 +459,86 @@ namespace NSG.Mobile.Infrastructure.Migrations
                     b.ToTable("audit_logs", (string)null);
                 });
 
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.Banner", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("ImageAltText")
+                        .HasMaxLength(250)
+                        .HasColumnType("varchar(250)")
+                        .HasColumnName("image_alt_text");
+
+                    b.Property<string>("ImageStorageKey")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("image_storage_key");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("is_active");
+
+                    b.Property<int?>("NsgUnitId")
+                        .HasColumnType("int")
+                        .HasColumnName("nsg_unit_id");
+
+                    b.Property<int?>("Priority")
+                        .HasColumnType("int")
+                        .HasColumnName("priority");
+
+                    b.Property<bool>("ShowOnlyImage")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false)
+                        .HasColumnName("show_only_image");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at_ist");
+
+                    b.HasKey("Id")
+                        .HasName("pk_banners");
+
+                    b.HasIndex("NsgUnitId")
+                        .HasDatabaseName("ix_banners_nsg_unit_id");
+
+                    b.HasIndex("IsActive", "Priority")
+                        .HasDatabaseName("ix_banners_is_active_priority");
+
+                    b.ToTable("banners", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_banners_show_only_image", "`show_only_image` = 0 OR `image_storage_key` IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_banners_title", "CHAR_LENGTH(`title`) > 0");
+                        });
+                });
+
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.City", b =>
                 {
                     b.Property<int>("Id")
@@ -1467,7 +1547,6 @@ namespace NSG.Mobile.Infrastructure.Migrations
 
                     b.ToTable("personnel_leave_history", null, t =>
                         {
-
                             t.HasCheckConstraint("ck_personnel_leave_history_change_source", "`change_source` IN (1, 2)");
 
                             t.HasCheckConstraint("ck_personnel_leave_history_counts", "(`old_leave_taken` IS NULL OR `old_leave_taken` >= 0) AND `new_leave_taken` >= 0");
@@ -2079,6 +2158,10 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasColumnType("varchar(200)")
                         .HasColumnName("full_name");
 
+                    b.Property<int?>("Gender")
+                        .HasColumnType("int")
+                        .HasColumnName("gender");
+
                     b.Property<decimal?>("HalfPayLeaveDue")
                         .HasColumnType("decimal(7,2)")
                         .HasColumnName("half_pay_leave_due");
@@ -2339,6 +2422,15 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_admin_refresh_tokens_admin_profiles_admin_profile_id");
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.Banner", b =>
+                {
+                    b.HasOne("NSG.Mobile.Domain.Entities.NsgUnit", null)
+                        .WithMany()
+                        .HasForeignKey("NsgUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_banners_nsg_units_nsg_unit_id");
                 });
 
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.City", b =>

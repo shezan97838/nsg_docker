@@ -378,6 +378,10 @@ public class UserPisSchemaTests : IAsyncLifetime
             .Where(t => t.Name.EndsWith("Dto", StringComparison.Ordinal) && !IsRequestOrInput(t))
             .SelectMany(t => t.GetProperties().Select(p => $"{t.Name}.{p.Name}"))
             .Where(n => !n.EndsWith("Masked", StringComparison.Ordinal))
+            // The only approved exception: GET /api/v1/profile returns the signed-in user's OWN identifiers decrypted (explicit
+            // product decision, see OQ-025). Any other DTO, or any other field on that DTO, must still be masked or absent.
+            .Where(n => !new[] { "MobileProfileResponseDto.AadhaarNumber", "MobileProfileResponseDto.PanNumber",
+                                 "MobileProfileResponseDto.PranNumber", "MobileProfileResponseDto.SalaryAccountNumber" }.Contains(n))
             .Where(n => forbidden.Any(f => n.ToLowerInvariant().Contains(f)))
             .ToList();
 

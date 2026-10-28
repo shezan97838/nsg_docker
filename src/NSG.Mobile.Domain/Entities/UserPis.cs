@@ -64,6 +64,9 @@ public class UserPis
 
     // ── Personal and family ──
 
+    /// <summary>Gender (Male, Female, Other). Nullable in the database so records that predate the field stay unchanged; required on create.</summary>
+    public Gender? Gender { get; set; }
+
     public PersonnelCategory? Category { get; set; }
 
     public int? ReligionId { get; set; }

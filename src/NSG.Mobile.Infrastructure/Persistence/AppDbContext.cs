@@ -38,6 +38,7 @@ public class AppDbContext : DbContext
     public DbSet<GrievanceCategory> GrievanceCategories => Set<GrievanceCategory>();
     public DbSet<Grievance> Grievances => Set<Grievance>();
     public DbSet<DgMessage> DgMessages => Set<DgMessage>();
+    public DbSet<Banner> Banners => Set<Banner>();
     public DbSet<GrievanceStatusLog> GrievanceStatusLogs => Set<GrievanceStatusLog>();
     public DbSet<PersonnelLeaveRecord> PersonnelLeaveRecords => Set<PersonnelLeaveRecord>();
     public DbSet<PersonnelLeaveHistory> PersonnelLeaveHistory => Set<PersonnelLeaveHistory>();

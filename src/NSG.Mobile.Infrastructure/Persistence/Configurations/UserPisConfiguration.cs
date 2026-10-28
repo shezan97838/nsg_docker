@@ -56,6 +56,7 @@ public class UserPisConfiguration : IEntityTypeConfiguration<UserPis>
         builder.Property(p => p.DateOfImmovablePropertyReturn).HasColumnType("date");
 
         // ── Personal and family ──
+        builder.Property(p => p.Gender).HasConversion<int?>();
         builder.Property(p => p.Category).HasConversion<int?>();
         builder.Property(p => p.BloodGroup).HasConversion<int?>();
         builder.Property(p => p.FatherName).HasMaxLength(200);

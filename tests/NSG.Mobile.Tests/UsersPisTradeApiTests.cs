@@ -55,7 +55,7 @@ public class UsersPisTradeApiTests : IAsyncLifetime
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `rank_hierarchy` WHERE `sr_no` >= " + FirstTestSrNo);
     }
 
-    private static Dictionary<string, object?> Create(string nsg = "T-1") => new() { ["nsgNumber"] = nsg, ["serviceNumber"] = "S-1" };
+    private static Dictionary<string, object?> Create(string nsg = "T-1") => new() { ["nsgNumber"] = nsg, ["serviceNumber"] = "S-1", ["gender"] = "Male" };
     private static Dictionary<string, object?> Update() => new() { ["serviceNumber"] = "S-1", ["isActive"] = true };
 
     private async Task<long> CreatePersonAsync(Dictionary<string, object?> body)

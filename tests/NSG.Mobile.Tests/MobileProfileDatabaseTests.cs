@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using NSG.Mobile.Application.Interfaces.Infrastructure;
 using NSG.Mobile.Domain.Constants;
 using NSG.Mobile.Domain.Entities;
 using NSG.Mobile.Domain.Enums;
@@ -21,7 +23,7 @@ public class MobileProfileDatabaseTests : IAsyncLifetime
     private const string Auth = "/api/v1/mobile-auth";
     private const string ProfileUrl = "/api/v1/profile";
     private const string Nsg = "PROF-1001", OtherNsg = "PROF-2002", Mobile = "9823456711", OtherMobile = "9823456722", Dob = "1992-07-08", Mpin = "2580";
-    private const string Secret = "CIPHERTEXT-MUST-NOT-LEAK";
+    private const string Aadhaar = "123546789532", Pan = "AGIPR3625F", Pran = "321654987321", Account = "30927989329";
 
     private readonly ApiFactory _factory;
     private readonly HttpClient _anonymous;
@@ -49,11 +51,19 @@ public class MobileProfileDatabaseTests : IAsyncLifetime
 
     public async Task DisposeAsync() => await CleanAsync();
 
-    private static UserPis NewPis(string nsg, string name, string mobile) => new()
+    // Encrypted with the API host's own IEncryptionService, so the endpoint decrypts with the same key.
+    private UserPis NewPis(string nsg, string name, string mobile)
     {
-        NsgNumber = nsg, ServiceNumber = "SVC-" + nsg, FullName = name, MobileNumber = mobile, DateOfBirth = DateOnly.Parse(Dob),
-        AadhaarNumberEncrypted = Secret, PanNumberEncrypted = Secret, PranNumberEncrypted = Secret, SalaryAccountNumberEncrypted = Secret
-    };
+        using IServiceScope scope = _factory.Services.CreateScope();
+        IEncryptionService encryption = scope.ServiceProvider.GetRequiredService<IEncryptionService>();
+        return new UserPis
+        {
+            NsgNumber = nsg, ServiceNumber = "SVC-" + nsg, FullName = name, MobileNumber = mobile, DateOfBirth = DateOnly.Parse(Dob),
+            Gender = Gender.Female,
+            AadhaarNumberEncrypted = encryption.Encrypt(Aadhaar), PanNumberEncrypted = encryption.Encrypt(Pan),
+            PranNumberEncrypted = encryption.Encrypt(Pran), SalaryAccountNumberEncrypted = encryption.Encrypt(Account)
+        };
+    }
 
     private async Task CleanAsync()
     {
@@ -102,9 +112,19 @@ public class MobileProfileDatabaseTests : IAsyncLifetime
         Assert.Equal(Nsg, data.GetProperty("nsgNumber").GetString());
         Assert.Equal("Profile One", data.GetProperty("fullName").GetString());
         Assert.Equal("1992-07-08", data.GetProperty("dateOfBirth").GetString());
-        Assert.DoesNotContain(Secret, text);
+        Assert.Equal("Female", data.GetProperty("gender").GetString());
+        Assert.Equal(Aadhaar, data.GetProperty("aadhaarNumber").GetString());
+        Assert.Equal(Pan, data.GetProperty("panNumber").GetString());
+        Assert.Equal(Pran, data.GetProperty("pranNumber").GetString());
+        Assert.Equal(Account, data.GetProperty("salaryAccountNumber").GetString());
         Assert.DoesNotContain(OtherNsg, text);
-        foreach (string forbidden in new[] { "aadhaar", "pan", "pran", "salary", "hash", "mpin", "password" })
+        await using (AppDbContext ctx = _factory.CreateContext())
+        {
+            UserPis stored = await ctx.UsersPis.AsNoTracking().SingleAsync(p => p.NsgNumber == Nsg);
+            foreach (string hiddenValue in new[] { stored.AadhaarNumberEncrypted!, stored.PanNumberEncrypted!, stored.PranNumberEncrypted!, stored.SalaryAccountNumberEncrypted! })
+                Assert.DoesNotContain(hiddenValue, text);   // ciphertext is never returned; the stored values are untouched
+        }
+        foreach (string forbidden in new[] { "hash", "mpin", "password", "encrypted" })
             Assert.DoesNotContain(forbidden, text, StringComparison.OrdinalIgnoreCase);
     }
 

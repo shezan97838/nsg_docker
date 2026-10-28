@@ -64,6 +64,7 @@ public class UserPisValidator : AbstractValidator<UserPis>
         RuleFor(x => x.SalaryAccountNumberHash).Matches(DomainConstants.PisFormats.BlindIndexPattern).When(x => x.SalaryAccountNumberHash != null);
 
         // Undefined numeric enum values (e.g. a cast from 99) are rejected.
+        RuleFor(x => x.Gender).IsInEnum().When(x => x.Gender.HasValue);
         RuleFor(x => x.Category).IsInEnum().When(x => x.Category.HasValue);
         RuleFor(x => x.BloodGroup).IsInEnum().When(x => x.BloodGroup.HasValue);
         RuleFor(x => x.MobileAppActivationStatus).IsInEnum();

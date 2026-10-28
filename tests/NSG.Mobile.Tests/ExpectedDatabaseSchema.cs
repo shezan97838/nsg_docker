@@ -160,6 +160,21 @@ internal static class ExpectedDatabaseSchema
             "updated_at_ist|datetime(6)|NULL",
             "updated_by|bigint|NULL",
         },
+        ["banners"] = new[]
+        {
+            "id|int|NOT NULL",
+            "title|varchar(200)|NOT NULL",
+            "description|varchar(1000)|NOT NULL",
+            "category|varchar(100)|NOT NULL",
+            "image_storage_key|varchar(500)|NULL",
+            "image_alt_text|varchar(250)|NULL",
+            "show_only_image|tinyint(1)|NOT NULL",
+            "nsg_unit_id|int|NULL",
+            "priority|int|NULL",
+            "is_active|tinyint(1)|NOT NULL",
+            "created_at_ist|datetime(6)|NOT NULL",
+            "updated_at_ist|datetime(6)|NOT NULL",
+        },
         ["approve_mobile_users"] = new[]
         {
             "id|bigint|NOT NULL",
@@ -433,6 +448,7 @@ internal static class ExpectedDatabaseSchema
             "created_by|int|NULL",
             "updated_at_ist|datetime(6)|NULL",
             "updated_by|int|NULL",
+            "gender|int|NULL",
         },
     };
 }

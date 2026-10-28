@@ -64,11 +64,11 @@ public class UsersPisApiTests : IAsyncLifetime
 
     // ── Helpers ──
 
-    private Dictionary<string, object?> Minimal(string nsg = "N-1", string service = "S-1") => new() { ["nsgNumber"] = nsg, ["serviceNumber"] = service };
+    private Dictionary<string, object?> Minimal(string nsg = "N-1", string service = "S-1") => new() { ["nsgNumber"] = nsg, ["serviceNumber"] = service, ["gender"] = "Male" };
 
     private Dictionary<string, object?> Full(string nsg = "123456") => new()
     {
-        ["nsgNumber"] = nsg, ["serviceNumber"] = "123456789", ["fullName"] = "Ranvir Singh",
+        ["nsgNumber"] = nsg, ["serviceNumber"] = "123456789", ["fullName"] = "Ranvir Singh", ["gender"] = "Female",
         ["nsgRankId"] = _rank, ["parentDepartmentRankId"] = _dept, ["nsgUnitId"] = _unit, ["educationId"] = _education,
         ["dateOfInductionInNsg"] = "2024-02-04", ["sideSteppedOn"] = "2025-01-10", ["sideSteppedFromNsgUnitId"] = _otherUnit,
         ["dateOfRepatriation"] = "2031-01-31", ["dateOfBirth"] = "1992-02-04", ["dateOfEnrollmentInGovtService"] = "2012-03-04",
@@ -157,6 +157,7 @@ public class UsersPisApiTests : IAsyncLifetime
         Assert.Equal("Inspector(GD)", body.GetProperty("parentDepartmentRankName").GetString());
         Assert.Equal("HINDU", body.GetProperty("religionName").GetString());
         Assert.Equal("Test State", body.GetProperty("permanentStateName").GetString());
+        Assert.Equal("Female", body.GetProperty("gender").GetString());
         Assert.Equal("ST", body.GetProperty("category").GetString());
         Assert.Equal("OPositive", body.GetProperty("bloodGroup").GetString());
         Assert.Equal(172, body.GetProperty("heightCm").GetInt32());
@@ -503,6 +504,59 @@ public class UsersPisApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, (await _admin.PutAsJsonAsync($"{Url}/{id}", new Dictionary<string, object?> { ["serviceNumber"] = "S", ["mobileNumber"] = "123" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await _admin.PutAsJsonAsync($"{Url}/{id}", new Dictionary<string, object?> { ["serviceNumber"] = "S", ["religionId"] = 987654 })).StatusCode);
         Assert.Equal("N-1", (await GetAsync(id)).GetProperty("nsgNumber").GetString());
+    }
+
+    // ── Gender ──
+
+    [Fact]
+    public async Task Create_requires_a_valid_gender_and_accepts_exactly_Male_Female_Other()
+    {
+        foreach (object? bad in new object?[] { null, "", "Robot", "male ", 0, 4, 99 })
+        {
+            Dictionary<string, object?> body = Minimal("G-BAD"); body["gender"] = bad;
+            Assert.Equal(HttpStatusCode.BadRequest, (await _admin.PostAsJsonAsync(Url, body)).StatusCode);
+        }
+        Dictionary<string, object?> missing = Minimal("G-BAD"); missing.Remove("gender");
+        Assert.Equal(HttpStatusCode.BadRequest, (await _admin.PostAsJsonAsync(Url, missing)).StatusCode);
+        Assert.Equal(0, await CountAsync());
+
+        foreach (string gender in new[] { "Male", "Female", "Other" })
+        {
+            Dictionary<string, object?> body = Minimal("G-" + gender); body["gender"] = gender;
+            Assert.Equal(gender, (await CreateAsync(body)).GetProperty("gender").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task Update_changes_gender_when_supplied_and_keeps_it_when_omitted_or_invalid()
+    {
+        long id = IdOf(await CreateAsync(Minimal("G-U")));   // Male
+
+        Dictionary<string, object?> omitted = new() { ["serviceNumber"] = "S", ["isActive"] = true };
+        Assert.Equal("Male", (await (await _admin.PutAsJsonAsync($"{Url}/{id}", omitted)).ReadDataAsync()).GetProperty("gender").GetString());
+
+        Dictionary<string, object?> invalid = new() { ["serviceNumber"] = "S", ["isActive"] = true, ["gender"] = "Robot" };
+        Assert.Equal(HttpStatusCode.BadRequest, (await _admin.PutAsJsonAsync($"{Url}/{id}", invalid)).StatusCode);
+        Assert.Equal("Male", (await GetAsync(id)).GetProperty("gender").GetString());
+
+        Dictionary<string, object?> change = new() { ["serviceNumber"] = "S", ["isActive"] = true, ["gender"] = "Other" };
+        JsonElement updated = await (await _admin.PutAsJsonAsync($"{Url}/{id}", change)).ReadDataAsync();
+        Assert.Equal("Other", updated.GetProperty("gender").GetString());
+        Assert.Equal("Other", (await GetAsync(id)).GetProperty("gender").GetString());
+    }
+
+    [Fact]
+    public async Task Records_that_predate_gender_return_null_from_list_and_get_by_id()
+    {
+        await using (AppDbContext ctx = _factory.CreateContext())
+            await ctx.Database.ExecuteSqlRawAsync("INSERT INTO `users_pis` (`nsg_number`,`service_number`,`is_active`,`created_at_ist`) VALUES ('OLD-1','S',1,NOW(6))");
+        long id;
+        await using (AppDbContext ctx = _factory.CreateContext())
+            id = (await ctx.UsersPis.AsNoTracking().SingleAsync()).Id;
+
+        Assert.Equal(JsonValueKind.Null, (await GetAsync(id)).GetProperty("gender").ValueKind);
+        JsonElement page = await (await _admin.GetAsync(Url)).ReadDataAsync();
+        Assert.Equal(JsonValueKind.Null, page.GetProperty("items")[0].GetProperty("gender").ValueKind);
     }
 
     // ── Deactivate ──

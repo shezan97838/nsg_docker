@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using NSG.Mobile.Application.Authentication.Interfaces;
+using NSG.Mobile.Application.Banners;
 using NSG.Mobile.Application.Common;
 using NSG.Mobile.Domain.Constants;
 using NSG.Mobile.Application.Interfaces.Infrastructure;
@@ -69,6 +70,7 @@ public static class DependencyInjection
     {
         // Bind options
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+        services.Configure<PublicApiOptions>(configuration.GetSection(PublicApiOptions.SectionName));
         services.Configure<SecurityOptions>(configuration.GetSection(SecurityOptions.SectionName));
         services.Configure<OtpOptions>(configuration.GetSection(OtpOptions.SectionName));
         services.Configure<EncryptionOptions>(configuration.GetSection(EncryptionOptions.SectionName));
@@ -235,6 +237,8 @@ public static class DependencyInjection
         services.AddScoped<IAdminRefreshTokenRepository, AdminRefreshTokenRepository>();
         services.AddScoped<IGrievanceRepository, GrievanceRepository>();
         services.AddScoped<IDgMessageRepository, DgMessageRepository>();
+        services.AddScoped<IBannerRepository, BannerRepository>();
+        services.AddScoped<IBannerImageUrlBuilder, BannerImageUrlBuilder>();
         services.AddScoped<ILeaveRepository, LeaveRepository>();
     }
 

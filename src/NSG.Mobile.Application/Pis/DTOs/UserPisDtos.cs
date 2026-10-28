@@ -40,6 +40,9 @@ public abstract class UserPisWriteDto
     public DateOnly? DateOfSuperannuation { get; set; }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
+    public Gender? Gender { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public PersonnelCategory? Category { get; set; }
 
     public int? ReligionId { get; set; }
@@ -147,6 +150,9 @@ public class UserPisListItemDto
     public DateOnly? DateOfSuperannuation { get; set; }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
+    public Gender? Gender { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public PersonnelCategory? Category { get; set; }
 
     public int? ReligionId { get; set; }
@@ -218,6 +224,9 @@ public class UserPisResponseDto
     public DateOnly? DateOfBirth { get; set; }
     public DateOnly? DateOfEnrollmentInGovtService { get; set; }
     public DateOnly? DateOfSuperannuation { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public Gender? Gender { get; set; }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public PersonnelCategory? Category { get; set; }

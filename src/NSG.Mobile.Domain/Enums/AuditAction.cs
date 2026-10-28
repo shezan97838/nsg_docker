@@ -69,5 +69,10 @@ public enum AuditAction
     // Leave management events
     LeaveRecordChanged = 100,
     LeaveBulkUploadProcessed = 101,
-    LeaveRecordViewed = 102
+    LeaveRecordViewed = 102,
+
+    // Banner management events
+    BannerCreated = 110,
+    BannerUpdated = 111,
+    BannerStatusChanged = 112
 }

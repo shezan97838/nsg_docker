@@ -1,13 +1,20 @@
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSG.Mobile.API.Controllers;
 using NSG.Mobile.Application.Common;
 using NSG.Mobile.Application.Profile.DTOs;
 using NSG.Mobile.Application.Profile.Services;
 using NSG.Mobile.Domain.Entities;
 using NSG.Mobile.Domain.Enums;
+using NSG.Mobile.Infrastructure.Options;
+using NSG.Mobile.Infrastructure.Security;
 
 namespace NSG.Mobile.Tests;
 
@@ -15,6 +22,19 @@ namespace NSG.Mobile.Tests;
 public class MobileProfileServiceTests
 {
     private const string Cipher = "CIPHER-SECRET-VALUE";
+    private const string Aadhaar = "123546789532", Pan = "AGIPR3625F", Pran = "321654987321", Account = "30927989329";
+
+    // Real AES with a throw-away in-memory key, so the tests exercise the real decryption path.
+    private static readonly AesEncryptionService Aes = new(Options.Create(new EncryptionOptions { Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }));
+
+    private sealed class CapturingLogger : ILogger<MobileProfileService>
+    {
+        public List<string> Messages { get; } = new();
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => Messages.Add(formatter(state, exception) + exception);
+    }
 
     private static UserPis Pis(long id, string nsg, string name, string mobile) => new()
     {
@@ -57,6 +77,7 @@ public class MobileProfileServiceTests
         SpouseName = "Laxmi",
         NextOfKinMobileNumber = "9876543210",
         NumberOfChildren = 2,
+        Gender = Gender.Female,
         Category = PersonnelCategory.GEN,
         BloodGroup = BloodGroupType.OPositive,
         HeightCm = 172,
@@ -68,10 +89,10 @@ public class MobileProfileServiceTests
         PermanentStateId = 10,
         PermanentState = new State { Id = 10, Name = "Uttar Pradesh" },
         PermanentPinCode = "251001",
-        AadhaarNumberEncrypted = Cipher,
-        PanNumberEncrypted = Cipher,
-        PranNumberEncrypted = Cipher,
-        SalaryAccountNumberEncrypted = Cipher,
+        AadhaarNumberEncrypted = Aes.Encrypt(Aadhaar),
+        PanNumberEncrypted = Aes.Encrypt(Pan),
+        PranNumberEncrypted = Aes.Encrypt(Pran),
+        SalaryAccountNumberEncrypted = Aes.Encrypt(Account),
         PanNumberHash = Cipher,
         SalaryAccountNumberHash = Cipher
     };
@@ -81,7 +102,7 @@ public class MobileProfileServiceTests
         FakeProfileRepository profiles = new(new FakeGrantRepository(new TestClock()));
         FakePisRepository pis = new();
         FakeCurrentUser user = new();
-        return (new MobileProfileService(user, profiles, pis), user, profiles, pis);
+        return (new MobileProfileService(user, profiles, pis, Aes, NullLogger<MobileProfileService>.Instance), user, profiles, pis);
     }
 
     [Fact]
@@ -136,6 +157,7 @@ public class MobileProfileServiceTests
 
         MobileProfileResponseDto dto = (await service.GetMyProfileAsync()).Data!;
 
+        Assert.Equal(Gender.Female, dto.Gender);
         Assert.Equal(PersonnelCategory.GEN, dto.Category);
         Assert.Equal("Ram Saran", dto.FatherName); Assert.Equal("Savitri Devi", dto.MotherName);
         Assert.Equal("Laxmi", dto.SpouseName); Assert.Equal("9876543210", dto.NextOfKinMobileNumber);
@@ -223,22 +245,104 @@ public class MobileProfileServiceTests
         Assert.Null(dto.PermanentStateId); Assert.Null(dto.PermanentStateName);
         Assert.Null(dto.DateOfBirth); Assert.Null(dto.Category);
         Assert.Null(dto.BloodGroup); Assert.Null(dto.HeightCm); Assert.Null(dto.WeightKg);
+        Assert.Null(dto.Gender);   // records that predate the field
     }
 
     [Fact]
-    public async Task The_response_never_carries_sensitive_fields()
+    public async Task The_response_returns_decrypted_identifiers_but_never_ciphertext_hashes_or_admin_fields()
     {
         var (service, user, profiles, pis) = Build();
         pis.Rows.Add(Pis(1, "NSG-MINE", "My Name", "9000000002"));
         profiles.Profiles.Add(new MobileUserProfile { Id = 9, NsgNumber = "NSG-MINE", MpinHash = "MPIN-HASH-VALUE", PasswordHash = "PW-HASH-VALUE" });
         user.ProfileId = 9;
+        UserPis stored = pis.Rows.Single();
+        string[] cipherBefore = { stored.AadhaarNumberEncrypted!, stored.PanNumberEncrypted!, stored.PranNumberEncrypted!, stored.SalaryAccountNumberEncrypted! };
 
-        string json = JsonSerializer.Serialize((await service.GetMyProfileAsync()).Data);
+        MobileProfileResponseDto dto = (await service.GetMyProfileAsync()).Data!;
+        string json = JsonSerializer.Serialize(dto);
 
-        Assert.DoesNotContain(Cipher, json);
+        Assert.Equal(Aadhaar, dto.AadhaarNumber);
+        Assert.Equal(Pan, dto.PanNumber);
+        Assert.Equal(Pran, dto.PranNumber);
+        Assert.Equal(Account, dto.SalaryAccountNumber);
+        Assert.Equal(Gender.Female, dto.Gender);
+        foreach (string cipher in cipherBefore.Append(Cipher))
+            Assert.DoesNotContain(cipher, json);
         Assert.DoesNotContain("HASH-VALUE", json);
+        // Only the four identifiers may match; hashes, ciphertext, credentials and admin-only fields stay out.
         foreach (PropertyInfo p in typeof(MobileProfileResponseDto).GetProperties())
-            Assert.DoesNotMatch("(?i)aadhaar|pan|pran|salary|hash|mpin|password|encrypted|isactive|mobilestatus|createdat|updatedat|createdby|updatedby", p.Name);
+            Assert.DoesNotMatch("(?i)hash|mpin|password|encrypted|isactive|mobilestatus|createdat|updatedat|createdby|updatedby", p.Name);
+        Assert.Equal(new[] { "AadhaarNumber", "PanNumber", "PranNumber", "SalaryAccountNumber" },
+            typeof(MobileProfileResponseDto).GetProperties().Select(p => p.Name).Where(n => Regex.IsMatch(n, "(?i)aadhaar|pan|pran|salary")).OrderBy(n => n));
+        // Decryption is read-only: the stored ciphertext is exactly what it was.
+        Assert.Equal(cipherBefore, new[] { stored.AadhaarNumberEncrypted!, stored.PanNumberEncrypted!, stored.PranNumberEncrypted!, stored.SalaryAccountNumberEncrypted! });
+    }
+
+    [Fact]
+    public async Task Missing_identifiers_are_null_and_the_rest_of_the_profile_is_still_returned()
+    {
+        var (service, user, profiles, pis) = Build();
+        UserPis row = Pis(1, "NSG-MINE", "My Name", "9000000002");
+        row.AadhaarNumberEncrypted = null; row.PanNumberEncrypted = null;   // PRAN and account stay set
+        pis.Rows.Add(row);
+        profiles.Profiles.Add(new MobileUserProfile { Id = 9, NsgNumber = "NSG-MINE" });
+        user.ProfileId = 9;
+
+        MobileProfileResponseDto dto = (await service.GetMyProfileAsync()).Data!;
+
+        Assert.Null(dto.AadhaarNumber); Assert.Null(dto.PanNumber);
+        Assert.Equal(Pran, dto.PranNumber); Assert.Equal(Account, dto.SalaryAccountNumber);
+        Assert.Equal("My Name", dto.FullName);
+    }
+
+    [Theory]
+    [InlineData("CIPHER-SECRET-VALUE")]                       // not base64
+    [InlineData("QUJD")]                                      // valid base64 but shorter than the IV
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]   // right shape, wrong key / bad padding
+    public async Task An_unreadable_stored_value_gives_null_never_ciphertext_and_logs_no_values(string unreadable)
+    {
+        FakeProfileRepository profiles = new(new FakeGrantRepository(new TestClock()));
+        FakePisRepository pis = new();
+        FakeCurrentUser user = new();
+        CapturingLogger logger = new();
+        MobileProfileService service = new(user, profiles, pis, Aes, logger);
+        UserPis row = Pis(1, "NSG-MINE", "My Name", "9000000002");
+        row.AadhaarNumberEncrypted = unreadable;    // only this one is broken
+        pis.Rows.Add(row);
+        profiles.Profiles.Add(new MobileUserProfile { Id = 9, NsgNumber = "NSG-MINE" });
+        user.ProfileId = 9;
+
+        Result<MobileProfileResponseDto> r = await service.GetMyProfileAsync();
+
+        Assert.True(r.IsSuccess);                                   // does not fail the request
+        Assert.Null(r.Data!.AadhaarNumber);                         // no ciphertext fallback
+        Assert.Equal(Pan, r.Data.PanNumber);                        // other identifiers unaffected
+        Assert.Equal("My Name", r.Data.FullName);
+        Assert.DoesNotContain(unreadable, JsonSerializer.Serialize(r.Data));
+        Assert.Equal(unreadable, row.AadhaarNumberEncrypted);       // stored value untouched
+        string logged = string.Join("|", logger.Messages);
+        Assert.Contains("Aadhaar", logged);                         // the failure is logged by field name only
+        Assert.DoesNotContain(unreadable, logged);
+        foreach (string secret in new[] { Aadhaar, Pan, Pran, Account })
+            Assert.DoesNotContain(secret, logged);
+    }
+
+    [Fact]
+    public async Task A_value_encrypted_with_a_different_key_is_not_revealed()
+    {
+        AesEncryptionService otherKey = new(Options.Create(new EncryptionOptions { Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }));
+        var (service, user, profiles, pis) = Build();
+        UserPis row = Pis(1, "NSG-MINE", "My Name", "9000000002");
+        row.SalaryAccountNumberEncrypted = otherKey.Encrypt(Account);
+        pis.Rows.Add(row);
+        profiles.Profiles.Add(new MobileUserProfile { Id = 9, NsgNumber = "NSG-MINE" });
+        user.ProfileId = 9;
+
+        MobileProfileResponseDto dto = (await service.GetMyProfileAsync()).Data!;
+
+        // AES-CBC has no integrity tag, so a wrong key either fails padding (null) or yields garbage; it must never yield the real value.
+        Assert.NotEqual(Account, dto.SalaryAccountNumber);
+        Assert.NotEqual(row.SalaryAccountNumberEncrypted, dto.SalaryAccountNumber);
     }
 
     [Fact]

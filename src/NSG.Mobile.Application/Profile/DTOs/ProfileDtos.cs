@@ -6,9 +6,9 @@ namespace NSG.Mobile.Application.Profile.DTOs;
 /// <summary>
 /// Full PIS details of the signed-in mobile user for GET /api/v1/profile. SOW §3.1 (PIS).
 ///
-/// SECURITY: deliberately excludes all sensitive identifiers (Aadhaar/PAN/PRAN/salary-account encrypted
-/// or hashed), all admin-only fields (MobileAppActivationStatus, IsActive, audit timestamps and user ids),
-/// no MPIN or password hash. Lookup ids are included alongside their display names so the mobile client can
+/// SECURITY: returns the caller's own Aadhaar, PAN, PRAN and salary account number decrypted (the person is taken from
+/// the token only, so nobody else's can be read). Never returns ciphertext or blind-index hashes, and deliberately excludes
+/// all admin-only fields (MobileAppActivationStatus, IsActive, audit timestamps and user ids), no MPIN or password hash. Lookup ids are included alongside their display names so the mobile client can
 /// display and match values without a second round-trip.
 /// </summary>
 public class MobileProfileResponseDto
@@ -54,6 +54,9 @@ public class MobileProfileResponseDto
     // ── Personal and family ──
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
+    public Gender? Gender { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public PersonnelCategory? Category { get; set; }
 
     public int? ReligionId { get; set; }
@@ -81,6 +84,20 @@ public class MobileProfileResponseDto
 
     /// <summary>Weight in kilograms, up to two decimals.</summary>
     public decimal? WeightKg { get; set; }
+
+    // Sensitive identifiers: decrypted for the owner only; null when not recorded or when the stored value cannot be read.
+
+    /// <summary>Aadhaar number (12 digits).</summary>
+    public string? AadhaarNumber { get; set; }
+
+    /// <summary>PAN (upper-case).</summary>
+    public string? PanNumber { get; set; }
+
+    /// <summary>PRAN.</summary>
+    public string? PranNumber { get; set; }
+
+    /// <summary>Salary account number.</summary>
+    public string? SalaryAccountNumber { get; set; }
 
     // ── Permanent address ──
 

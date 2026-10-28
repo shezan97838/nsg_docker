@@ -42,6 +42,7 @@ public class UserPisModelTests : IAsyncLifetime
         ("DateOfBirth", typeof(DateOnly), true),
         ("DateOfEnrollmentInGovtService", typeof(DateOnly), true),
         ("DateOfSuperannuation", typeof(DateOnly), true),
+        ("Gender", typeof(Gender), true),
         ("Category", typeof(PersonnelCategory), true),
         ("ReligionId", typeof(int), true),
         ("FatherName", typeof(string), true),
@@ -118,10 +119,11 @@ public class UserPisModelTests : IAsyncLifetime
             .ToListAsync())
             .Select(s => s.Split('|')).ToDictionary(p => p[0], p => p[1]);
 
-        Assert.Equal(53, types.Count);
+        Assert.Equal(54, types.Count);
         Assert.Equal("bigint", types["id"]);
         Assert.Equal("tinyint unsigned", types["height_cm"]);
         Assert.Equal("decimal(5,2)", types["weight_kg"]);
+        Assert.Equal("int", types["gender"]);
         Assert.Equal("int", types["category"]);
         Assert.Equal("int", types["blood_group"]);
         Assert.Equal("int", types["mobile_app_activation_status"]);
