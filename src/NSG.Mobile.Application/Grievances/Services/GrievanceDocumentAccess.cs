@@ -58,7 +58,7 @@ public sealed class GrievanceDocumentAccess
     private async Task<Result<GrievanceDocumentContent>> OpenRecordAsync(
         Grievance grievance, GrievanceDocumentRecord document, KeyValuePair<string, object> which, GrievanceActorType actor, long actorId, CancellationToken cancellationToken)
     {
-        // Outside Development only private R2 may serve documents; a host without it must never read the local disk.
+        // Storage is validated at startup; this guard stays so a host that reports storage unavailable answers 503 instead of failing.
         if (!_availability.IsAvailable)
             return Result.Failure<GrievanceDocumentContent>(GrievanceErrorCodes.StorageUnavailable, GrievanceMessages.StorageUnavailable);
 
@@ -80,6 +80,9 @@ public sealed class GrievanceDocumentAccess
 
         _logger.LogInformation("Grievance document downloaded: grievance {GrievanceId}, document {Document}, by {ActorType} {ActorId}", grievance.Id, which.Value, actor, actorId);
         await _audit.LogAsync(AuditAction.DocumentDownloaded, DomainConstants.AuditResults.Success,
+            // An Admin Portal admin (already validated by the caller) is recorded by admin profile id; an employee's mobile profile id is not a
+            // legacy user id and is not written to the user column (unchanged behaviour).
+            userId: actor == GrievanceActorType.Admin ? _currentUser.AuditUserId() : null,
             entityType: nameof(Grievance), entityId: grievance.Id.ToString(), correlationId: _currentUser.CorrelationId,
             additionalData: JsonSerializer.Serialize(new Dictionary<string, object> { ["actorType"] = actor.ToString(), ["actorId"] = actorId, [which.Key] = which.Value }),
             cancellationToken: cancellationToken);

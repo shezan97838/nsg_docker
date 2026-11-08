@@ -52,38 +52,6 @@ public class DevelopmentReviewerTests
         Assert.Null(reviewer.DisplayName);
     }
 
-    [Theory]
-    [InlineData(MobileAppActivationStatus.Approved, AuditAction.ITApprovalGranted)]
-    [InlineData(MobileAppActivationStatus.Rejected, AuditAction.ITApprovalRejected)]
-    public async Task Approval_and_rejection_audit_the_AsmarTest_reviewer(MobileAppActivationStatus decision, AuditAction expected)
-    {
-        FakeRequestRepository requests = new();
-        FakeAudit audit = new();
-        MobileApprovalService service = new(requests, audit, new FakeCurrentUser(), Resolver(Environments.Development, true), TimeProvider.System);
-
-        var result = await service.DecideAsync(1, new MobileApprovalDecisionRequestDto { Decision = decision });
-
-        Assert.True(result.IsSuccess);
-        var entry = Assert.Single(audit.Entries);
-        Assert.Equal(expected, entry.Action);
-        Assert.Equal(ReviewerIdentityResolver.DevelopmentReviewerUserId, entry.UserId);
-        Assert.Contains("AsmarTest", entry.Data);
-    }
-
-    [Fact]
-    public async Task Outside_development_a_decision_without_a_token_user_is_refused()
-    {
-        MobileApprovalService service = new(new FakeRequestRepository(), new FakeAudit(), new FakeCurrentUser(), Resolver("Production", true), TimeProvider.System);
-        var result = await service.DecideAsync(1, new MobileApprovalDecisionRequestDto { Decision = MobileAppActivationStatus.Approved });
-        Assert.False(result.IsSuccess);
-    }
-}
-
-/// <summary>Resolver as in Production (no fallback), for tests that exercise the approval service with a given token user.</summary>
-internal static class ProductionReviewer
-{
-    public static ReviewerIdentityResolver For(FakeCurrentUser user)
-        => new(user, new TestEnv("Production"), Options.Create(new DevelopmentReviewerOptions()));
 }
 
 internal sealed class TestEnv : IHostEnvironment

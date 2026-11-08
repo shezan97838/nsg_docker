@@ -40,11 +40,6 @@ public static class PisFieldRules
         => rule.Must(v => v is null || IsExact(v, DomainConstants.PisFormats.SalaryAccountPattern))
             .WithMessage("{PropertyName} must contain 9 to 18 digits only.");
 
-    /// <summary>Optional value; when present, a six-digit PIN code that does not start with 0.</summary>
-    public static IRuleBuilderOptions<T, string?> MustBePinCode<T>(this IRuleBuilder<T, string?> rule)
-        => rule.Must(v => v is null || IsExact(v, DomainConstants.PisFormats.PinCodePattern))
-            .WithMessage("{PropertyName} must be a 6-digit PIN code.");
-
     /// <summary>Required identifier that must already be trimmed (the caller normalises first).</summary>
     public static IRuleBuilderOptions<T, string> MustBeRequiredTrimmedIdentifier<T>(this IRuleBuilder<T, string> rule, int maxLength)
         => rule.NotEmpty().WithMessage("{PropertyName} is required.")

@@ -55,7 +55,12 @@ public class MobileAuthController : ControllerBase
             : MobileAuthProblem.From(this, result);
     }
 
-    /// <summary>Exchange a refresh token for a new access token and a new refresh token. The presented token is used up; presenting it again ends the session.</summary>
+    /// <summary>
+    /// Exchange a refresh token for a new access token and a new refresh token. The presented token is used up; presenting it again ends the session.
+    /// 403 with <c>code</c> <c>SURAKSHA_1001</c>: a PIS Admin blocked the person's mobile access. 403 with <c>code</c> <c>SURAKSHA_1002</c>:
+    /// the session was replaced because the account signed in on another device (latest login wins); no tokens are issued. The 401 of an
+    /// authenticated request carries the same two codes in its body when the access token's session ended that way.
+    /// </summary>
     [HttpPost("token/refresh")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
@@ -155,7 +160,7 @@ public class MobileAuthController : ControllerBase
         if (!result.IsSuccess) return MobileAuthProblem.From(this, result);
 
         MobileAuthFlowDto dto = result.Data!;
-        ApiResult<MobileAuthFlowDto> body = new(dto.Message, dto);
+        ApiResult<MobileAuthFlowDto> body = new(dto.Message, dto) { Code = dto.Code };
 
         // 201 only where something was created: the approval request, or the profile.
         return dto.Status is MobileAuthStatus.ApprovalRequested or MobileAuthStatus.ProfileCreated
@@ -176,7 +181,7 @@ internal static class MobileAuthProblem
             ApiErrorCodes.MobileNotMatched or ApiErrorCodes.NotFound => StatusCodes.Status404NotFound,
             ApiErrorCodes.InvalidCredentials or ApiErrorCodes.Unauthorized
                 or ApiErrorCodes.RefreshTokenInvalid or ApiErrorCodes.RefreshTokenExpired or ApiErrorCodes.RefreshTokenReuseDetected => StatusCodes.Status401Unauthorized,
-            ApiErrorCodes.Forbidden => StatusCodes.Status403Forbidden,
+            ApiErrorCodes.Forbidden or ApiErrorCodes.MobileAccessBlocked or ApiErrorCodes.MobileSessionReplaced => StatusCodes.Status403Forbidden,
             ApiErrorCodes.AccountLocked => StatusCodes.Status423Locked,
             ApiErrorCodes.Conflict => StatusCodes.Status409Conflict,
             ApiErrorCodes.OtpRateLimited or ApiErrorCodes.OtpResendCooldown or ApiErrorCodes.OtpMaxAttemptsExceeded => StatusCodes.Status429TooManyRequests,
@@ -186,6 +191,9 @@ internal static class MobileAuthProblem
 
         ProblemDetails problem = new() { Status = status, Title = result.ErrorCode, Detail = result.ErrorMessage };
         problem.Extensions["traceId"] = controller.HttpContext.Items["CorrelationId"]?.ToString() ?? controller.HttpContext.TraceIdentifier;
+
+        // Only the public session codes are sent to the client (the envelope drops every other code anyway).
+        if (result.ErrorCode is ApiErrorCodes.MobileAccessBlocked or ApiErrorCodes.MobileSessionReplaced) problem.Extensions["code"] = result.ErrorCode;
         return new ObjectResult(problem) { StatusCode = status, ContentTypes = { "application/problem+json" } };
     }
 }

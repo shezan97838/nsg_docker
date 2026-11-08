@@ -53,7 +53,8 @@ public class EducationQualificationApiTests : IAsyncLifetime
     private async Task UseByPersonnelAsync(int educationId)
     {
         await using AppDbContext ctx = _factory.CreateContext();
-        ctx.UsersPis.Add(new UserPis { NsgNumber = "ED-" + educationId, ServiceNumber = "S", EducationId = educationId, CreatedAtIst = IndianStandardTime.Now });
+        string course = await ctx.EducationQualifications.Where(e => e.Id == educationId).Select(e => e.CourseName).SingleAsync();   // personnel rows store the name as text
+        ctx.UsersPis.Add(new UserPis { NsgNumber = "ED-" + educationId, MobileNumber = TestPisData.Mobile(), Education = course, CreatedAtIst = IndianStandardTime.Now });
         await ctx.SaveChangesAsync();
     }
 

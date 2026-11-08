@@ -71,3 +71,7 @@ FileStorage/
 
 ## EF Core Migrations (keep migrations, ignore temp files)
 *.Designer.cs.bak
+
+## Local publish output and Visual Studio publish profiles (machine-specific experiments, never committed)
+publish/
+src/NSG.Mobile.API/Properties/PublishProfiles/

@@ -771,6 +771,78 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.DigitalLibraryItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("file_path");
+
+                    b.Property<string>("FileType")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("file_type");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsImportant")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_important");
+
+                    b.Property<DateTime?>("UpdatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at_ist");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_digital_library");
+
+                    b.HasIndex("IsActive", "CreatedAtIst")
+                        .HasDatabaseName("ix_digital_library_is_active_created_at_ist");
+
+                    b.HasIndex("IsActive", "IsImportant", "CreatedAtIst")
+                        .HasDatabaseName("ix_digital_library_is_active_is_important_created_at_ist");
+
+                    b.ToTable("digital_library", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_digital_library_description", "CHAR_LENGTH(`description`) > 0");
+
+                            t.HasCheckConstraint("ck_digital_library_file_type", "`file_type` IN ('PDF', 'JPG', 'JPEG', 'PNG')");
+                        });
+                });
+
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.EducationQualification", b =>
                 {
                     b.Property<int>("Id")
@@ -1187,6 +1259,19 @@ namespace NSG.Mobile.Infrastructure.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("AccessBlockReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("access_block_reason");
+
+                    b.Property<DateTime?>("AccessBlockedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("access_blocked_at_ist");
+
+                    b.Property<int?>("AccessBlockedBy")
+                        .HasColumnType("int")
+                        .HasColumnName("access_blocked_by");
+
                     b.Property<DateTime>("CreatedAtIst")
                         .HasColumnType("datetime(6)")
                         .HasColumnName("created_at_ist");
@@ -1266,6 +1351,8 @@ namespace NSG.Mobile.Infrastructure.Migrations
 
                     b.ToTable("mobile_user_profiles", null, t =>
                         {
+                            t.HasCheckConstraint("ck_mobile_user_profiles_access_block", "(`access_blocked_at_ist` IS NULL AND `access_blocked_by` IS NULL AND `access_block_reason` IS NULL) OR (`access_blocked_at_ist` IS NOT NULL AND `is_active` = 0)");
+
                             t.HasCheckConstraint("ck_mobile_user_profiles_credentials", "(`mpin_hash` IS NULL OR CHAR_LENGTH(`mpin_hash`) > 0) AND (`password_hash` IS NULL OR CHAR_LENGTH(`password_hash`) > 0)");
 
                             t.HasCheckConstraint("ck_mobile_user_profiles_failed_login_attempts", "`failed_login_attempts` >= 0");
@@ -1484,6 +1571,67 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasDatabaseName("ix_pd_trade_pd_trade_name");
 
                     b.ToTable("pd_trade", (string)null);
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PersonnelForm16", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AssessmentYear")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("varchar(7)")
+                        .HasColumnName("assessment_year");
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<string>("NsgNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("nsg_number");
+
+                    b.Property<string>("PartAFilePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("part_a_file_path");
+
+                    b.Property<DateTime?>("PartAUploadedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("part_a_uploaded_at_ist");
+
+                    b.Property<string>("PartBFilePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("part_b_file_path");
+
+                    b.Property<DateTime?>("PartBUploadedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("part_b_uploaded_at_ist");
+
+                    b.Property<DateTime>("UpdatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at_ist");
+
+                    b.Property<long>("UploadedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("uploaded_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_personnel_form16");
+
+                    b.HasIndex("NsgNumber", "AssessmentYear")
+                        .IsUnique()
+                        .HasDatabaseName("ix_personnel_form16_nsg_number_assessment_year");
+
+                    b.ToTable("personnel_form16", (string)null);
                 });
 
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.PersonnelLeaveHistory", b =>
@@ -1734,6 +1882,251 @@ namespace NSG.Mobile.Infrastructure.Migrations
                     b.ToTable("personnel_leave_upload_errors", (string)null);
                 });
 
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PisOwnershipTransfer", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("NewAssignedTo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("new_assigned_to");
+
+                    b.Property<string>("NsgNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("nsg_number");
+
+                    b.Property<long>("PisRecordId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("pis_record_id");
+
+                    b.Property<long?>("PreviousAssignedTo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("previous_assigned_to");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTime>("TransferredAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("transferred_at_ist");
+
+                    b.Property<long>("TransferredBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("transferred_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_pis_ownership_transfers");
+
+                    b.HasIndex("PisRecordId", "TransferredAtIst")
+                        .HasDatabaseName("ix_pis_ownership_transfers_pis_record_id_transferred_at_ist");
+
+                    b.ToTable("pis_ownership_transfers", (string)null);
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PisUploadBatch", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("CompletedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("completed_at_ist");
+
+                    b.Property<int>("ConflictCount")
+                        .HasColumnType("int")
+                        .HasColumnName("conflict_count");
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<int>("FailedCount")
+                        .HasColumnType("int")
+                        .HasColumnName("failed_count");
+
+                    b.Property<string>("FailureMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("failure_message");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("file_name");
+
+                    b.Property<int>("InsertedCount")
+                        .HasColumnType("int")
+                        .HasColumnName("inserted_count");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TotalRows")
+                        .HasColumnType("int")
+                        .HasColumnName("total_rows");
+
+                    b.Property<int>("UpdatedCount")
+                        .HasColumnType("int")
+                        .HasColumnName("updated_count");
+
+                    b.Property<int>("UploadType")
+                        .HasColumnType("int")
+                        .HasColumnName("upload_type");
+
+                    b.Property<long>("UploadedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("uploaded_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_pis_upload_batches");
+
+                    b.HasIndex("UploadedBy", "CreatedAtIst")
+                        .HasDatabaseName("ix_pis_upload_batches_uploaded_by_created_at_ist");
+
+                    b.ToTable("pis_upload_batches", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_pis_upload_batches_counts", "`total_rows` >= 0 AND `inserted_count` >= 0 AND `updated_count` >= 0 AND `failed_count` >= 0 AND `conflict_count` >= 0");
+
+                            t.HasCheckConstraint("ck_pis_upload_batches_status", "`status` IN (1, 2, 3, 4, 5)");
+
+                            t.HasCheckConstraint("ck_pis_upload_batches_upload_type", "`upload_type` IN (1, 2)");
+                        });
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PisUploadBatchError", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BatchId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("batch_id");
+
+                    b.Property<string>("ConflictType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("conflict_type");
+
+                    b.Property<string>("ConflictingNsgNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("conflicting_nsg_number");
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<string>("Field")
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)")
+                        .HasColumnName("field");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("NsgNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("nsg_number");
+
+                    b.Property<int>("RowNumber")
+                        .HasColumnType("int")
+                        .HasColumnName("excel_row_number");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id")
+                        .HasName("pk_pis_upload_batch_errors");
+
+                    b.HasIndex("BatchId", "RowNumber")
+                        .HasDatabaseName("ix_pis_upload_batch_errors_batch_id_excel_row_number");
+
+                    b.ToTable("pis_upload_batch_errors", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_pis_upload_batch_errors_status", "`status` IN (1, 2)");
+                        });
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PisUploadBatchRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BatchId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("batch_id");
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<string>("NsgNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("nsg_number");
+
+                    b.Property<int>("Operation")
+                        .HasColumnType("int")
+                        .HasColumnName("operation");
+
+                    b.Property<long>("PisRecordId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("pis_record_id");
+
+                    b.Property<int>("RowNumber")
+                        .HasColumnType("int")
+                        .HasColumnName("excel_row_number");
+
+                    b.HasKey("Id")
+                        .HasName("pk_pis_upload_batch_records");
+
+                    b.HasIndex("PisRecordId")
+                        .HasDatabaseName("ix_pis_upload_batch_records_pis_record_id");
+
+                    b.HasIndex("BatchId", "RowNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_pis_upload_batch_records_batch_id_excel_row_number");
+
+                    b.ToTable("pis_upload_batch_records", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_pis_upload_batch_records_operation", "`operation` IN (1, 2)");
+                        });
+                });
+
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.RankHierarchy", b =>
                 {
                     b.Property<int>("Id")
@@ -1916,6 +2309,139 @@ namespace NSG.Mobile.Infrastructure.Migrations
                     b.ToTable("religions", (string)null);
                 });
 
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.SalarySlip", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AccountNumberEncrypted")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("varchar(512)")
+                        .HasColumnName("account_number_encrypted");
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("file_path");
+
+                    b.Property<long>("OriginalBatchId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("original_batch_id");
+
+                    b.Property<int>("PageCount")
+                        .HasColumnType("int")
+                        .HasColumnName("page_count");
+
+                    b.Property<DateOnly>("SalaryMonth")
+                        .HasColumnType("date")
+                        .HasColumnName("salary_month");
+
+                    b.Property<DateTime>("UpdatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at_ist");
+
+                    b.Property<long?>("UserPisId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_pis_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_salary_slips");
+
+                    b.HasIndex("OriginalBatchId")
+                        .HasDatabaseName("ix_salary_slips_original_batch_id");
+
+                    b.HasIndex("SalaryMonth")
+                        .HasDatabaseName("ix_salary_slips_salary_month");
+
+                    b.HasIndex("UserPisId", "SalaryMonth")
+                        .HasDatabaseName("ix_salary_slips_user_pis_id_salary_month");
+
+                    b.ToTable("salary_slips", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_salary_slips_page_count", "`page_count` > 0");
+                        });
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.SalarySlipUploadBatch", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_ist");
+
+                    b.Property<string>("FailureMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("failure_message");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("original_file_name");
+
+                    b.Property<int>("ProcessedPages")
+                        .HasColumnType("int")
+                        .HasColumnName("processed_pages");
+
+                    b.Property<DateOnly>("SalaryMonth")
+                        .HasColumnType("date")
+                        .HasColumnName("salary_month");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TotalPages")
+                        .HasColumnType("int")
+                        .HasColumnName("total_pages");
+
+                    b.Property<string>("UnmatchedPageNumbers")
+                        .HasColumnType("text")
+                        .HasColumnName("unmatched_page_numbers");
+
+                    b.Property<int>("UnmatchedPages")
+                        .HasColumnType("int")
+                        .HasColumnName("unmatched_pages");
+
+                    b.Property<DateTime>("UpdatedAtIst")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at_ist");
+
+                    b.Property<long>("UploadedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("uploaded_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_salary_slip_upload_batches");
+
+                    b.HasIndex("UploadedBy", "SalaryMonth", "CreatedAtIst")
+                        .HasDatabaseName("ix_salary_slip_batches_uploaded_by_salary_month_created_at_ist");
+
+                    b.ToTable("salary_slip_upload_batches", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_salary_slip_upload_batches_pages", "`total_pages` >= 0 AND `processed_pages` >= 0 AND `unmatched_pages` >= 0");
+
+                            t.HasCheckConstraint("ck_salary_slip_upload_batches_status", "`status` IN (0, 1, 2, 3)");
+                        });
+                });
+
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.State", b =>
                 {
                     b.Property<int>("Id")
@@ -2087,16 +2613,22 @@ namespace NSG.Mobile.Infrastructure.Migrations
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
 
                     b.Property<string>("AadhaarNumberEncrypted")
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
+                        .HasMaxLength(512)
+                        .HasColumnType("varchar(512)")
                         .HasColumnName("aadhaar_number_encrypted");
 
-                    b.Property<int?>("BloodGroup")
-                        .HasColumnType("int")
+                    b.Property<long?>("AssignedTo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("assigned_to");
+
+                    b.Property<string>("BloodGroup")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
                         .HasColumnName("blood_group");
 
-                    b.Property<int?>("Category")
-                        .HasColumnType("int")
+                    b.Property<string>("Category")
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
                         .HasColumnName("category");
 
                     b.Property<string>("ChildCareLeaveAvailed")
@@ -2140,13 +2672,15 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasColumnType("date")
                         .HasColumnName("date_of_superannuation");
 
-                    b.Property<decimal?>("EarnedLeaveDue")
-                        .HasColumnType("decimal(7,2)")
+                    b.Property<string>("EarnedLeaveDue")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
                         .HasColumnName("earned_leave_due");
 
-                    b.Property<int?>("EducationId")
-                        .HasColumnType("int")
-                        .HasColumnName("education_id");
+                    b.Property<string>("Education")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("education");
 
                     b.Property<string>("FatherName")
                         .HasMaxLength(200)
@@ -2158,16 +2692,19 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasColumnType("varchar(200)")
                         .HasColumnName("full_name");
 
-                    b.Property<int?>("Gender")
-                        .HasColumnType("int")
+                    b.Property<string>("Gender")
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
                         .HasColumnName("gender");
 
-                    b.Property<decimal?>("HalfPayLeaveDue")
-                        .HasColumnType("decimal(7,2)")
+                    b.Property<string>("HalfPayLeaveDue")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
                         .HasColumnName("half_pay_leave_due");
 
-                    b.Property<byte?>("HeightCm")
-                        .HasColumnType("tinyint unsigned")
+                    b.Property<string>("HeightCm")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
                         .HasColumnName("height_cm");
 
                     b.Property<bool>("IsActive")
@@ -2188,8 +2725,9 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasColumnName("mobile_app_activation_status");
 
                     b.Property<string>("MobileNumber")
-                        .HasMaxLength(15)
-                        .HasColumnType("varchar(15)")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
                         .HasColumnName("mobile_number");
 
                     b.Property<string>("MotherName")
@@ -2208,44 +2746,35 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasColumnType("varchar(30)")
                         .HasColumnName("nsg_number");
 
-                    b.Property<int?>("NsgRankId")
-                        .HasColumnType("int")
-                        .HasColumnName("nsg_rank_id");
+                    b.Property<string>("NsgRank")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("nsg_rank");
 
-                    b.Property<int?>("NsgTradeId")
-                        .HasColumnType("int")
-                        .HasColumnName("nsg_trade_id");
+                    b.Property<string>("NsgUnit")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("nsg_unit");
 
-                    b.Property<int?>("NsgUnitId")
-                        .HasColumnType("int")
-                        .HasColumnName("nsg_unit_id");
-
-                    b.Property<int?>("NumberOfChildren")
-                        .HasColumnType("int")
+                    b.Property<string>("NumberOfChildren")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
                         .HasColumnName("number_of_children");
 
                     b.Property<string>("PanNumberEncrypted")
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
+                        .HasMaxLength(512)
+                        .HasColumnType("varchar(512)")
                         .HasColumnName("pan_number_encrypted");
 
-                    b.Property<string>("PanNumberHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .HasColumnName("pan_number_hash");
-
-                    b.Property<int?>("ParentDepartmentRankId")
-                        .HasColumnType("int")
-                        .HasColumnName("parent_department_rank_id");
+                    b.Property<string>("ParentDepartmentRank")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("parent_department_rank");
 
                     b.Property<string>("PaternityLeaveAvailed")
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)")
                         .HasColumnName("paternity_leave_availed");
-
-                    b.Property<int?>("PdTradeId")
-                        .HasColumnType("int")
-                        .HasColumnName("pd_trade_id");
 
                     b.Property<string>("PermanentDistrict")
                         .HasMaxLength(100)
@@ -2253,8 +2782,8 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasColumnName("permanent_district");
 
                     b.Property<string>("PermanentPinCode")
-                        .HasMaxLength(6)
-                        .HasColumnType("varchar(6)")
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
                         .HasColumnName("permanent_pin_code");
 
                     b.Property<string>("PermanentPoliceStation")
@@ -2267,9 +2796,10 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasColumnType("varchar(150)")
                         .HasColumnName("permanent_post_office");
 
-                    b.Property<int?>("PermanentStateId")
-                        .HasColumnType("int")
-                        .HasColumnName("permanent_state_id");
+                    b.Property<string>("PermanentState")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("permanent_state");
 
                     b.Property<string>("PermanentVillage")
                         .HasMaxLength(150)
@@ -2277,37 +2807,29 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasColumnName("permanent_village");
 
                     b.Property<string>("PranNumberEncrypted")
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
+                        .HasMaxLength(512)
+                        .HasColumnType("varchar(512)")
                         .HasColumnName("pran_number_encrypted");
 
-                    b.Property<int?>("ReligionId")
-                        .HasColumnType("int")
-                        .HasColumnName("religion_id");
+                    b.Property<string>("Religion")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("religion");
 
                     b.Property<string>("SalaryAccountNumberEncrypted")
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
+                        .HasMaxLength(512)
+                        .HasColumnType("varchar(512)")
                         .HasColumnName("salary_account_number_encrypted");
 
-                    b.Property<string>("SalaryAccountNumberHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .HasColumnName("salary_account_number_hash");
-
                     b.Property<string>("ServiceNumber")
-                        .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("varchar(30)")
                         .HasColumnName("service_number");
 
-                    b.Property<int?>("SideSteppedFromNsgUnitId")
-                        .HasColumnType("int")
-                        .HasColumnName("side_stepped_from_nsg_unit_id");
-
-                    b.Property<DateOnly?>("SideSteppedOn")
-                        .HasColumnType("date")
-                        .HasColumnName("side_stepped_on");
+                    b.Property<string>("SideSteppedDetails")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("side_stepped_details");
 
                     b.Property<string>("SpouseName")
                         .HasMaxLength(200)
@@ -2322,15 +2844,16 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasColumnType("int")
                         .HasColumnName("updated_by");
 
-                    b.Property<decimal?>("WeightKg")
-                        .HasColumnType("decimal(5,2)")
+                    b.Property<string>("WeightKg")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
                         .HasColumnName("weight_kg");
 
                     b.HasKey("Id")
                         .HasName("pk_users_pis");
 
-                    b.HasIndex("EducationId")
-                        .HasDatabaseName("ix_users_pis_education_id");
+                    b.HasIndex("AssignedTo")
+                        .HasDatabaseName("ix_users_pis_assigned_to");
 
                     b.HasIndex("IsActive")
                         .HasDatabaseName("ix_users_pis_is_active");
@@ -2343,62 +2866,14 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_users_pis_nsg_number");
 
-                    b.HasIndex("NsgRankId")
-                        .HasDatabaseName("ix_users_pis_nsg_rank_id");
-
-                    b.HasIndex("NsgTradeId")
-                        .HasDatabaseName("ix_users_pis_nsg_trade_id");
-
-                    b.HasIndex("NsgUnitId")
-                        .HasDatabaseName("ix_users_pis_nsg_unit_id");
-
-                    b.HasIndex("PanNumberHash")
-                        .IsUnique()
-                        .HasDatabaseName("ix_users_pis_pan_number_hash");
-
-                    b.HasIndex("ParentDepartmentRankId")
-                        .HasDatabaseName("ix_users_pis_parent_department_rank_id");
-
-                    b.HasIndex("PdTradeId")
-                        .HasDatabaseName("ix_users_pis_pd_trade_id");
-
-                    b.HasIndex("PermanentStateId")
-                        .HasDatabaseName("ix_users_pis_permanent_state_id");
-
-                    b.HasIndex("ReligionId")
-                        .HasDatabaseName("ix_users_pis_religion_id");
-
-                    b.HasIndex("SalaryAccountNumberHash")
-                        .IsUnique()
-                        .HasDatabaseName("ix_users_pis_salary_account_number_hash");
-
                     b.HasIndex("ServiceNumber")
                         .HasDatabaseName("ix_users_pis_service_number");
 
-                    b.HasIndex("SideSteppedFromNsgUnitId")
-                        .HasDatabaseName("ix_users_pis_side_stepped_from_nsg_unit_id");
-
                     b.ToTable("users_pis", null, t =>
                         {
-                            t.HasCheckConstraint("ck_users_pis_blood_group", "`blood_group` IS NULL OR `blood_group` BETWEEN 1 AND 8");
-
-                            t.HasCheckConstraint("ck_users_pis_category", "`category` IS NULL OR `category` IN (1, 2, 3, 4)");
-
-                            t.HasCheckConstraint("ck_users_pis_enrollment_after_birth", "`date_of_enrollment_in_govt_service` IS NULL OR `date_of_birth` IS NULL OR `date_of_enrollment_in_govt_service` >= `date_of_birth`");
-
-                            t.HasCheckConstraint("ck_users_pis_hashes_format", "(`pan_number_hash` IS NULL OR `pan_number_hash` REGEXP '^[0-9a-f]{64}$') AND (`salary_account_number_hash` IS NULL OR `salary_account_number_hash` REGEXP '^[0-9a-f]{64}$')");
-
                             t.HasCheckConstraint("ck_users_pis_mobile_app_activation_status", "`mobile_app_activation_status` IN (0, 1, 2)");
 
-                            t.HasCheckConstraint("ck_users_pis_mobile_number_format", "`mobile_number` IS NULL OR `mobile_number` REGEXP '^[6-9][0-9]{9}$'");
-
-                            t.HasCheckConstraint("ck_users_pis_numbers", "(`height_cm` IS NULL OR `height_cm` > 0) AND (`weight_kg` IS NULL OR `weight_kg` > 0) AND (`number_of_children` IS NULL OR `number_of_children` >= 0) AND (`earned_leave_due` IS NULL OR `earned_leave_due` >= 0) AND (`half_pay_leave_due` IS NULL OR `half_pay_leave_due` >= 0)");
-
-                            t.HasCheckConstraint("ck_users_pis_pin_code_format", "`permanent_pin_code` IS NULL OR `permanent_pin_code` REGEXP '^[1-9][0-9]{5}$'");
-
-                            t.HasCheckConstraint("ck_users_pis_repatriation_after_induction", "`date_of_repatriation` IS NULL OR `date_of_induction_in_nsg` IS NULL OR `date_of_repatriation` >= `date_of_induction_in_nsg`");
-
-                            t.HasCheckConstraint("ck_users_pis_superannuation_after_birth", "`date_of_superannuation` IS NULL OR `date_of_birth` IS NULL OR `date_of_superannuation` > `date_of_birth`");
+                            t.HasCheckConstraint("ck_users_pis_mobile_number_format", "`mobile_number` REGEXP '^[0-9]{10}$'");
                         });
                 });
 
@@ -2522,6 +2997,26 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasConstraintName("fk_personnel_leave_upload_errors_batch_id");
                 });
 
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PisUploadBatchError", b =>
+                {
+                    b.HasOne("NSG.Mobile.Domain.Entities.PisUploadBatch", null)
+                        .WithMany("Errors")
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pis_upload_batch_errors_batch_id");
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PisUploadBatchRecord", b =>
+                {
+                    b.HasOne("NSG.Mobile.Domain.Entities.PisUploadBatch", null)
+                        .WithMany("Records")
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pis_upload_batch_records_batch_id");
+                });
+
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.RefreshToken", b =>
                 {
                     b.HasOne("NSG.Mobile.Domain.Entities.Device", "Device")
@@ -2551,79 +3046,16 @@ namespace NSG.Mobile.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("NSG.Mobile.Domain.Entities.UserPis", b =>
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.SalarySlip", b =>
                 {
-                    b.HasOne("NSG.Mobile.Domain.Entities.EducationQualification", "Education")
-                        .WithMany()
-                        .HasForeignKey("EducationId")
+                    b.HasOne("NSG.Mobile.Domain.Entities.SalarySlipUploadBatch", "OriginalBatch")
+                        .WithMany("SalarySlips")
+                        .HasForeignKey("OriginalBatchId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_users_pis_education_qualifications_education_id");
+                        .IsRequired()
+                        .HasConstraintName("fk_salary_slips_original_batch_id");
 
-                    b.HasOne("NSG.Mobile.Domain.Entities.RankHierarchy", "NsgRank")
-                        .WithMany()
-                        .HasForeignKey("NsgRankId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_users_pis_rank_hierarchy_nsg_rank_id");
-
-                    b.HasOne("NSG.Mobile.Domain.Entities.NsgTrade", "NsgTrade")
-                        .WithMany()
-                        .HasForeignKey("NsgTradeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_users_pis_nsg_trade_nsg_trade_id");
-
-                    b.HasOne("NSG.Mobile.Domain.Entities.NsgUnit", "NsgUnit")
-                        .WithMany()
-                        .HasForeignKey("NsgUnitId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_users_pis_nsg_units_nsg_unit_id");
-
-                    b.HasOne("NSG.Mobile.Domain.Entities.ParentDepartmentRank", "ParentDepartmentRank")
-                        .WithMany()
-                        .HasForeignKey("ParentDepartmentRankId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_users_pis_parent_department_ranks_parent_department_rank_id");
-
-                    b.HasOne("NSG.Mobile.Domain.Entities.PdTrade", "PdTrade")
-                        .WithMany()
-                        .HasForeignKey("PdTradeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_users_pis_pd_trade_pd_trade_id");
-
-                    b.HasOne("NSG.Mobile.Domain.Entities.State", "PermanentState")
-                        .WithMany()
-                        .HasForeignKey("PermanentStateId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_users_pis_states_permanent_state_id");
-
-                    b.HasOne("NSG.Mobile.Domain.Entities.Religion", "Religion")
-                        .WithMany()
-                        .HasForeignKey("ReligionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_users_pis_religions_religion_id");
-
-                    b.HasOne("NSG.Mobile.Domain.Entities.NsgUnit", "SideSteppedFromNsgUnit")
-                        .WithMany()
-                        .HasForeignKey("SideSteppedFromNsgUnitId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_users_pis_nsg_units_side_stepped_from_nsg_unit_id");
-
-                    b.Navigation("Education");
-
-                    b.Navigation("NsgRank");
-
-                    b.Navigation("NsgTrade");
-
-                    b.Navigation("NsgUnit");
-
-                    b.Navigation("ParentDepartmentRank");
-
-                    b.Navigation("PdTrade");
-
-                    b.Navigation("PermanentState");
-
-                    b.Navigation("Religion");
-
-                    b.Navigation("SideSteppedFromNsgUnit");
+                    b.Navigation("OriginalBatch");
                 });
 
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.Device", b =>
@@ -2634,6 +3066,18 @@ namespace NSG.Mobile.Infrastructure.Migrations
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.PersonnelLeaveUploadBatch", b =>
                 {
                     b.Navigation("Errors");
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.PisUploadBatch", b =>
+                {
+                    b.Navigation("Errors");
+
+                    b.Navigation("Records");
+                });
+
+            modelBuilder.Entity("NSG.Mobile.Domain.Entities.SalarySlipUploadBatch", b =>
+                {
+                    b.Navigation("SalarySlips");
                 });
 
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.State", b =>

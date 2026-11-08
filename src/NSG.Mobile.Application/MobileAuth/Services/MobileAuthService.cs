@@ -87,6 +87,12 @@ public class MobileAuthService : IMobileAuthService
             case EligibilityKind.PendingRequest:
                 return WithDates(Terminal(eligibility), eligibility.Request);
 
+            case EligibilityKind.InactiveProfile when eligibility.Profile is { IsAdminBlocked: true }:
+                // The usual "unavailable" status, plus the code that tells the app a PIS Admin blocked the profile.
+                Result<MobileAuthFlowDto> blocked = Flow(MobileAuthStatus.AccessUnavailable, MobileAuthMessages.AccessBlockedByPisAdmin);
+                blocked.Data!.Code = ApiErrorCodes.MobileAccessBlocked;
+                return blocked;
+
             case EligibilityKind.ActiveProfile or EligibilityKind.OtpEligible:
                 ApproveMobileUser? approved = await _requests.GetLatestApprovedByNsgNumberAsync(id.Nsg, cancellationToken);
                 return WithDates(
@@ -128,6 +134,9 @@ public class MobileAuthService : IMobileAuthService
 
         if (!profile.IsActive)
         {
+            // Checked before the MPIN, as it always was: a blocked person gets no token and no failed-attempt is counted either way.
+            if (profile.IsAdminBlocked) return await AdminBlockedLoginAsync<MobileLoginResponseDto>(profile, ipAddress, now, cancellationToken);
+
             await _sessions.RevokeAllForProfileAsync(profile.Id, MobileSessionRevokeReasons.ProfileInactive, now, cancellationToken);
             await AuditLoginFailureAsync(profile, "ProfileInactive", ipAddress, cancellationToken);
             return Result.Failure<MobileLoginResponseDto>(ApiErrorCodes.Forbidden, MobileAuthMessages.AccessUnavailable);
@@ -150,15 +159,41 @@ public class MobileAuthService : IMobileAuthService
             return failure;
         }
 
-        await _profiles.RecordSuccessfulLoginAsync(profile.Id, now, cancellationToken);
+        // Tokens are issued only here, after the MPIN has been verified against an active, unlocked profile. The session is stored only if
+        // the profile is still active and unblocked at that instant (a block that committed after the check above wins).
+        string refreshSecret = _tokenService.GenerateRefreshToken();
+        MobileRefreshToken first = NewRefreshToken(refreshSecret, ipAddress, now);
+        first.ProfileId = profile.Id;
+        first.FamilyId = Guid.NewGuid();
 
-        // Tokens are issued only here, after the MPIN has been verified against an active, unlocked profile.
-        MobileLoginResponseDto session = await StartSessionAsync(profile, ipAddress, now, cancellationToken);
+        // One active session per profile: signing in again ends the previous one.
+        SessionStartOutcome started = await _sessions.StartSessionAsync(first, now, cancellationToken);
+        if (started == SessionStartOutcome.AdminBlocked) return await AdminBlockedLoginAsync<MobileLoginResponseDto>(profile, ipAddress, now, cancellationToken);
+        if (started == SessionStartOutcome.ProfileInactive)
+        {
+            await AuditLoginFailureAsync(profile, "ProfileInactive", ipAddress, cancellationToken);
+            return Result.Failure<MobileLoginResponseDto>(ApiErrorCodes.Forbidden, MobileAuthMessages.AccessUnavailable);
+        }
+
+        await _profiles.RecordSuccessfulLoginAsync(profile.Id, now, cancellationToken);
+        MobileAccessToken access = _tokenService.GenerateMobileAccessToken(profile, first.FamilyId);
+        MobileLoginResponseDto session = ToResponse(profile, access, refreshSecret, first.ExpiresAtIst);
 
         await _audit.LogAsync(AuditAction.LoginSuccess, DomainConstants.AuditResults.Success, entityType: nameof(MobileUserProfile),
             entityId: profile.Id.ToString(), ipAddress: ipAddress, correlationId: _currentUser.CorrelationId, cancellationToken: cancellationToken);
 
         return Result.Success(session);
+    }
+
+    /// <summary>
+    /// The profile is blocked by a PIS Admin: no token, no session, no failed-attempt count. Any live session row (only possible in the
+    /// instant around a block) is revoked with the block's own reason, never relabelled.
+    /// </summary>
+    private async Task<Result<T>> AdminBlockedLoginAsync<T>(MobileUserProfile profile, string? ipAddress, DateTime now, CancellationToken cancellationToken)
+    {
+        await _sessions.RevokeAllForProfileAsync(profile.Id, MobileSessionRevokeReasons.AdminBlocked, now, cancellationToken);
+        await AuditLoginFailureAsync(profile, "AdminBlocked", ipAddress, cancellationToken);
+        return Result.Failure<T>(ApiErrorCodes.MobileAccessBlocked, MobileAuthMessages.AccessBlockedByPisAdmin);
     }
 
     // ───────────────────────── sessions: refresh and logout ─────────────────────────
@@ -183,6 +218,14 @@ public class MobileAuthService : IMobileAuthService
                 return Result.Failure<MobileLoginResponseDto>(ApiErrorCodes.RefreshTokenExpired, MobileAuthMessages.SessionExpired);
 
             case RefreshRotationOutcome.Invalid:
+                // Two reasons carry a public code: a PIS Admin block (SURAKSHA_1001) and a replacement by a newer login (SURAKSHA_1002,
+                // latest login wins; also for a token that had expired before the replacement). Any other reason (logout, MPIN
+                // change/reset, ...) keeps the plain invalid-token answer.
+                if (rotation.RevokeReason == MobileSessionRevokeReasons.AdminBlocked)
+                    return Result.Failure<MobileLoginResponseDto>(ApiErrorCodes.MobileAccessBlocked, MobileAuthMessages.AccessBlockedByPisAdmin);
+                if (rotation.RevokeReason == MobileSessionRevokeReasons.NewLogin
+                    && !(await _profiles.GetByIdAsync(rotation.ProfileId, cancellationToken) is { IsAdminBlocked: true }))   // a block never shows 1002
+                    return Result.Failure<MobileLoginResponseDto>(ApiErrorCodes.MobileSessionReplaced, MobileAuthMessages.SessionReplacedByNewLogin);
                 return Result.Failure<MobileLoginResponseDto>(ApiErrorCodes.RefreshTokenInvalid, MobileAuthMessages.SessionInvalid);
         }
 
@@ -190,6 +233,13 @@ public class MobileAuthService : IMobileAuthService
         MobileUserProfile? profile = await _profiles.GetByIdAsync(rotation.ProfileId, cancellationToken);
         if (profile == null || !profile.IsActive)
         {
+            // A block that committed between the rotation and this read: the token just stored is revoked with the block's reason.
+            if (profile is { IsAdminBlocked: true })
+            {
+                await _sessions.RevokeAllForProfileAsync(rotation.ProfileId, MobileSessionRevokeReasons.AdminBlocked, now, cancellationToken);
+                return Result.Failure<MobileLoginResponseDto>(ApiErrorCodes.MobileAccessBlocked, MobileAuthMessages.AccessBlockedByPisAdmin);
+            }
+
             await _sessions.RevokeAllForProfileAsync(rotation.ProfileId, MobileSessionRevokeReasons.ProfileInactive, now, cancellationToken);
             return Result.Failure<MobileLoginResponseDto>(ApiErrorCodes.Forbidden, MobileAuthMessages.AccessUnavailable);
         }
@@ -212,20 +262,6 @@ public class MobileAuthService : IMobileAuthService
 
         // Same answer whether or not the token was known: logging out is idempotent and reveals nothing.
         return Result.Success(new MobileAuthFlowDto { Status = MobileAuthStatus.LoggedOut });
-    }
-
-    private async Task<MobileLoginResponseDto> StartSessionAsync(MobileUserProfile profile, string? ipAddress, DateTime now, CancellationToken cancellationToken)
-    {
-        string refreshSecret = _tokenService.GenerateRefreshToken();
-        MobileRefreshToken first = NewRefreshToken(refreshSecret, ipAddress, now);
-        first.ProfileId = profile.Id;
-        first.FamilyId = Guid.NewGuid();
-
-        // One active session per profile: signing in again ends the previous one.
-        await _sessions.StartSessionAsync(first, now, cancellationToken);
-
-        MobileAccessToken access = _tokenService.GenerateMobileAccessToken(profile, first.FamilyId);
-        return ToResponse(profile, access, refreshSecret, first.ExpiresAtIst);
     }
 
     private MobileRefreshToken NewRefreshToken(string secret, string? ipAddress, DateTime now) => new()
@@ -340,7 +376,7 @@ public class MobileAuthService : IMobileAuthService
 
             case MobileAppActivationStatus.Approved:
                 // Already approved: no approval request, just proof that this person controls the registered number.
-                return Result.Success(await IssueGrantAsync(MobileGrantPurpose.RegistrationVerified, pis.NsgNumber, pis.MobileNumber!, MobileAuthStatus.RegistrationVerified, cancellationToken));
+                return Result.Success(await IssueGrantAsync(MobileGrantPurpose.RegistrationVerified, pis.NsgNumber, pis.MobileNumber, MobileAuthStatus.RegistrationVerified, cancellationToken));
 
             default:
                 return Flow(MobileAuthStatus.AccessUnavailable, MobileAuthMessages.AccessUnavailable);
@@ -397,7 +433,7 @@ public class MobileAuthService : IMobileAuthService
         await _audit.LogAsync(AuditAction.RegistrationSubmitted, DomainConstants.AuditResults.Success, ipAddress: ipAddress,
             correlationId: _currentUser.CorrelationId, additionalData: "{\"path\":\"Approved\"}", cancellationToken: cancellationToken);
 
-        return Result.Success(await IssueGrantAsync(MobileGrantPurpose.MpinSetup, pis.NsgNumber, pis.MobileNumber!, MobileAuthStatus.MpinSetupGranted, cancellationToken));
+        return Result.Success(await IssueGrantAsync(MobileGrantPurpose.MpinSetup, pis.NsgNumber, pis.MobileNumber, MobileAuthStatus.MpinSetupGranted, cancellationToken));
     }
 
     // ───────────────────────── 6. mpin/setup ─────────────────────────
@@ -425,7 +461,7 @@ public class MobileAuthService : IMobileAuthService
         MobileUserProfile profile = new()
         {
             NsgNumber = pis.NsgNumber,
-            MobileNumber = pis.MobileNumber!,
+            MobileNumber = pis.MobileNumber,
             DateOfBirth = pis.DateOfBirth.Value,
             Role = UserRole.Employee,
             MpinHash = _hasher.HashPassword(request.Mpin),
@@ -570,7 +606,7 @@ public class MobileAuthService : IMobileAuthService
 
         // 3. Match all three identifiers against PIS.
         UserPis? pis = await _pis.GetByNsgNumberAsync(id.Nsg, cancellationToken);
-        if (pis == null || pis.DateOfBirth == null || pis.MobileNumber == null || !Matches(id, pis.NsgNumber, pis.MobileNumber, pis.DateOfBirth.Value))
+        if (pis == null || pis.DateOfBirth == null || !Matches(id, pis.NsgNumber, pis.MobileNumber, pis.DateOfBirth.Value))
         {
             return new Eligibility(EligibilityKind.NotMatched);
         }
@@ -623,7 +659,7 @@ public class MobileAuthService : IMobileAuthService
         ApproveMobileUser request = new()
         {
             NsgNumber = pis.NsgNumber,
-            MobileNumber = pis.MobileNumber!,
+            MobileNumber = pis.MobileNumber,
             DateOfBirth = pis.DateOfBirth!.Value,
             ApprovalStatus = MobileAppActivationStatus.Pending,
             RequestedAtIst = now,

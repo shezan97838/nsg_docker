@@ -51,7 +51,11 @@ public class RankHierarchyRepository : IRankHierarchyRepository
         => await _context.RankHierarchies.AnyAsync(r => r.RankName == rankName && (!excludeId.HasValue || r.Id != excludeId.Value), cancellationToken);
 
     public async Task<bool> IsInUseAsync(int id, CancellationToken cancellationToken = default)
-        => await _context.UsersPis.AnyAsync(u => u.NsgRankId == id, cancellationToken);
+    {
+        // Personnel rows store the master's name as text (no id), so usage is matched by name.
+        string? name = await _context.RankHierarchies.Where(r => r.Id == id).Select(r => r.RankName).FirstOrDefaultAsync(cancellationToken);
+        return name != null && await _context.UsersPis.AnyAsync(u => u.NsgRank == name, cancellationToken);
+    }
 
     public async Task AddAsync(RankHierarchy rank, CancellationToken cancellationToken = default)
     {

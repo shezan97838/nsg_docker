@@ -1,6 +1,4 @@
 using System.Text;
-using Amazon.Runtime;
-using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -21,6 +19,7 @@ using NSG.Mobile.Infrastructure.Persistence;
 using NSG.Mobile.Infrastructure.Repositories;
 using NSG.Mobile.Infrastructure.Security;
 using NSG.Mobile.Infrastructure.Services;
+using NSG.Mobile.Infrastructure.Services.Storage;
 
 namespace NSG.Mobile.Infrastructure;
 
@@ -74,7 +73,6 @@ public static class DependencyInjection
         services.Configure<SecurityOptions>(configuration.GetSection(SecurityOptions.SectionName));
         services.Configure<OtpOptions>(configuration.GetSection(OtpOptions.SectionName));
         services.Configure<EncryptionOptions>(configuration.GetSection(EncryptionOptions.SectionName));
-        services.Configure<BlindIndexOptions>(configuration.GetSection(BlindIndexOptions.SectionName));
 
         // Mobile registration / login tunables: lockout defaults come from Security, MobileAuth overrides them.
         var securityOptions = new SecurityOptions();
@@ -87,6 +85,21 @@ public static class DependencyInjection
         };
         configuration.GetSection("MobileAuth").Bind(mobileAuthSettings);
         services.AddSingleton(mobileAuthSettings);
+
+        // Salary slip module limits (SalarySlips section; defaults in SalarySlipSettings).
+        var salarySlipSettings = new NSG.Mobile.Application.SalarySlips.SalarySlipSettings();
+        configuration.GetSection("SalarySlips").Bind(salarySlipSettings);
+        services.AddSingleton(salarySlipSettings);
+
+        // Form 16 module limits (Form16Storage section; defaults in Form16Settings).
+        var form16Settings = new NSG.Mobile.Application.Form16.Form16Settings();
+        configuration.GetSection("Form16Storage").Bind(form16Settings);   // limits only (MaxPdfSizeBytes); the location is Storage:RootPath
+        services.AddSingleton(form16Settings);
+
+        // Digital Library limits (DigitalLibrary section; defaults in DigitalLibrarySettings). Limits only: the location is Storage:RootPath.
+        var digitalLibrarySettings = new NSG.Mobile.Application.DigitalLibrary.DigitalLibrarySettings();
+        configuration.GetSection("DigitalLibrary").Bind(digitalLibrarySettings);
+        services.AddSingleton(digitalLibrarySettings);
 
         // Leave module limits (Leave section; defaults in LeaveSettings).
         var leaveSettings = new NSG.Mobile.Application.Leave.LeaveSettings();
@@ -127,11 +140,23 @@ public static class DependencyInjection
                     var principal = context.Principal;
                     if (principal?.FindFirst(DomainConstants.MobileClaims.TokenUse)?.Value != DomainConstants.MobileClaims.MobileAccess) return;
 
-                    bool valid = Guid.TryParse(principal.FindFirst(DomainConstants.MobileClaims.SessionId)?.Value, out var sessionId)
-                        && long.TryParse(principal.FindFirst(DomainConstants.MobileClaims.ProfileId)?.Value, out var profileId)
-                        && await context.HttpContext.RequestServices.GetRequiredService<IMobileRefreshTokenRepository>()
-                            .IsSessionActiveAsync(sessionId, profileId, context.HttpContext.RequestAborted);
-                    if (!valid) context.Fail("Mobile session is not active.");
+                    MobileSessionState state = MobileSessionState.Revoked;
+                    if (Guid.TryParse(principal.FindFirst(DomainConstants.MobileClaims.SessionId)?.Value, out var sessionId)
+                        && long.TryParse(principal.FindFirst(DomainConstants.MobileClaims.ProfileId)?.Value, out var profileId))
+                    {
+                        state = await context.HttpContext.RequestServices.GetRequiredService<IMobileRefreshTokenRepository>()
+                            .GetSessionStateAsync(sessionId, profileId, context.HttpContext.RequestAborted);
+                    }
+
+                    if (state == MobileSessionState.Active) return;
+
+                    // The token is refused either way. Only a PIS Admin block (SURAKSHA_1001) and a replacement by a newer login
+                    // (SURAKSHA_1002) leave a code behind for the 401 body; every other reason stays the plain 401 it always was.
+                    if (state == MobileSessionState.AdminBlocked)
+                        context.HttpContext.Items[DomainConstants.AuthFailure.CodeItemKey] = ApiErrorCodes.MobileAccessBlocked;
+                    else if (state == MobileSessionState.Replaced)
+                        context.HttpContext.Items[DomainConstants.AuthFailure.CodeItemKey] = ApiErrorCodes.MobileSessionReplaced;
+                    context.Fail("Mobile session is not active.");
                 },
                 OnAuthenticationFailed = context =>
                 {
@@ -185,7 +210,6 @@ public static class DependencyInjection
         services.AddScoped<IAdminTokenService, AdminJwtTokenService>();
         services.AddScoped<IPasswordHashingService, PasswordHashingService>();
         services.AddScoped<IEncryptionService, AesEncryptionService>();
-        services.AddScoped<IBlindIndexService, HmacBlindIndexService>();
     }
 
     private static void AddCaching(this IServiceCollection services, IConfiguration configuration)
@@ -226,20 +250,30 @@ public static class DependencyInjection
         services.AddScoped<INsgTradeRepository, NsgTradeRepository>();
         services.AddScoped<IPdTradeRepository, PdTradeRepository>();
         services.AddScoped<IUserPisRepository, UserPisRepository>();
+        services.AddScoped<IPisOwnershipRepository, PisOwnershipRepository>();
+        services.AddScoped<IPisImportRepository, PisImportRepository>();
+        services.AddScoped<IPisAdminQueryRepository, PisAdminQueryRepository>();
         services.AddScoped<IStateRepository, StateRepository>();
         services.AddScoped<ICityRepository, CityRepository>();
         services.AddScoped<IMobileUserProfileRepository, MobileUserProfileRepository>();
         services.AddScoped<IApproveMobileUserRepository, ApproveMobileUserRepository>();
         services.AddScoped<IMobileAuthGrantRepository, MobileAuthGrantRepository>();
         services.AddScoped<IMobileRefreshTokenRepository, MobileRefreshTokenRepository>();
+        services.AddScoped<IMobileAccessRepository, MobileAccessRepository>();
         services.AddScoped<IAdminProfileRepository, AdminProfileRepository>();
         services.AddScoped<IAdminRoleRepository, AdminRoleRepository>();
         services.AddScoped<IAdminRefreshTokenRepository, AdminRefreshTokenRepository>();
         services.AddScoped<IGrievanceRepository, GrievanceRepository>();
+        services.AddScoped<IDigitalLibraryRepository, DigitalLibraryRepository>();
+
         services.AddScoped<IDgMessageRepository, DgMessageRepository>();
         services.AddScoped<IBannerRepository, BannerRepository>();
         services.AddScoped<IBannerImageUrlBuilder, BannerImageUrlBuilder>();
         services.AddScoped<ILeaveRepository, LeaveRepository>();
+        services.AddScoped<ISalarySlipRepository, SalarySlipRepository>();
+        services.AddScoped<ISalarySlipQueryRepository, SalarySlipQueryRepository>();
+        services.AddScoped<ISalarySlipMobileRepository, SalarySlipMobileRepository>();
+        services.AddScoped<IForm16Repository, Form16Repository>();
     }
 
     private static void AddInfrastructureServices(this IServiceCollection services)
@@ -248,7 +282,7 @@ public static class DependencyInjection
         services.AddScoped<IOtpService, OtpService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IReviewerIdentityResolver, ReviewerIdentityResolver>();
-        services.AddScoped<IFileStorageService, LocalFileStorageService>();
+
     }
 
     private static void AddExternalIntegrations(this IServiceCollection services, IConfiguration configuration)
@@ -258,7 +292,19 @@ public static class DependencyInjection
         services.Configure<HrmsOptions>(configuration.GetSection(HrmsOptions.SectionName));
         services.Configure<PayrollOptions>(configuration.GetSection(PayrollOptions.SectionName));
         services.Configure<FileStorageOptions>(configuration.GetSection(FileStorageOptions.SectionName));
-        services.AddR2StorageWhenConfigured(configuration);
+        services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
+        services.AddSingleton<IStorageRoot, StorageRoot>();
+        services.AddHostedService<StorageStartupValidator>();
+        services.AddFileStorageProvider();
+
+        // Form 16, salary slips and the digital library use local disk under the common storage root (Storage:RootPath).
+        services.AddScoped<IForm16StorageService, Form16StorageService>();
+        services.AddScoped<IDigitalLibraryStorageService, DigitalLibraryStorageService>();
+
+        // (independent of the IFileStorageService selection above)
+        services.AddScoped<ISalarySlipStorageService, SalarySlipStorageService>();
+        services.AddScoped<ISalarySlipPdfExtractionService, SalarySlipPdfExtractionService>();
+        services.AddScoped<ISalarySlipPdfGenerationService, SalarySlipPdfGenerationService>();
 
         // Placeholder implementations — replace with actual integrations when API contracts are available
         services.AddScoped<INicSmsService, NicSmsServicePlaceholder>();
@@ -268,33 +314,14 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Switches <see cref="IFileStorageService"/> from the local filesystem to private Cloudflare R2 when <c>R2Storage:ServiceUrl</c> holds a real
-    /// value. When R2 is chosen, a missing bucket or credential stops the application at startup with a message naming the missing settings.
-    /// With no real service URL the local storage stays in place and nothing else is validated.
+    /// Registers <see cref="LocalFileStorageService"/> as the only <see cref="IFileStorageService"/> (grievance documents, DG message images,
+    /// banner images). It stores under the common storage root (<c>Storage:RootPath</c>), which <see cref="Services.Storage.StorageStartupValidator"/>
+    /// checks at startup in every environment.
     /// </summary>
-    private static void AddR2StorageWhenConfigured(this IServiceCollection services, IConfiguration configuration)
+    private static void AddFileStorageProvider(this IServiceCollection services)
     {
-        IConfigurationSection section = configuration.GetSection(R2Options.SectionName);
-        R2Options r2 = section.Get<R2Options>() ?? new R2Options();
-        // Grievance documents may only be read or written when storage is private R2, or when running in Development.
-        bool r2Active = r2.IsEnabled;
-        services.AddSingleton<IStorageAvailability>(sp => new StorageAvailability(r2Active || sp.GetRequiredService<IHostEnvironment>().IsDevelopment()));
-        if (!r2Active) return;
-
-        r2.EnsureValid();
-        services.Configure<R2Options>(section);
-
-        // R2 specifics: path-style addressing, region "auto", and no SDK-added checksums (R2 rejects the newer default trailers).
-        services.TryAddSingleton<IAmazonS3>(_ => new AmazonS3Client(
-            new BasicAWSCredentials(r2.AccessKey, r2.SecretKey),
-            new AmazonS3Config
-            {
-                ServiceURL = r2.ServiceUrl,
-                ForcePathStyle = true,
-                AuthenticationRegion = "auto",
-                RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
-                ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED
-            }));
-        services.Replace(ServiceDescriptor.Scoped<IFileStorageService, R2FileStorageService>());
+        // The root is validated at startup, so by the time a request arrives storage is usable.
+        services.AddSingleton<IStorageAvailability>(new StorageAvailability(true));
+        services.AddScoped<IFileStorageService, LocalFileStorageService>();
     }
 }

@@ -39,7 +39,7 @@
 - Indexes for actual query patterns (not speculative)
 - `AsNoTracking()` for read-only queries
 - No lazy loading — explicit Include only
-- Review migrations before applying. Startup auto-migration is controlled by `Database:MigrateOnStartup` in `appsettings.json` (currently `true`, see OQ-034)
+- Review migrations before applying. `Database:MigrateOnStartup` is `true` in the committed `appsettings.json` for the Render development deployment only (disposable database, OQ-034). Production (NIC Ubuntu) must set `Database__MigrateOnStartup=false` and apply reviewed scripts/bundles instead
 - Table, column, index and constraint names: lowercase `snake_case` — see "Database Standards" and `docs/DATABASE-STANDARDS.md`
 
 ## Security Rules
@@ -99,7 +99,7 @@ Full rules, rationale and checklist: **`docs/DATABASE-STANDARDS.md`** (authorita
 - **Tables and columns: lowercase `snake_case`** (`a-z`, digits, `_`; start with a letter; at most 64 characters; never a MySQL reserved word such as `rank`). No exceptions for new or existing objects except EF's own `__EFMigrationsHistory`.
 - Every table is mapped explicitly with `ToTable("...")`; columns, keys, indexes and foreign keys are named by `DatabaseNamingStandard` (`pk_`, `ix_`, `fk_`, `ck_`). C# names stay PascalCase; JSON and routes are public contracts and are not renamed to match the database.
 - Every `DateTime` is an IST (Asia/Kolkata, UTC+05:30) instant stored as `datetime(6)` in a `*_ist` column and written with `IndianStandardTime.Now` (never `DateTime.UtcNow`/`DateTime.Now`); the API exposes it with the fixed `+05:30` offset (`IstTime.FromIst`). See "Timestamp Convention" in `CLAUDE.md`. Foreign key columns match the referenced key type exactly. Foreign keys use `Restrict`.
-- Migrations: review the generated SQL; never edit or rename one applied to a shared database (use a corrective migration); never run at startup; test renames on a copy of real data; ask for approval before applying to development or production.
+- Migrations: review the generated SQL; never edit or rename one applied to a shared database (use a corrective migration); never run at startup in production (the Render development deployment auto-migrates a disposable database, OQ-034); test renames on a copy of real data; ask for approval before applying to development or production.
 - Raw SQL only in tests/tools, parameterised, lowercase identifiers. `tests/NSG.Mobile.Tests/ExpectedDatabaseSchema.cs` pins the whole schema and `DatabaseNamingRuleTests` enforces the rules; update the pinned schema in the same change as any schema change.
 
 ## API Response Rules (no blank responses)
@@ -116,7 +116,7 @@ Adopted 2026-10-14. **Status: rule adopted; endpoints written before this date d
 - **Known deviations (to be migrated):** every paged list returns `items: []` when empty; every `DELETE` returns 204; `POST` and `PUT` return the bare resource without a message; `GET /api/v1/ranks/dropdown` and the other dropdowns return `[]` when empty.
 
 ### Global response envelope (adopted 2026-10-22; supersedes the body shapes above)
-Every JSON response is `{ "success": true|false, "message": "...", "data": ... }` (`ApiResponse<T>`, Application layer). `data` is the payload on success and always `null` on failure or when there is nothing to return.
+Every JSON response is `{ "success": true|false, "message": "...", "data": ... }` (`ApiResponse<T>`, Application layer). `data` is the payload on success and always `null` on failure or when there is nothing to return. An optional `code` (machine-readable, omitted from the JSON when null) is added only for the allow-listed `ApiErrorCodes.PublicCodes` - today only `SURAKSHA_1001`, reserved for a PIS Admin mobile-access block (ADR-024); every other response is unchanged.
 - **Wrapped centrally, not per controller:** `ApiResponseEnvelopeFilter` (global MVC result filter) wraps controller results; `GlobalExceptionHandlingMiddleware` writes the envelope for unhandled exceptions and for bodyless 401/403/404/405/429. Controllers keep returning DTOs, `ApiResult<T>`, `ApiMessageResponse` or `ProblemDetails`; a body that is already an `ApiResponse<T>` is not wrapped twice.
 - **Status codes are preserved.** The only change: a bodyless 204 is sent as 200 with the envelope (`data: null`), because a 204 cannot carry a body.
 - **Not wrapped:** file downloads (`FileResult`), redirects, `/health/*`, `/swagger`.

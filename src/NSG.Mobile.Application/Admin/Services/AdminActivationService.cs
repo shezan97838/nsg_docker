@@ -79,7 +79,7 @@ public class AdminActivationService : IAdminActivationService
         return Result.Success(new AdminOtpSentDto
         {
             OtpReferenceId = sent.ReferenceId!.Value,
-            MaskedMobileNumber = PisMasking.Mask(person.MobileNumber!),
+            MaskedMobileNumber = PisMasking.Mask(person.MobileNumber),
             OtpExpiresAt = IstTime.FromIst(sent.ExpiresAtIst ?? Now()),
             DemoOtpMode = sent.IsDemo
         });
@@ -93,6 +93,11 @@ public class AdminActivationService : IAdminActivationService
             await AuditAsync(AuditAction.OtpFailed, DomainConstants.AuditResults.Failure, null, ipAddress, "ActivationNotEligible", cancellationToken);
             return Result.Failure<string>(ApiErrorCodes.MobileNotMatched, AdminMessages.NotMatched);
         }
+
+        // The account holder is positively identified here (matching PIS record, then the verified OTP), so the activation is attributed to their
+        // profile id. An id that cannot be stored in the integer audit column is refused before the OTP is consumed or anything is written.
+        if (!AdminActor.TryFrom(profile.Id, out AdminActor actor))
+            return Result.Failure<string>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
 
         // The OTP must have been sent to this person's PIS number for activation; anything else looks like an unknown reference.
         OtpRequest? otp = await _otpRequests.GetByReferenceIdAsync(request.OtpReferenceId, cancellationToken);
@@ -116,7 +121,7 @@ public class AdminActivationService : IAdminActivationService
         if (!activated)
             return Result.Failure<string>(ApiErrorCodes.MobileNotMatched, AdminMessages.NotMatched);
 
-        await AuditAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success, profile.Id, ipAddress, "AdminAccountActivated", cancellationToken);
+        await AuditAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success, profile.Id, ipAddress, "AdminAccountActivated", cancellationToken, actor.Key);
         return Result.Success(AdminMessages.AccountActivated);
     }
 
@@ -133,7 +138,7 @@ public class AdminActivationService : IAdminActivationService
         return eligible ? (profile, person) : (null, null);
     }
 
-    private Task AuditAsync(AuditAction action, string result, long? adminProfileId, string? ipAddress, string detail, CancellationToken cancellationToken)
-        => _audit.LogAsync(action, result, entityType: nameof(AdminProfile), entityId: adminProfileId?.ToString(), ipAddress: ipAddress,
+    private Task AuditAsync(AuditAction action, string result, long? adminProfileId, string? ipAddress, string detail, CancellationToken cancellationToken, int? auditUserId = null)
+        => _audit.LogAsync(action, result, userId: auditUserId, entityType: nameof(AdminProfile), entityId: adminProfileId?.ToString(), ipAddress: ipAddress,
             correlationId: _currentUser.CorrelationId, additionalData: AdminSupport.Audit(("detail", detail)), cancellationToken: cancellationToken);
 }

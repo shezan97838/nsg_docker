@@ -71,6 +71,9 @@ public class RankHierarchyService : IRankHierarchyService
 
     public async Task<Result<RankResponseDto>> CreateAsync(CreateRankRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure<RankResponseDto>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         string rankName = request.RankName.Trim();
 
         Result? conflict = await CheckConflictsAsync(request.SrNo, rankName, null, cancellationToken);
@@ -96,6 +99,9 @@ public class RankHierarchyService : IRankHierarchyService
 
     public async Task<Result<RankResponseDto>> UpdateAsync(int id, UpdateRankRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure<RankResponseDto>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         RankHierarchy? rank = await _repository.GetByIdAsync(id, cancellationToken);
         if (rank == null)
             return Result.Failure<RankResponseDto>(ApiErrorCodes.NotFound, "Rank not found.");
@@ -120,6 +126,9 @@ public class RankHierarchyService : IRankHierarchyService
 
     public async Task<Result> DeleteAsync(int id, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         RankHierarchy? rank = await _repository.GetByIdAsync(id, cancellationToken);
         if (rank == null)
             return Result.Failure(ApiErrorCodes.NotFound, "Rank not found.");
@@ -153,12 +162,12 @@ public class RankHierarchyService : IRankHierarchyService
     private async Task AuditAsync(string operation, int rankId, CancellationToken cancellationToken)
     {
         await _auditService.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success,
-            userId: _currentUserService.UserId, entityType: EntityType, entityId: rankId.ToString(),
+            userId: _currentUserService.AuditUserId(), entityType: EntityType, entityId: rankId.ToString(),
             correlationId: _currentUserService.CorrelationId,
             additionalData: $"{{\"operation\":\"{operation}\"}}",
             cancellationToken: cancellationToken);
 
-        _logger.LogInformation("{Operation} rank {RankId} by admin {AdminId}", operation, rankId, _currentUserService.UserId);
+        _logger.LogInformation("{Operation} rank {RankId} by admin {AdminId}", operation, rankId, _currentUserService.AuditUserId());
     }
 
     private static string? NormalizeShortCode(string? shortCode)

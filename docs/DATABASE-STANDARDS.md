@@ -23,7 +23,7 @@ MySQL on Linux treats database and table names as case-sensitive (`lower_case_ta
 
 ### B. Columns
 - Lowercase `snake_case`, same limits as tables, never reserved words (so the C# property `User.Rank` is stored in column `rank_name`).
-- C# properties keep .NET naming. `DatabaseNamingStandard` derives the column from the property name (`NsgTradeId` → `nsg_trade_id`); an explicit `HasColumnName` always wins.
+- C# properties keep .NET naming. `DatabaseNamingStandard` derives the column from the property name (`NsgNumber` → `nsg_number`); an explicit `HasColumnName` always wins.
 - Consistent names: primary key `id`; foreign key `<referenced_singular>_id`; booleans `is_*`; status columns `*_status` or `status`; audit columns `created_at_ist`, `updated_at_ist`, `created_by`, `updated_by`.
 - Every `DateTime` property is an **Indian Standard Time (IST / UTC+05:30) instant**, stored as `datetime(6)`, and its column ends in `_ist` (enforced by `DatabaseNamingStandard`). Application code writes `IndianStandardTime.Now`.
 
@@ -50,7 +50,7 @@ MySQL on Linux treats database and table names as case-sensitive (`lower_case_ta
 ### F. Migrations
 - Use the EF Core Pomelo provider and review the generated SQL (`dotnet ef migrations script <from> <to>`) before applying.
 - **Never edit or rename a migration that was applied to a shared or deployed database.** Fix forward with a corrective migration. A migration that exists only on one developer's machine and in the disposable test database may be removed with `dotnet ef migrations remove`.
-- Never apply migrations at application start. Production uses a migration bundle or script, run with a **migrator** account; the runtime account has `SELECT, INSERT, UPDATE, DELETE` only (docs/CONFIGURATION.md section 6).
+- **Production (NIC Ubuntu):** never apply migrations at application start. Set `Database__MigrateOnStartup=false` explicitly (the committed `appsettings.json` default is `true`, see below) and use a migration bundle or script, run with a **migrator** account; the runtime account has `SELECT, INSERT, UPDATE, DELETE` only (docs/CONFIGURATION.md section 6). **Render development deployment:** `Database:MigrateOnStartup=true` is accepted there by the owner (OQ-034) because its MySQL database is disposable; it must not be copied to any environment holding real data.
 - Delete the scaffolded `DropPrimaryKey`/`AddPrimaryKey` pairs that appear when only a table name changes: MySQL primary keys are always `PRIMARY`, and Pomelo wraps those operations in stored procedures that need `CREATE ROUTINE`.
 - EF's differ ignores changes that differ only by letter case (it missed `CK_States_Code_Format` → `ck_states_code_format`). After a renaming migration, compare the real schema, not just the generated script.
 - Model configuration, `AppDbContextModelSnapshot`, `__EFMigrationsHistory` and the real schema must agree: run `dotnet ef migrations has-pending-model-changes` and compare `information_schema` after applying.
@@ -60,7 +60,7 @@ MySQL on Linux treats database and table names as case-sensitive (`lower_case_ta
 ### G. SQL in application code
 - Application code uses LINQ/EF only. Raw SQL (`FromSql`, `ExecuteSql`, scripts, dynamic identifiers) is limited to tests and one-off tooling, uses parameters for values, and uses the exact lowercase names. Identifiers are never built from user input.
 - Code must not depend on an index or constraint name appearing in a MySQL error message unless that name is a constant covered by a test (`UserPisRepository` reads `ix_users_pis_*` names from duplicate-key errors; renaming those indexes means updating it).
-- Strings that merely look like database names but are data (for example the HMAC labels `UsersPIS.Pan` in `PisBlindIndexes`) are **not** identifiers and must never follow a rename.
+- Strings that merely look like database names but are data (for example text labels that happen to contain a table name) are **not** identifiers and must never follow a rename.
 
 ## 3. How the rules are enforced
 | Control | Where |

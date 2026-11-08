@@ -11,12 +11,30 @@ public class MobileRefreshTokenRepository : IMobileRefreshTokenRepository
 
     public MobileRefreshTokenRepository(AppDbContext context) => _context = context;
 
-    public async Task StartSessionAsync(MobileRefreshToken first, DateTime nowUtc, CancellationToken cancellationToken = default)
+    public async Task<SessionStartOutcome> StartSessionAsync(MobileRefreshToken first, DateTime nowUtc, CancellationToken cancellationToken = default)
     {
         var strategy = _context.Database.CreateExecutionStrategy();
-        await strategy.ExecuteAsync(async () =>
+        return await strategy.ExecuteAsync(async () =>
         {
             await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            // Take the profile's row lock first. A block that has committed leaves this update matching nothing; a block that is still
+            // running makes it wait for the commit. Either way the read below sees the committed state, so a session is never stored
+            // for a profile whose block has committed. (The decision is the read, not the affected-row count.)
+            await _context.MobileUserProfiles
+                .Where(p => p.Id == first.ProfileId && p.IsActive && p.AccessBlockedAtIst == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.LastLoginAtIst, (DateTime?)nowUtc), cancellationToken);
+
+            var profile = await _context.MobileUserProfiles.AsNoTracking()
+                .Where(p => p.Id == first.ProfileId)
+                .Select(p => new { p.IsActive, Blocked = p.AccessBlockedAtIst != null })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (profile == null || !profile.IsActive || profile.Blocked)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return profile is { Blocked: true } ? SessionStartOutcome.AdminBlocked : SessionStartOutcome.ProfileInactive;
+            }
+
             await _context.MobileRefreshTokens
                 .Where(t => t.ProfileId == first.ProfileId && t.RevokedAtIst == null)
                 .ExecuteUpdateAsync(s => s
@@ -26,6 +44,7 @@ public class MobileRefreshTokenRepository : IMobileRefreshTokenRepository
             _context.MobileRefreshTokens.Add(first);
             await _context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            return SessionStartOutcome.Started;
         });
     }
 
@@ -62,14 +81,32 @@ public class MobileRefreshTokenRepository : IMobileRefreshTokenRepository
 
             if (presented.RevokedAtIst != null && presented.RevokeReason == MobileSessionRevokeReasons.Rotated)
             {
-                // A token that was already exchanged is being used again: assume it leaked and end the whole session.
-                await _context.MobileRefreshTokens.Where(t => t.TokenHash == presentedTokenHash)
-                    .ExecuteUpdateAsync(s => s.SetProperty(t => t.ReuseDetectedAtIst, (DateTime?)nowUtc), cancellationToken);
-                await _context.MobileRefreshTokens.Where(t => t.FamilyId == presented.FamilyId && t.RevokedAtIst == null)
+                // A token that was already exchanged is being used again. Ending the family's live token is the decision: if a live token
+                // was there, the session had not been replaced and this is reuse; assume it leaked and end the whole session.
+                int ended = await _context.MobileRefreshTokens.Where(t => t.FamilyId == presented.FamilyId && t.RevokedAtIst == null)
                     .ExecuteUpdateAsync(s => s
                         .SetProperty(t => t.RevokedAtIst, (DateTime?)nowUtc)
                         .SetProperty(t => t.RevokeReason, MobileSessionRevokeReasons.ReuseDetected), cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
+
+                if (ended == 0)
+                {
+                    // Nothing was live: the session had already ended. Nothing has been changed yet, so leave the transaction and read the
+                    // family's latest state afresh (this transaction's snapshot may predate a login that has just committed).
+                    await transaction.RollbackAsync(cancellationToken);
+                    string? familyEnd = await _context.MobileRefreshTokens.AsNoTracking()
+                        .Where(t => t.FamilyId == presented.FamilyId)
+                        .OrderByDescending(t => t.Id)
+                        .Select(t => t.RevokeReason)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    // Replaced by a newer login: that, not reuse, is what the old device is told. The NewLogin reason is left as it is.
+                    if (familyEnd == MobileSessionRevokeReasons.NewLogin)
+                        return new RefreshRotationResult(RefreshRotationOutcome.Invalid, presented.ProfileId, presented.FamilyId, MobileSessionRevokeReasons.NewLogin);
+                }
+
+                await _context.MobileRefreshTokens.Where(t => t.TokenHash == presentedTokenHash)
+                    .ExecuteUpdateAsync(s => s.SetProperty(t => t.ReuseDetectedAtIst, (DateTime?)nowUtc), cancellationToken);
+                if (ended > 0) await transaction.CommitAsync(cancellationToken);
                 return new RefreshRotationResult(RefreshRotationOutcome.ReuseDetected, presented.ProfileId, presented.FamilyId);
             }
 
@@ -77,7 +114,7 @@ public class MobileRefreshTokenRepository : IMobileRefreshTokenRepository
             await transaction.RollbackAsync(cancellationToken);
             return new RefreshRotationResult(
                 presented.RevokedAtIst == null ? RefreshRotationOutcome.Expired : RefreshRotationOutcome.Invalid,
-                presented.ProfileId, presented.FamilyId);
+                presented.ProfileId, presented.FamilyId, presented.RevokeReason);
         });
     }
 
@@ -105,4 +142,31 @@ public class MobileRefreshTokenRepository : IMobileRefreshTokenRepository
                   join p in _context.MobileUserProfiles.AsNoTracking() on t.ProfileId equals p.Id
                   where t.FamilyId == sessionId && t.ProfileId == profileId && t.RevokedAtIst == null && p.IsActive
                   select t.Id).AnyAsync(cancellationToken);
+
+    public async Task<MobileSessionState> GetSessionStateAsync(Guid sessionId, long profileId, CancellationToken cancellationToken = default)
+    {
+        var profile = await _context.MobileUserProfiles.AsNoTracking()
+            .Where(p => p.Id == profileId)
+            .Select(p => new { p.IsActive, Blocked = p.AccessBlockedAtIst != null })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (profile == null) return MobileSessionState.Revoked;
+
+        // The newest row of the session decides: an older row of the same session was only rotated, which says nothing about its end.
+        var latest = await _context.MobileRefreshTokens.AsNoTracking()
+            .Where(t => t.FamilyId == sessionId && t.ProfileId == profileId)
+            .OrderByDescending(t => t.Id)
+            .Select(t => new { t.RevokedAtIst, t.RevokeReason })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (latest == null) return MobileSessionState.Revoked;
+
+        // A live token on a blocked profile is the moment between a committed block and the revocation reaching this row: the block marker wins.
+        if (latest.RevokedAtIst == null)
+            return profile.Blocked ? MobileSessionState.AdminBlocked : profile.IsActive ? MobileSessionState.Active : MobileSessionState.Revoked;
+
+        if (latest.RevokeReason == MobileSessionRevokeReasons.AdminBlocked) return MobileSessionState.AdminBlocked;
+
+        // Replaced by a newer login (latest login wins). A profile that is blocked right now never reports this: SURAKSHA_1001 stays exclusive
+        // to the block, and a blocked person with an old replaced session gets the plain revoked answer as before.
+        return latest.RevokeReason == MobileSessionRevokeReasons.NewLogin && !profile.Blocked ? MobileSessionState.Replaced : MobileSessionState.Revoked;
+    }
 }

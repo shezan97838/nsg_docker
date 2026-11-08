@@ -23,10 +23,7 @@ public static class StartupSecretsValidator
         RequireSet(configuration, "Jwt:Issuer");
         RequireSet(configuration, "Jwt:Audience");
 
-        byte[] encryptionKey = RequireBase64(configuration, "Encryption:Key", exactBytes: 32);
-        byte[] blindIndexKey = RequireBase64(configuration, "BlindIndex:Key", minBytes: 32);
-        if (encryptionKey.AsSpan().SequenceEqual(blindIndexKey))
-            throw new InvalidOperationException("BlindIndex:Key must be different from Encryption:Key.");
+        RequireBase64(configuration, "Encryption:Key", exactBytes: 32);
     }
 
     private static void RequireSet(IConfiguration configuration, string key)

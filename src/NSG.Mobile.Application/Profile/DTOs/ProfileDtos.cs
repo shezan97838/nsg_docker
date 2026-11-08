@@ -1,50 +1,32 @@
-using System.Text.Json.Serialization;
-using NSG.Mobile.Domain.Enums;
-
 namespace NSG.Mobile.Application.Profile.DTOs;
 
 /// <summary>
 /// Full PIS details of the signed-in mobile user for GET /api/v1/profile. SOW §3.1 (PIS).
 ///
+/// The personnel row is a self-contained text model: every column is returned exactly as stored (lookup values such as rank and
+/// unit are plain text, and numeric-looking columns such as height, weight and leave details are text and are never converted).
+///
 /// SECURITY: returns the caller's own Aadhaar, PAN, PRAN and salary account number decrypted (the person is taken from
-/// the token only, so nobody else's can be read). Never returns ciphertext or blind-index hashes, and deliberately excludes
-/// all admin-only fields (MobileAppActivationStatus, IsActive, audit timestamps and user ids), no MPIN or password hash. Lookup ids are included alongside their display names so the mobile client can
-/// display and match values without a second round-trip.
+/// the token only, so nobody else's can be read). Never returns ciphertext, and deliberately excludes all admin-only fields
+/// (MobileAppActivationStatus, IsActive, audit timestamps and user ids), no MPIN or password hash.
 /// </summary>
 public class MobileProfileResponseDto
 {
     // ── Identity and service ──
 
     public string NsgNumber { get; set; } = string.Empty;
-    public string ServiceNumber { get; set; } = string.Empty;
+    public string? ServiceNumber { get; set; }
     public string? FullName { get; set; }
 
-    public int? NsgRankId { get; set; }
-    public string? NsgRankName { get; set; }
-
-    public int? NsgTradeId { get; set; }
-    public string? NsgTradeName { get; set; }
-
-    public int? ParentDepartmentRankId { get; set; }
-    public string? ParentDepartmentRankName { get; set; }
-
-    public int? PdTradeId { get; set; }
-    public string? PdTradeName { get; set; }
-
-    public int? NsgUnitId { get; set; }
-    public string? NsgUnitName { get; set; }
-
-    public int? EducationId { get; set; }
-    public string? EducationName { get; set; }
+    public string? NsgRank { get; set; }
+    public string? ParentDepartmentRank { get; set; }
+    public string? NsgUnit { get; set; }
+    public string? Education { get; set; }
 
     public DateOnly? DateOfInductionInNsg { get; set; }
 
-    /// <summary>Date of side-stepping.</summary>
-    public DateOnly? SideSteppedOn { get; set; }
-
-    /// <summary>NSG unit the person was side-stepped from.</summary>
-    public int? SideSteppedFromNsgUnitId { get; set; }
-    public string? SideSteppedFromNsgUnitName { get; set; }
+    /// <summary>Side-stepped details as stored (one free-text value, for example <c>10.01.2025 FROM 11 SRG</c>).</summary>
+    public string? SideSteppedDetails { get; set; }
 
     public DateOnly? DateOfRepatriation { get; set; }
     public DateOnly? DateOfBirth { get; set; }
@@ -53,14 +35,9 @@ public class MobileProfileResponseDto
 
     // ── Personal and family ──
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public Gender? Gender { get; set; }
-
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public PersonnelCategory? Category { get; set; }
-
-    public int? ReligionId { get; set; }
-    public string? ReligionName { get; set; }
+    public string? Gender { get; set; }
+    public string? Category { get; set; }
+    public string? Religion { get; set; }
 
     public string? FatherName { get; set; }
     public string? MotherName { get; set; }
@@ -71,19 +48,18 @@ public class MobileProfileResponseDto
     /// <summary>Mobile number of next of kin.</summary>
     public string? NextOfKinMobileNumber { get; set; }
 
-    public int? NumberOfChildren { get; set; }
+    public string? NumberOfChildren { get; set; }
 
     /// <summary>Individual's own mobile number.</summary>
-    public string? MobileNumber { get; set; }
+    public string MobileNumber { get; set; } = string.Empty;
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public BloodGroupType? BloodGroup { get; set; }
+    public string? BloodGroup { get; set; }
 
-    /// <summary>Height in whole centimetres.</summary>
-    public int? HeightCm { get; set; }
+    /// <summary>Height as stored (text).</summary>
+    public string? HeightCm { get; set; }
 
-    /// <summary>Weight in kilograms, up to two decimals.</summary>
-    public decimal? WeightKg { get; set; }
+    /// <summary>Weight as stored (text).</summary>
+    public string? WeightKg { get; set; }
 
     // Sensitive identifiers: decrypted for the owner only; null when not recorded or when the stored value cannot be read.
 
@@ -108,10 +84,9 @@ public class MobileProfileResponseDto
     /// <summary>District as text (no District master).</summary>
     public string? PermanentDistrict { get; set; }
 
-    public int? PermanentStateId { get; set; }
-    public string? PermanentStateName { get; set; }
+    public string? PermanentState { get; set; }
 
-    /// <summary>Six-digit PIN code.</summary>
+    /// <summary>PIN code as stored (text).</summary>
     public string? PermanentPinCode { get; set; }
 
     // ── Service and leave summaries ──
@@ -121,11 +96,11 @@ public class MobileProfileResponseDto
     /// <summary>Date of Immovable Property Return (Optional in source).</summary>
     public DateOnly? DateOfImmovablePropertyReturn { get; set; }
 
-    /// <summary>Earned/Annual leave balance still due.</summary>
-    public decimal? EarnedLeaveDue { get; set; }
+    /// <summary>Earned/Annual leave details still due, as stored (text).</summary>
+    public string? EarnedLeaveDue { get; set; }
 
-    /// <summary>Half Pay leave balance still due.</summary>
-    public decimal? HalfPayLeaveDue { get; set; }
+    /// <summary>Half Pay leave details still due, as stored (text).</summary>
+    public string? HalfPayLeaveDue { get; set; }
 
     /// <summary>Paternity leave already availed.</summary>
     public string? PaternityLeaveAvailed { get; set; }

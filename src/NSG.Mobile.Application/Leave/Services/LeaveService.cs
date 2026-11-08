@@ -54,8 +54,7 @@ public class LeaveService : ILeaveService
 
     public async Task<Result<LeaveSaveResponse>> SaveAsync(string? nsgNumber, int? leaveTaken, bool createIfMissing, CancellationToken cancellationToken)
     {
-        long? adminId = _currentUser.AdminProfileId;
-        if (adminId == null)
+        if (!_currentUser.TryGetAdminActor(out AdminActor actor))
             return Result.Failure<LeaveSaveResponse>(ApiErrorCodes.Unauthorized, LeaveMessages.IdentityMissing);
 
         List<string> problems = new();
@@ -72,7 +71,7 @@ public class LeaveService : ILeaveService
 
         DateTime now = NowIst();
         int year = LeaveRules.CurrentYear(now);
-        LeaveSaveResult saved = await _repository.SaveManualAsync(canonical, year, leaveTaken!.Value, createIfMissing, adminId.Value, now, cancellationToken);
+        LeaveSaveResult saved = await _repository.SaveManualAsync(canonical, year, leaveTaken!.Value, createIfMissing, actor.Id, now, cancellationToken);
 
         switch (saved.Outcome)
         {
@@ -86,10 +85,10 @@ public class LeaveService : ILeaveService
         if (saved.Outcome != LeaveSaveOutcome.Unchanged)
         {
             await _audit.LogAsync(AuditAction.LeaveRecordChanged, DomainConstants.AuditResults.Success,
-                entityType: nameof(PersonnelLeaveRecord), entityId: record.Id.ToString(), correlationId: _currentUser.CorrelationId,
+                userId: actor.Key, entityType: nameof(PersonnelLeaveRecord), entityId: record.Id.ToString(), correlationId: _currentUser.CorrelationId,
                 additionalData: JsonSerializer.Serialize(new
                 {
-                    actorId = adminId.Value, source = "manual", year, oldLeaveTaken = saved.OldLeaveTaken, newLeaveTaken = record.LeaveTaken
+                    actorId = actor.Id, source = "manual", year, oldLeaveTaken = saved.OldLeaveTaken, newLeaveTaken = record.LeaveTaken
                 }),
                 cancellationToken: cancellationToken);
         }
@@ -105,8 +104,7 @@ public class LeaveService : ILeaveService
 
     public async Task<Result<LeaveRecordAdminDto>> GetCurrentYearAsync(string? nsgNumber, CancellationToken cancellationToken)
     {
-        long? adminId = _currentUser.AdminProfileId;
-        if (adminId == null)
+        if (!_currentUser.TryGetAdminActor(out AdminActor actor))
             return Result.Failure<LeaveRecordAdminDto>(ApiErrorCodes.Unauthorized, LeaveMessages.IdentityMissing);
 
         string? problem = LeaveRules.ValidateNsgNumber(nsgNumber, "NSG number", out string nsg);

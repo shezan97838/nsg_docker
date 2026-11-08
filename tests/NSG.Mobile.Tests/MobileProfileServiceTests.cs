@@ -48,55 +48,40 @@ public class MobileProfileServiceTests
         DateOfSuperannuation = new DateOnly(2050, 5, 15),
         DateOfEnrollmentInGovtService = new DateOnly(2008, 6, 20),
         DateOfRepatriation = new DateOnly(2015, 3, 10),
-        SideSteppedOn = new DateOnly(2012, 7, 1),
+        SideSteppedDetails = "01.07.2012 FROM Unit Six",
         DateOfAme = new DateOnly(2022, 4, 15),
         DateOfImmovablePropertyReturn = new DateOnly(2023, 1, 31),
-        EarnedLeaveDue = 12.5m,
-        HalfPayLeaveDue = 4.0m,
+        EarnedLeaveDue = "12.5",
+        HalfPayLeaveDue = "4.0",
         PaternityLeaveAvailed = "0",
         MaternityLeaveAvailed = null,
         ChildCareLeaveAvailed = "2 TIMES",
-        NsgRankId = 3,
-        NsgRank = new RankHierarchy { Id = 3, RankName = "Inspector" },
-        NsgTradeId = 7,
-        NsgTrade = new NsgTrade { Id = 7, NsgTradeName = "GD" },
-        ParentDepartmentRankId = 5,
-        ParentDepartmentRank = new ParentDepartmentRank { Id = 5, Name = "Havildar" },
-        PdTradeId = 9,
-        PdTrade = new PdTrade { Id = 9, PdTradeName = "Signal" },
-        NsgUnitId = 4,
-        NsgUnit = new NsgUnit { Id = 4, Name = "Unit Four" },
-        SideSteppedFromNsgUnitId = 6,
-        SideSteppedFromNsgUnit = new NsgUnit { Id = 6, Name = "Unit Six" },
-        EducationId = 2,
-        Education = new EducationQualification { Id = 2, CourseName = "BA" },
-        ReligionId = 1,
-        Religion = new Religion { Id = 1, Name = "HINDU" },
+        NsgRank = "Inspector",
+        ParentDepartmentRank = "Havildar",
+        NsgUnit = "Unit Four",
+        Education = "BA",
+        Religion = "HINDU",
         FatherName = "Ram Saran",
         MotherName = "Savitri Devi",
         SpouseName = "Laxmi",
         NextOfKinMobileNumber = "9876543210",
-        NumberOfChildren = 2,
-        Gender = Gender.Female,
-        Category = PersonnelCategory.GEN,
-        BloodGroup = BloodGroupType.OPositive,
-        HeightCm = 172,
-        WeightKg = 70.5m,
+        NumberOfChildren = "2",
+        Gender = "Female",
+        Category = "GEN",
+        BloodGroup = "O+",
+        HeightCm = "172",
+        WeightKg = "70.5",
         PermanentVillage = "Rampur",
         PermanentPostOffice = "Rampur PO",
         PermanentPoliceStation = "Rampur PS",
         PermanentDistrict = "Muzaffarnagar",
-        PermanentStateId = 10,
-        PermanentState = new State { Id = 10, Name = "Uttar Pradesh" },
+        PermanentState = "Uttar Pradesh",
         PermanentPinCode = "251001",
         AadhaarNumberEncrypted = Aes.Encrypt(Aadhaar),
         PanNumberEncrypted = Aes.Encrypt(Pan),
         PranNumberEncrypted = Aes.Encrypt(Pran),
-        SalaryAccountNumberEncrypted = Aes.Encrypt(Account),
-        PanNumberHash = Cipher,
-        SalaryAccountNumberHash = Cipher
+        SalaryAccountNumberEncrypted = Aes.Encrypt(Account)
     };
-
     private static (MobileProfileService Service, FakeCurrentUser User, FakeProfileRepository Profiles, FakePisRepository PisRepo) Build()
     {
         FakeProfileRepository profiles = new(new FakeGrantRepository(new TestClock()));
@@ -120,8 +105,8 @@ public class MobileProfileServiceTests
         Assert.True(r.IsSuccess);
         Assert.Equal("NSG-MINE", r.Data!.NsgNumber);
         Assert.Equal("My Name", r.Data.FullName);
-        Assert.Equal("Inspector", r.Data.NsgRankName);
-        Assert.Equal("Unit Four", r.Data.NsgUnitName);
+        Assert.Equal("Inspector", r.Data.NsgRank);
+        Assert.Equal("Unit Four", r.Data.NsgUnit);
         Assert.Equal(new DateOnly(1990, 5, 15), r.Data.DateOfBirth);
         Assert.Equal("9000000002", r.Data.MobileNumber);
     }
@@ -136,15 +121,13 @@ public class MobileProfileServiceTests
 
         MobileProfileResponseDto dto = (await service.GetMyProfileAsync()).Data!;
 
-        Assert.Equal(3, dto.NsgRankId); Assert.Equal("Inspector", dto.NsgRankName);
-        Assert.Equal(7, dto.NsgTradeId); Assert.Equal("GD", dto.NsgTradeName);
-        Assert.Equal(5, dto.ParentDepartmentRankId); Assert.Equal("Havildar", dto.ParentDepartmentRankName);
-        Assert.Equal(9, dto.PdTradeId); Assert.Equal("Signal", dto.PdTradeName);
-        Assert.Equal(4, dto.NsgUnitId); Assert.Equal("Unit Four", dto.NsgUnitName);
-        Assert.Equal(6, dto.SideSteppedFromNsgUnitId); Assert.Equal("Unit Six", dto.SideSteppedFromNsgUnitName);
-        Assert.Equal(2, dto.EducationId); Assert.Equal("BA", dto.EducationName);
-        Assert.Equal(1, dto.ReligionId); Assert.Equal("HINDU", dto.ReligionName);
-        Assert.Equal(10, dto.PermanentStateId); Assert.Equal("Uttar Pradesh", dto.PermanentStateName);
+        Assert.Equal("Inspector", dto.NsgRank);
+        Assert.Equal("Havildar", dto.ParentDepartmentRank);
+        Assert.Equal("Unit Four", dto.NsgUnit);
+        Assert.Equal("01.07.2012 FROM Unit Six", dto.SideSteppedDetails);   // one free-text value, never split
+        Assert.Equal("BA", dto.Education);
+        Assert.Equal("HINDU", dto.Religion);
+        Assert.Equal("Uttar Pradesh", dto.PermanentState);
     }
 
     [Fact]
@@ -157,13 +140,46 @@ public class MobileProfileServiceTests
 
         MobileProfileResponseDto dto = (await service.GetMyProfileAsync()).Data!;
 
-        Assert.Equal(Gender.Female, dto.Gender);
-        Assert.Equal(PersonnelCategory.GEN, dto.Category);
+        Assert.Equal("Female", dto.Gender);
+        Assert.Equal("GEN", dto.Category);
         Assert.Equal("Ram Saran", dto.FatherName); Assert.Equal("Savitri Devi", dto.MotherName);
         Assert.Equal("Laxmi", dto.SpouseName); Assert.Equal("9876543210", dto.NextOfKinMobileNumber);
-        Assert.Equal(2, dto.NumberOfChildren);
-        Assert.Equal(BloodGroupType.OPositive, dto.BloodGroup);
-        Assert.Equal(172, dto.HeightCm); Assert.Equal(70.5m, dto.WeightKg);
+        Assert.Equal("2", dto.NumberOfChildren);
+        Assert.Equal("O+", dto.BloodGroup);
+        Assert.Equal("172", dto.HeightCm); Assert.Equal("70.5", dto.WeightKg);
+    }
+
+    [Fact]
+    public async Task Text_columns_are_returned_exactly_as_stored_with_no_numeric_conversion()
+    {
+        var (service, user, profiles, pis) = Build();
+        UserPis row = Pis(1, "NSG-MINE", "My Name", "9000000002");
+        row.HeightCm = "5'10\""; row.WeightKg = "81.50"; row.NumberOfChildren = "02"; row.EarnedLeaveDue = "220 DAYS";
+        row.HalfPayLeaveDue = "00360"; row.Gender = "M"; row.Category = "General"; row.BloodGroup = "O POSITIVE";
+        row.PermanentPinCode = "0123456"; row.NextOfKinMobileNumber = "+91 98765 43210";
+        pis.Rows.Add(row);
+        profiles.Profiles.Add(new MobileUserProfile { Id = 9, NsgNumber = "NSG-MINE" });
+        user.ProfileId = 9;
+
+        MobileProfileResponseDto dto = (await service.GetMyProfileAsync()).Data!;
+
+        Assert.Equal("5'10\"", dto.HeightCm); Assert.Equal("81.50", dto.WeightKg); Assert.Equal("02", dto.NumberOfChildren);
+        Assert.Equal("220 DAYS", dto.EarnedLeaveDue); Assert.Equal("00360", dto.HalfPayLeaveDue);
+        Assert.Equal("M", dto.Gender); Assert.Equal("General", dto.Category); Assert.Equal("O POSITIVE", dto.BloodGroup);
+        Assert.Equal("0123456", dto.PermanentPinCode); Assert.Equal("+91 98765 43210", dto.NextOfKinMobileNumber);
+    }
+
+    [Fact]
+    public void The_profile_response_has_no_lookup_ids_or_legacy_side_stepped_parts()
+    {
+        string[] names = typeof(MobileProfileResponseDto).GetProperties().Select(p => p.Name).ToArray();
+
+        Assert.DoesNotContain(names, n => n.EndsWith("Id", StringComparison.Ordinal));
+        Assert.DoesNotContain(names, n => n.EndsWith("Name", StringComparison.Ordinal) && n != "FullName" && n != "FatherName" && n != "MotherName" && n != "SpouseName");
+        Assert.DoesNotContain("SideSteppedOn", names);
+        Assert.Contains("SideSteppedDetails", names);
+        Assert.All(typeof(MobileProfileResponseDto).GetProperties().Where(p => p.Name is "Gender" or "Category" or "BloodGroup" or "HeightCm" or "WeightKg"
+            or "NumberOfChildren" or "EarnedLeaveDue" or "HalfPayLeaveDue"), p => Assert.Equal(typeof(string), p.PropertyType));
     }
 
     [Fact]
@@ -181,7 +197,7 @@ public class MobileProfileServiceTests
         Assert.Equal(new DateOnly(2050, 5, 15), dto.DateOfSuperannuation);
         Assert.Equal(new DateOnly(2008, 6, 20), dto.DateOfEnrollmentInGovtService);
         Assert.Equal(new DateOnly(2015, 3, 10), dto.DateOfRepatriation);
-        Assert.Equal(new DateOnly(2012, 7, 1), dto.SideSteppedOn);
+        Assert.Equal("01.07.2012 FROM Unit Six", dto.SideSteppedDetails);
         Assert.Equal(new DateOnly(2022, 4, 15), dto.DateOfAme);
         Assert.Equal(new DateOnly(2023, 1, 31), dto.DateOfImmovablePropertyReturn);
     }
@@ -211,7 +227,7 @@ public class MobileProfileServiceTests
 
         MobileProfileResponseDto dto = (await service.GetMyProfileAsync()).Data!;
 
-        Assert.Equal(12.5m, dto.EarnedLeaveDue); Assert.Equal(4.0m, dto.HalfPayLeaveDue);
+        Assert.Equal("12.5", dto.EarnedLeaveDue); Assert.Equal("4.0", dto.HalfPayLeaveDue);
         Assert.Equal("0", dto.PaternityLeaveAvailed);
         Assert.Null(dto.MaternityLeaveAvailed);
         Assert.Equal("2 TIMES", dto.ChildCareLeaveAvailed);
@@ -234,15 +250,13 @@ public class MobileProfileServiceTests
 
         Assert.True(r.IsSuccess);
         MobileProfileResponseDto dto = r.Data!;
-        Assert.Null(dto.NsgRankId); Assert.Null(dto.NsgRankName);
-        Assert.Null(dto.NsgTradeId); Assert.Null(dto.NsgTradeName);
-        Assert.Null(dto.ParentDepartmentRankId); Assert.Null(dto.ParentDepartmentRankName);
-        Assert.Null(dto.PdTradeId); Assert.Null(dto.PdTradeName);
-        Assert.Null(dto.NsgUnitId); Assert.Null(dto.NsgUnitName);
-        Assert.Null(dto.SideSteppedFromNsgUnitId); Assert.Null(dto.SideSteppedFromNsgUnitName);
-        Assert.Null(dto.EducationId); Assert.Null(dto.EducationName);
-        Assert.Null(dto.ReligionId); Assert.Null(dto.ReligionName);
-        Assert.Null(dto.PermanentStateId); Assert.Null(dto.PermanentStateName);
+        Assert.Null(dto.NsgRank);
+        Assert.Null(dto.ParentDepartmentRank);
+        Assert.Null(dto.NsgUnit);
+        
+        Assert.Null(dto.Education);
+        Assert.Null(dto.Religion);
+        Assert.Null(dto.PermanentState);
         Assert.Null(dto.DateOfBirth); Assert.Null(dto.Category);
         Assert.Null(dto.BloodGroup); Assert.Null(dto.HeightCm); Assert.Null(dto.WeightKg);
         Assert.Null(dto.Gender);   // records that predate the field
@@ -265,7 +279,7 @@ public class MobileProfileServiceTests
         Assert.Equal(Pan, dto.PanNumber);
         Assert.Equal(Pran, dto.PranNumber);
         Assert.Equal(Account, dto.SalaryAccountNumber);
-        Assert.Equal(Gender.Female, dto.Gender);
+        Assert.Equal("Female", dto.Gender);
         foreach (string cipher in cipherBefore.Append(Cipher))
             Assert.DoesNotContain(cipher, json);
         Assert.DoesNotContain("HASH-VALUE", json);

@@ -97,7 +97,7 @@ public class AdminAuthService : IAdminAuthService
         return Result.Success(new AdminOtpSentDto
         {
             OtpReferenceId = sent.ReferenceId!.Value,
-            MaskedMobileNumber = PisMasking.Mask(person.MobileNumber!),
+            MaskedMobileNumber = PisMasking.Mask(person.MobileNumber),
             OtpExpiresAt = IstTime.FromIst(sent.ExpiresAtIst ?? Now()),
             DemoOtpMode = sent.IsDemo
         });
@@ -110,6 +110,11 @@ public class AdminAuthService : IAdminAuthService
         PasswordCheck check = await CheckPasswordAsync(request.NsgNumber, request.Password, ipAddress, cancellationToken);
         if (check.Failure != null) return Failed<AdminLoginResponseDto>(check.Failure);
         AdminProfile profile = check.Profile!;
+
+        // The password has just authenticated this admin, so the sign-in is attributed to their profile id. An id that cannot be stored in the
+        // integer audit column is refused here, before the OTP is consumed, a session is started or anything is written.
+        if (!AdminActor.TryFrom(profile.Id, out AdminActor actor))
+            return Result.Failure<AdminLoginResponseDto>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
 
         UserPis? person = await ActivePersonnelAsync(profile, ipAddress, cancellationToken);
         if (person == null)
@@ -137,7 +142,7 @@ public class AdminAuthService : IAdminAuthService
         await _profiles.RecordSuccessfulLoginAsync(profile.Id, now, cancellationToken);
         AdminLoginResponseDto session = await StartSessionAsync(profile, ipAddress, now, cancellationToken);
 
-        await _audit.LogAsync(AuditAction.LoginSuccess, DomainConstants.AuditResults.Success, entityType: nameof(AdminProfile), entityId: profile.Id.ToString(),
+        await _audit.LogAsync(AuditAction.LoginSuccess, DomainConstants.AuditResults.Success, userId: actor.Key, entityType: nameof(AdminProfile), entityId: profile.Id.ToString(),
             ipAddress: ipAddress, correlationId: _currentUser.CorrelationId, cancellationToken: cancellationToken);
         return Result.Success(session);
     }
@@ -165,14 +170,15 @@ public class AdminAuthService : IAdminAuthService
 
         // The account must still be allowed in; a deactivated one loses every session at its next refresh.
         AdminProfile? profile = await _profiles.GetByIdAsync(rotation.ProfileId, cancellationToken);
-        if (!IsAllowedIn(profile))
+        // An id that cannot be stored in the integer audit column is treated like an account that may no longer sign in (it cannot occur for a profile that passed sign-in).
+        if (!IsAllowedIn(profile) || !AdminActor.TryFrom(profile!.Id, out AdminActor actor))
         {
             await _sessions.RevokeAllForProfileAsync(rotation.ProfileId, AdminSessionRevokeReasons.AccountDeactivated, now, cancellationToken);
             return Result.Failure<AdminLoginResponseDto>(ApiErrorCodes.Forbidden, AdminMessages.AccessUnavailable);
         }
 
         AdminAccessToken access = _adminTokens.GenerateAdminAccessToken(profile!, profile!.Role!.RoleCode, rotation.FamilyId);
-        await _audit.LogAsync(AuditAction.TokenRefreshed, DomainConstants.AuditResults.Success, entityType: nameof(AdminProfile), entityId: profile.Id.ToString(),
+        await _audit.LogAsync(AuditAction.TokenRefreshed, DomainConstants.AuditResults.Success, userId: actor.Key, entityType: nameof(AdminProfile), entityId: profile.Id.ToString(),
             ipAddress: ipAddress, correlationId: _currentUser.CorrelationId, cancellationToken: cancellationToken);
         return Result.Success(ToResponse(profile, access, nextSecret, next.ExpiresAtIst));
     }

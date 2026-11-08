@@ -40,6 +40,9 @@ public class GeographyApiTests : IAsyncLifetime
         return await r.ReadDataAsync();
     }
 
+    private async Task<JsonElement> GetDataAsync(string url) =>
+        await (await _admin.GetAsync(url)).ReadDataAsync();
+
     // ── Authorization ──
 
     [Fact]
@@ -140,22 +143,22 @@ public class GeographyApiTests : IAsyncLifetime
         await CreateStateAsync("Chandigarh", "04", "UnionTerritory");
         await CreateStateAsync("Delhi", "07", "UnionTerritory");
 
-        JsonElement all = await _admin.GetFromJsonAsync<JsonElement>("/api/v1/states?pageSize=2&pageNumber=1");
+        JsonElement all = await GetDataAsync("/api/v1/states?pageSize=2&pageNumber=1");
         Assert.Equal(4, all.GetProperty("totalCount").GetInt32());
         Assert.Equal(2, all.GetProperty("totalPages").GetInt32());
         Assert.True(all.GetProperty("hasNextPage").GetBoolean());
         Assert.Equal(new[] { "Assam", "Bihar" }, all.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("name").GetString()).ToArray());
 
-        JsonElement page2 = await _admin.GetFromJsonAsync<JsonElement>("/api/v1/states?pageSize=2&pageNumber=2");
+        JsonElement page2 = await GetDataAsync("/api/v1/states?pageSize=2&pageNumber=2");
         Assert.Equal(new[] { "Chandigarh", "Delhi" }, page2.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("name").GetString()).ToArray());
 
-        JsonElement uts = await _admin.GetFromJsonAsync<JsonElement>("/api/v1/states?administrativeType=UnionTerritory");
+        JsonElement uts = await GetDataAsync("/api/v1/states?administrativeType=UnionTerritory");
         Assert.Equal(2, uts.GetProperty("totalCount").GetInt32());
 
-        JsonElement search = await _admin.GetFromJsonAsync<JsonElement>("/api/v1/states?search=ihar");
+        JsonElement search = await GetDataAsync("/api/v1/states?search=ihar");
         Assert.Equal("Bihar", search.GetProperty("items")[0].GetProperty("name").GetString());
 
-        JsonElement desc = await _admin.GetFromJsonAsync<JsonElement>("/api/v1/states?sortBy=name&sortDirection=desc&pageSize=1");
+        JsonElement desc = await GetDataAsync("/api/v1/states?sortBy=name&sortDirection=desc&pageSize=1");
         Assert.Equal("Delhi", desc.GetProperty("items")[0].GetProperty("name").GetString());
 
         // Unknown sort field must not error or reach SQL — it falls back to the default order.
@@ -163,7 +166,7 @@ public class GeographyApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, badSort.StatusCode);
 
         // Page size is capped at the shared maximum of 100.
-        JsonElement capped = await _admin.GetFromJsonAsync<JsonElement>("/api/v1/states?pageSize=5000");
+        JsonElement capped = await GetDataAsync("/api/v1/states?pageSize=5000");
         Assert.Equal(100, capped.GetProperty("pageSize").GetInt32());
     }
 
@@ -229,11 +232,11 @@ public class GeographyApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound,
             (await _admin.PutAsJsonAsync("/api/v1/cities/999999", new { name = "X", stateId = goa, isActive = true })).StatusCode);
 
-        JsonElement byState = await _admin.GetFromJsonAsync<JsonElement>($"/api/v1/cities?stateId={goa}");
+        JsonElement byState = await GetDataAsync($"/api/v1/cities?stateId={goa}");
         Assert.Equal(2, byState.GetProperty("totalCount").GetInt32());
-        JsonElement census = await _admin.GetFromJsonAsync<JsonElement>("/api/v1/cities?classification=CensusTown");
+        JsonElement census = await GetDataAsync("/api/v1/cities?classification=CensusTown");
         Assert.Equal(1, census.GetProperty("totalCount").GetInt32());
-        JsonElement search = await _admin.GetFromJsonAsync<JsonElement>("/api/v1/cities?search=koch");
+        JsonElement search = await GetDataAsync("/api/v1/cities?search=koch");
         Assert.Equal("Kochi", search.GetProperty("items")[0].GetProperty("name").GetString());
     }
 
@@ -248,7 +251,7 @@ public class GeographyApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, (await _admin.GetAsync("/api/v1/states/999999/cities")).StatusCode);
 
         // A stateId query parameter must not override the route's parent.
-        JsonElement r = await _admin.GetFromJsonAsync<JsonElement>($"/api/v1/states/{goa}/cities?stateId={kerala}");
+        JsonElement r = await GetDataAsync($"/api/v1/states/{goa}/cities?stateId={kerala}");
         Assert.Equal(1, r.GetProperty("totalCount").GetInt32());
         Assert.Equal("Margao", r.GetProperty("items")[0].GetProperty("name").GetString());
     }

@@ -50,6 +50,11 @@ public class OnboardingService : IOnboardingService
     public async Task<Result> ApproveRegistrationAsync(
         int userId, string? reason, CancellationToken cancellationToken = default)
     {
+        // An Admin Portal admin whose id cannot be stored in the integer audit column is refused before anything is written. A legacy staff token has
+        // no admin_profile_id and keeps its legacy behaviour (users.approved_by and the audit user remain the legacy staff id).
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
             return Result.Failure(ApiErrorCodes.NotFound, "User not found.");
@@ -67,12 +72,12 @@ public class OnboardingService : IOnboardingService
         await _userRepository.UpdateAsync(user, cancellationToken);
 
         await _auditService.LogAsync(AuditAction.ITApprovalGranted, DomainConstants.AuditResults.Success,
-            userId: _currentUserService.UserId, entityType: "User", entityId: userId.ToString(),
+            userId: _currentUserService.AuditUserId(), entityType: "User", entityId: userId.ToString(),
             correlationId: _currentUserService.CorrelationId,
             additionalData: reason != null ? $"{{\"reason\":\"{reason}\"}}" : null,
             cancellationToken: cancellationToken);
 
-        _logger.LogInformation("User {UserId} approved by IT admin {AdminId}", userId, _currentUserService.UserId);
+        _logger.LogInformation("User {UserId} approved by IT admin {AdminId}", userId, _currentUserService.AuditUserId());
 
         // TODO: Send push notification to user about approval (Phase 2)
 
@@ -82,6 +87,11 @@ public class OnboardingService : IOnboardingService
     public async Task<Result> RejectRegistrationAsync(
         int userId, string? reason, CancellationToken cancellationToken = default)
     {
+        // An Admin Portal admin whose id cannot be stored in the integer audit column is refused before anything is written. A legacy staff token has
+        // no admin_profile_id and keeps its legacy behaviour (users.approved_by and the audit user remain the legacy staff id).
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
             return Result.Failure(ApiErrorCodes.NotFound, "User not found.");
@@ -97,7 +107,7 @@ public class OnboardingService : IOnboardingService
         await _userRepository.UpdateAsync(user, cancellationToken);
 
         await _auditService.LogAsync(AuditAction.ITApprovalRejected, DomainConstants.AuditResults.Success,
-            userId: _currentUserService.UserId, entityType: "User", entityId: userId.ToString(),
+            userId: _currentUserService.AuditUserId(), entityType: "User", entityId: userId.ToString(),
             correlationId: _currentUserService.CorrelationId,
             additionalData: reason != null ? $"{{\"reason\":\"{reason}\"}}" : null,
             cancellationToken: cancellationToken);

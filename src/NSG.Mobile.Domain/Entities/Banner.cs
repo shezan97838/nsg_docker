@@ -2,7 +2,7 @@ namespace NSG.Mobile.Domain.Entities;
 
 /// <summary>
 /// Home-screen banner shown to employees in the mobile app. Table <c>banners</c>. The image is optional: <see cref="ImageStorageKey"/> is the
-/// image uploaded with the banner to private storage (R2); only its object key is saved. <see cref="NsgUnitId"/> is saved for possible future
+/// image uploaded with the banner to private local storage; only its object key is saved. <see cref="NsgUnitId"/> is saved for possible future
 /// unit-wise targeting and is not used for filtering today. A banner is shown while <see cref="IsActive"/> is true (manual activation, no schedule).
 /// Timestamps are IST instants set by the server. Banners are never physically deleted.
 /// </summary>

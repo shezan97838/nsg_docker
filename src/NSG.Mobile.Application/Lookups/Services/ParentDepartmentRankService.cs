@@ -73,6 +73,9 @@ public class ParentDepartmentRankService : IParentDepartmentRankService
 
     public async Task<Result<LookupResponseDto>> CreateAsync(CreateLookupRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure<LookupResponseDto>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         ParentDepartmentRank entity = request.ToEntity<ParentDepartmentRank>(IndianStandardTime.Now);
 
         // Pre-check gives a clear message; the repository also maps a unique-index violation (race) to the same outcome.
@@ -86,6 +89,9 @@ public class ParentDepartmentRankService : IParentDepartmentRankService
 
     public async Task<Result<LookupResponseDto>> UpdateAsync(int id, UpdateLookupRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure<LookupResponseDto>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         ParentDepartmentRank? entity = await _repository.GetByIdAsync(id, cancellationToken);
         if (entity == null)
             return Result.Failure<LookupResponseDto>(ApiErrorCodes.NotFound, NotFoundMessage);
@@ -103,6 +109,9 @@ public class ParentDepartmentRankService : IParentDepartmentRankService
 
     public async Task<Result> DeleteAsync(int id, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         ParentDepartmentRank? entity = await _repository.GetByIdAsync(id, cancellationToken);
         if (entity == null)
             return Result.Failure(ApiErrorCodes.NotFound, NotFoundMessage);
@@ -119,11 +128,11 @@ public class ParentDepartmentRankService : IParentDepartmentRankService
     private async Task AuditAsync(string operation, int id, CancellationToken cancellationToken)
     {
         await _auditService.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success,
-            userId: _currentUserService.UserId, entityType: EntityType, entityId: id.ToString(),
+            userId: _currentUserService.AuditUserId(), entityType: EntityType, entityId: id.ToString(),
             correlationId: _currentUserService.CorrelationId,
             additionalData: $"{{\"operation\":\"{operation}\"}}",
             cancellationToken: cancellationToken);
 
-        _logger.LogInformation("{Operation} parent department rank {EntityId} by admin {AdminId}", operation, id, _currentUserService.UserId);
+        _logger.LogInformation("{Operation} parent department rank {EntityId} by admin {AdminId}", operation, id, _currentUserService.AuditUserId());
     }
 }

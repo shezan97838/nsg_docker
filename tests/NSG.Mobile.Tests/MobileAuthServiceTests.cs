@@ -583,14 +583,14 @@ public class MobileAuthServiceTests
         });
         TestClock clock = new();
         FakeAudit audit = new();
-        FakeCurrentUser reviewerUser = new() { UserId = 42 };
-        MobileApprovalService service = new(repo, audit, reviewerUser, ProductionReviewer.For(reviewerUser), clock);
+        FakeCurrentUser reviewerUser = new() { AdminProfileId = 42 };
+        MobileApprovalService service = new(repo, audit, reviewerUser, clock);
 
         var r = await service.DecideAsync(7, new MobileApprovalDecisionRequestDto { Decision = MobileAppActivationStatus.Approved, Remarks = "  verified  " });
 
         Assert.True(r.IsSuccess);
         Assert.Equal("Mobile approval request approved successfully.", r.Data!.Message);
-        Assert.Equal((7L, MobileAppActivationStatus.Approved, 42, (string?)"verified", IndianStandardTime.ConvertFromUtc(clock.Now.UtcDateTime)), repo.LastDecision);
+        Assert.Equal((7L, MobileAppActivationStatus.Approved, 42L, (string?)"verified", IndianStandardTime.ConvertFromUtc(clock.Now.UtcDateTime)), repo.LastDecision);
         Assert.Equal("XXXXXX3210", r.Data.Data!.MaskedMobileNumber);
         Assert.Equal(TimeSpan.FromHours(5.5), r.Data.Data.ReviewedAt!.Value.Offset);
         Assert.Contains(audit.Entries, e => e.Action == AuditAction.ITApprovalGranted && e.UserId == 42);
@@ -601,13 +601,13 @@ public class MobileAuthServiceTests
     {
         FakeRequestRepository repo = new();
         FakeCurrentUser noUser = new();
-        MobileApprovalService anonymous = new(repo, new FakeAudit(), noUser, ProductionReviewer.For(noUser), new TestClock());
+        MobileApprovalService anonymous = new(repo, new FakeAudit(), noUser, new TestClock());
         var r = await anonymous.DecideAsync(1, new MobileApprovalDecisionRequestDto { Decision = MobileAppActivationStatus.Rejected });
         Assert.Equal(ApiErrorCodes.Unauthorized, r.ErrorCode);
         Assert.Null(repo.LastDecision);
 
-        FakeCurrentUser adminUser = new() { UserId = 1 };
-        MobileApprovalService admin = new(repo, new FakeAudit(), adminUser, ProductionReviewer.For(adminUser), new TestClock());
+        FakeCurrentUser adminUser = new() { AdminProfileId = 1 };
+        MobileApprovalService admin = new(repo, new FakeAudit(), adminUser, new TestClock());
         repo.NextDecisionResult = new ApprovalDecisionResult(ApprovalDecisionOutcome.AlreadyDecided, CurrentStatus: MobileAppActivationStatus.Approved);
         var conflict = await admin.DecideAsync(1, new MobileApprovalDecisionRequestDto { Decision = MobileAppActivationStatus.Rejected });
         Assert.Equal(ApiErrorCodes.Conflict, conflict.ErrorCode);
@@ -658,7 +658,7 @@ public class MobileAuthServiceTests
     public void Future_or_empty_dob_is_invalid_and_pending_is_not_a_decision()
     {
         Assert.False(new MobileLoginCheckRequestValidator().Validate(new MobileLoginCheckRequestDto { NsgNumber = "N", MobileNumber = "9876543210" }).IsValid);
-        Assert.False(new MobileLoginCheckRequestValidator().Validate(new MobileLoginCheckRequestDto { NsgNumber = "N", MobileNumber = "9876543210", DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) }).IsValid);
+        Assert.False(new MobileLoginCheckRequestValidator().Validate(new MobileLoginCheckRequestDto { NsgNumber = "N", MobileNumber = "9876543210", DateOfBirth = DateOnly.FromDateTime(IndianStandardTime.Now.AddDays(1)) }).IsValid);
         var v = new MobileApprovalDecisionRequestValidator();
         Assert.False(v.Validate(new MobileApprovalDecisionRequestDto { Decision = MobileAppActivationStatus.Pending }).IsValid);
         Assert.True(v.Validate(new MobileApprovalDecisionRequestDto { Decision = MobileAppActivationStatus.Rejected, Remarks = "x" }).IsValid);

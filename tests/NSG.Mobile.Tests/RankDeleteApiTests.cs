@@ -49,7 +49,8 @@ public class RankDeleteApiTests : IAsyncLifetime
     private async Task AssignRankAsync(int rankId)
     {
         await using AppDbContext ctx = _factory.CreateContext();
-        ctx.UsersPis.Add(new UserPis { NsgNumber = "RD-" + rankId, ServiceNumber = "S", CreatedAtIst = IndianStandardTime.Now, NsgRankId = rankId });
+        string rankName = await ctx.RankHierarchies.Where(r => r.Id == rankId).Select(r => r.RankName).SingleAsync();   // personnel rows store the name as text
+        ctx.UsersPis.Add(new UserPis { NsgNumber = "RD-" + rankId, MobileNumber = TestPisData.Mobile(), CreatedAtIst = IndianStandardTime.Now, NsgRank = rankName });
         await ctx.SaveChangesAsync();
     }
 
@@ -99,7 +100,7 @@ public class RankDeleteApiTests : IAsyncLifetime
         Assert.True(await IsActiveAsync(id));
 
         await using AppDbContext ctx = _factory.CreateContext();
-        Assert.Equal(1, await ctx.UsersPis.CountAsync(p => p.NsgRankId == id)); // personnel record untouched
+        Assert.Equal(1, await ctx.UsersPis.CountAsync(p => p.NsgNumber == "RD-" + id)); // personnel record untouched
         Assert.Equal(0, await ctx.AuditLogs.CountAsync(a => a.EntityId == id.ToString() && a.AdditionalData!.Contains("RankDeactivated")));
     }
 

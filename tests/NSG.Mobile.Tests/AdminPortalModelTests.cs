@@ -35,7 +35,7 @@ public class AdminPortalModelTests
 
         HashSet<string> adminPolicies = new()
         {
-            DomainConstants.Policies.RequireAdminAccount, DomainConstants.Policies.RequireSuperAdmin, DomainConstants.Policies.RequireRegistrationAdmin,
+            DomainConstants.Policies.RequireAdminAccount, DomainConstants.Policies.RequireSuperAdmin,
             DomainConstants.Policies.RequirePisAdmin, DomainConstants.Policies.RequireGrievanceAdmin, DomainConstants.Policies.RequireMediaCellAdmin,
             DomainConstants.Policies.RequireSalaryManagementAdmin, DomainConstants.Policies.RequireLeaveAdmin
         };

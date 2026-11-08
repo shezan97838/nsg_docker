@@ -11,6 +11,7 @@ using NSG.Mobile.API.Security;
 using NSG.Mobile.Infrastructure.Options;
 using NSG.Mobile.Infrastructure.Security;
 using NSG.Mobile.Infrastructure.Services;
+using NSG.Mobile.Infrastructure.Services.Storage;
 
 namespace NSG.Mobile.Tests;
 
@@ -33,14 +34,14 @@ public class LinuxReadinessTests
     public void Inside_check_compares_whole_segments_and_follows_the_file_system_case_rules()
     {
         string baseDir = Path.Combine(Path.GetTempPath(), "nsg-files");
-        Assert.True(LocalFileStorageService.IsInside(baseDir, Path.Combine(baseDir, "a", "b.pdf")));
-        Assert.True(LocalFileStorageService.IsInside(baseDir + Path.DirectorySeparatorChar, Path.Combine(baseDir, "b.pdf")));
-        Assert.False(LocalFileStorageService.IsInside(baseDir, baseDir + "-evil" + Path.DirectorySeparatorChar + "x.pdf"));   // sibling with the same prefix
-        Assert.False(LocalFileStorageService.IsInside(baseDir, baseDir));                                                      // the root itself is not a file inside it
-        Assert.False(LocalFileStorageService.IsInside(baseDir, Path.GetFullPath(Path.Combine(baseDir, "..", "other.pdf"))));
+        Assert.True(StorageRoot.IsInside(baseDir, Path.Combine(baseDir, "a", "b.pdf")));
+        Assert.True(StorageRoot.IsInside(baseDir + Path.DirectorySeparatorChar, Path.Combine(baseDir, "b.pdf")));
+        Assert.False(StorageRoot.IsInside(baseDir, baseDir + "-evil" + Path.DirectorySeparatorChar + "x.pdf"));   // sibling with the same prefix
+        Assert.False(StorageRoot.IsInside(baseDir, baseDir));                                                      // the root itself is not a file inside it
+        Assert.False(StorageRoot.IsInside(baseDir, Path.GetFullPath(Path.Combine(baseDir, "..", "other.pdf"))));
 
         string differentCase = Path.Combine(baseDir.ToUpperInvariant(), "x.pdf");
-        Assert.Equal(OperatingSystem.IsWindows(), LocalFileStorageService.IsInside(baseDir, differentCase));   // Linux file systems are case-sensitive
+        Assert.Equal(OperatingSystem.IsWindows(), StorageRoot.IsInside(baseDir, differentCase));   // Linux file systems are case-sensitive
     }
 
     [Fact]
@@ -50,13 +51,14 @@ public class LinuxReadinessTests
         string root = Path.Combine(sandbox, "root");
         try
         {
-            LocalFileStorageService storage = new(Options.Create(new FileStorageOptions { BasePath = root }), NullLogger<LocalFileStorageService>.Instance);
+            StorageRoot layout = TestStorage.Central(root);
+            LocalFileStorageService storage = new(layout, Options.Create(new FileStorageOptions()), NullLogger<LocalFileStorageService>.Instance);
 
             await using (MemoryStream ok = new(new byte[] { 1, 2, 3 }))
             {
-                string key = await storage.StoreAsync(ok, "report.pdf", "application/pdf", "docs");
-                Assert.StartsWith("docs/", key);                         // forward slashes in keys on every OS
-                Assert.True(File.Exists(Path.Combine(root, key)));
+                string key = await storage.StoreAsync(ok, "report.pdf", "application/pdf", "grievances");
+                Assert.StartsWith("grievances/", key);                       // forward slashes in keys on every OS
+                Assert.True(File.Exists(layout.Resolve(StorageModule.Grievance, key)));
             }
 
             await using MemoryStream evil = new(new byte[] { 1 });
@@ -76,11 +78,21 @@ public class LinuxReadinessTests
     {
         string settings = File.ReadAllText(Path.Combine(Root(), "src", "NSG.Mobile.API", "appsettings.json"));
         Assert.DoesNotMatch(new Regex(@"""[A-Za-z]:\\\\"), settings);   // no "C:\\..." value
-        Assert.Contains("\"BasePath\": \"\"", settings);                 // the environment must supply it
+        Assert.DoesNotContain("BasePath", settings);                      // no per-module storage root exists any more
 
+        using (System.Text.Json.JsonDocument committed = System.Text.Json.JsonDocument.Parse(settings))
+            Assert.Equal(string.Empty, committed.RootElement.GetProperty("Storage").GetProperty("RootPath").GetString());   // supplied by the environment (Windows or Ubuntu)
+        Assert.DoesNotContain("SalarySlipStorage", settings);
+        Assert.DoesNotContain("/var/lib/nsg-mobile/uploads/form16", settings);
+
+        // The Windows development root is the only Windows path allowed, and only in the Development file (which is never published).
         string development = File.ReadAllText(Path.Combine(Root(), "src", "NSG.Mobile.API", "appsettings.Development.json"));
-        Assert.DoesNotMatch(new Regex(@"[A-Za-z]:\\"), development);
-        Assert.DoesNotContain("\\", development.Replace("\\\"", ""));   // relative, forward-slash path for local development
+        using System.Text.Json.JsonDocument parsed = System.Text.Json.JsonDocument.Parse(development);
+        Assert.Equal("D:\\NSGStorage", parsed.RootElement.GetProperty("Storage").GetProperty("RootPath").GetString());
+        Assert.DoesNotContain("D:\\\\NSGStorage\\\\", development);
+        Assert.False(parsed.RootElement.TryGetProperty("Form16Storage", out _), "Development must not set a separate Form 16 root");
+        Assert.False(parsed.RootElement.TryGetProperty("SalarySlipStorage", out _), "Development must not set a separate salary slip root");
+        Assert.False(parsed.RootElement.TryGetProperty("FileStorage", out _), "Development must not set a separate file storage root");
     }
 
     // ───── publish and startup hygiene (static) ─────

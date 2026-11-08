@@ -12,7 +12,7 @@ namespace NSG.Mobile.API.Controllers;
 /// <summary>
 /// Banners. Employees (mobile token) read the active banners, in priority order, and their private images; Media Cell
 /// admins (Admin Portal token, <c>MEDIA_CELL_ADMIN</c>) create, update, read and activate/deactivate. The acting admin always comes from the token.
-/// Images are uploaded with the banner to private storage (R2) and streamed back through authorized endpoints; only the object key is stored.
+/// Images are uploaded with the banner to private local storage and streamed back through authorized endpoints; only the object key is stored.
 /// Responses use the global envelope.
 /// </summary>
 [ApiController]

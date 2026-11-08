@@ -74,7 +74,8 @@ src/
 │   │   └── Configurations/  UserConfiguration, DeviceConfiguration, etc.
 │   ├── Repositories/      UserRepository, DeviceRepository, RefreshTokenRepository, etc.
 │   ├── Security/          JwtTokenService, PasswordHashingService, OtpService, AesEncryptionService
-│   ├── Services/          AuditService, CurrentUserService, RedisCacheService, LocalFileStorageService
+│   ├── Services/          AuditService, CurrentUserService, RedisCacheService, LocalFileStorageService, Form16StorageService, SalarySlipStorageService
+│   ├── Services/Storage/  StorageRoot (IStorageRoot), StorageFiles, StorageModule, StorageStartupValidator (ADR-023)
 │   ├── External/          NicSmsServicePlaceholder, FcmPlaceholder, HrmsPlaceholder, PayrollPlaceholder
 │   └── DependencyInjection.cs
 │
@@ -121,7 +122,8 @@ All configuration uses the **Options Pattern** with strongly typed classes:
 | FcmOptions | `Fcm` | Push notifications |
 | HrmsOptions | `Hrms` | HRMS integration |
 | PayrollOptions | `Payroll` | Payroll integration |
-| FileStorageOptions | `FileStorage` | Secure file storage |
+| StorageOptions | `Storage` | The one root for local document storage; mandatory whenever local storage is used, no fallback (ADR-023) |
+| FileStorageOptions | `FileStorage` | Upload limits only (the location is `Storage:RootPath`) |
 
 **Critical secrets** (JWT key, encryption key, DB password, API keys) must come from environment variables or a secure secret store — **never from source code**.
 

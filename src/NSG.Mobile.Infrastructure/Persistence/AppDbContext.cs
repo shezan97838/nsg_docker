@@ -44,6 +44,14 @@ public class AppDbContext : DbContext
     public DbSet<PersonnelLeaveHistory> PersonnelLeaveHistory => Set<PersonnelLeaveHistory>();
     public DbSet<PersonnelLeaveUploadBatch> PersonnelLeaveUploadBatches => Set<PersonnelLeaveUploadBatch>();
     public DbSet<PersonnelLeaveUploadError> PersonnelLeaveUploadErrors => Set<PersonnelLeaveUploadError>();
+    public DbSet<PisUploadBatch> PisUploadBatches => Set<PisUploadBatch>();
+    public DbSet<PisUploadBatchRecord> PisUploadBatchRecords => Set<PisUploadBatchRecord>();
+    public DbSet<PisUploadBatchError> PisUploadBatchErrors => Set<PisUploadBatchError>();
+    public DbSet<PisOwnershipTransfer> PisOwnershipTransfers => Set<PisOwnershipTransfer>();
+    public DbSet<SalarySlipUploadBatch> SalarySlipUploadBatches => Set<SalarySlipUploadBatch>();
+    public DbSet<SalarySlip> SalarySlips => Set<SalarySlip>();
+    public DbSet<PersonnelForm16> PersonnelForm16 => Set<PersonnelForm16>();
+    public DbSet<DigitalLibraryItem> DigitalLibrary => Set<DigitalLibraryItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

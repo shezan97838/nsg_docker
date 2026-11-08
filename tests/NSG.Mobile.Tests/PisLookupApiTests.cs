@@ -74,21 +74,23 @@ public class PisLookupApiTests : IAsyncLifetime
     private async Task AddPersonnelReferencingAsync(string resource, int id, bool viaSideStep = false)
     {
         await using AppDbContext context = _factory.CreateContext();
-        UserPis person = new() { NsgNumber = "N-" + Guid.NewGuid().ToString("N")[..8], ServiceNumber = "S-1", CreatedAtIst = IndianStandardTime.Now };
+        UserPis person = new() { NsgNumber = "N-" + Guid.NewGuid().ToString("N")[..8], ServiceNumber = "S-1", MobileNumber = TestPisData.Mobile(), CreatedAtIst = IndianStandardTime.Now };
+        // Personnel rows store the master's name as text, so the link is the name.
         if (resource == NsgUnits)
         {
+            string unit = await context.NsgUnits.Where(u => u.Id == id).Select(u => u.Name).SingleAsync();
             if (viaSideStep)
-                person.SideSteppedFromNsgUnitId = id;
+                person.SideSteppedDetails = "10.01.2025 FROM " + unit;   // free text: never matched against the master
             else
-                person.NsgUnitId = id;
+                person.NsgUnit = unit;
         }
         else if (resource == Religions)
         {
-            person.ReligionId = id;
+            person.Religion = await context.Religions.Where(r => r.Id == id).Select(r => r.Name).SingleAsync();
         }
         else
         {
-            person.ParentDepartmentRankId = id;
+            person.ParentDepartmentRank = await context.ParentDepartmentRanks.Where(r => r.Id == id).Select(r => r.Name).SingleAsync();
         }
         context.UsersPis.Add(person);
         await context.SaveChangesAsync();
@@ -309,13 +311,14 @@ public class PisLookupApiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Nsg_unit_delete_is_rejected_when_referenced_as_side_stepped_from_unit()
+    public async Task Nsg_unit_named_only_inside_free_text_side_stepped_details_does_not_block_delete()
     {
         JsonElement created = await CreateAsync(NsgUnits, "Former unit");
         int id = created.GetProperty("id").GetInt32();
         await AddPersonnelReferencingAsync(NsgUnits, id, viaSideStep: true);
 
-        Assert.Equal(HttpStatusCode.Conflict, (await _admin.DeleteAsync($"/api/v1/{NsgUnits}/{id}")).StatusCode);
+        // Side-stepped details are one free-text value that is never parsed, so it is not a reference to the unit.
+        Assert.NotEqual(HttpStatusCode.Conflict, (await _admin.DeleteAsync($"/api/v1/{NsgUnits}/{id}")).StatusCode);
     }
 
     [Fact]

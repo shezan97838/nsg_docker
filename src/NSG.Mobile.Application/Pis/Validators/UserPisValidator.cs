@@ -16,33 +16,33 @@ public class UserPisValidator : AbstractValidator<UserPis>
     public UserPisValidator()
     {
         RuleFor(x => x.NsgNumber).MustBeRequiredTrimmedIdentifier(30);
-        RuleFor(x => x.ServiceNumber).MustBeRequiredTrimmedIdentifier(30); // deliberately not unique
+        RuleFor(x => x.ServiceNumber!).MustBeRequiredTrimmedIdentifier(30).When(x => x.ServiceNumber != null); // nullable and deliberately not unique; when present it must be trimmed
 
+        // Workbook text columns (lengths mirror the database columns).
         RuleFor(x => x.FullName).MaximumLength(200);
         RuleFor(x => x.FatherName).MaximumLength(200);
         RuleFor(x => x.MotherName).MaximumLength(200);
         RuleFor(x => x.SpouseName).MaximumLength(200);
+        RuleFor(x => x.NsgRank).MaximumLength(100);
+        RuleFor(x => x.ParentDepartmentRank).MaximumLength(100);
+        RuleFor(x => x.NsgUnit).MaximumLength(100);
+        RuleFor(x => x.Education).MaximumLength(100);
+        RuleFor(x => x.Religion).MaximumLength(100);
+        RuleFor(x => x.SideSteppedDetails).MaximumLength(255);
+        RuleFor(x => x.Gender).MaximumLength(30);
+        RuleFor(x => x.Category).MaximumLength(30);
+        RuleFor(x => x.BloodGroup).MaximumLength(20);
+        RuleFor(x => x.HeightCm).MaximumLength(50);
+        RuleFor(x => x.WeightKg).MaximumLength(50);
+        RuleFor(x => x.NumberOfChildren).MaximumLength(50);
 
+        // The individual's mobile number is mandatory and unique.
+        RuleFor(x => x.MobileNumber).NotEmpty().WithMessage("{PropertyName} is required.");
         RuleFor(x => x.MobileNumber).MustBeIndianMobile();
-        RuleFor(x => x.NextOfKinMobileNumber).MustBeIndianMobile();
+        RuleFor(x => x.NextOfKinMobileNumber).MaximumLength(15);
 
-        // HeightCm is a byte, so fractions and values above 255 cannot be represented; only zero needs rejecting.
-        RuleFor(x => x.HeightCm).GreaterThan((byte)0).When(x => x.HeightCm.HasValue)
-            .WithMessage("Height must be a whole number of centimetres greater than zero.");
-
-        RuleFor(x => x.WeightKg).GreaterThan(0m).When(x => x.WeightKg.HasValue)
-            .WithMessage("Weight must be greater than zero.");
-        RuleFor(x => x.WeightKg).LessThanOrEqualTo(DomainConstants.PisFormats.MaxWeightKg).When(x => x.WeightKg.HasValue)
-            .WithMessage("Weight must not exceed 999.99 kg.");
-        RuleFor(x => x.WeightKg).PrecisionScale(5, 2, true).When(x => x.WeightKg.HasValue)
-            .WithMessage("Weight may have at most two decimal places.");
-
-        RuleFor(x => x.NumberOfChildren).GreaterThanOrEqualTo(0).When(x => x.NumberOfChildren.HasValue);
-
-        RuleFor(x => x.EarnedLeaveDue).GreaterThanOrEqualTo(0m).LessThanOrEqualTo(DomainConstants.PisFormats.MaxLeaveDue)
-            .PrecisionScale(7, 2, true).When(x => x.EarnedLeaveDue.HasValue);
-        RuleFor(x => x.HalfPayLeaveDue).GreaterThanOrEqualTo(0m).LessThanOrEqualTo(DomainConstants.PisFormats.MaxLeaveDue)
-            .PrecisionScale(7, 2, true).When(x => x.HalfPayLeaveDue.HasValue);
+        RuleFor(x => x.EarnedLeaveDue).MaximumLength(100);
+        RuleFor(x => x.HalfPayLeaveDue).MaximumLength(100);
         RuleFor(x => x.PaternityLeaveAvailed).MaximumLength(100);
         RuleFor(x => x.MaternityLeaveAvailed).MaximumLength(100);
         RuleFor(x => x.ChildCareLeaveAvailed).MaximumLength(100);
@@ -51,39 +51,22 @@ public class UserPisValidator : AbstractValidator<UserPis>
         RuleFor(x => x.PermanentPostOffice).MaximumLength(150);
         RuleFor(x => x.PermanentPoliceStation).MaximumLength(150);
         RuleFor(x => x.PermanentDistrict).MaximumLength(100);
-        RuleFor(x => x.PermanentPinCode).MustBePinCode();
+        RuleFor(x => x.PermanentState).MaximumLength(100);
+        RuleFor(x => x.PermanentPinCode).MaximumLength(10);
 
         // Ciphertext columns: length only (never validate or echo plaintext here).
-        RuleFor(x => x.AadhaarNumberEncrypted).MaximumLength(256);
-        RuleFor(x => x.PanNumberEncrypted).MaximumLength(256);
-        RuleFor(x => x.PranNumberEncrypted).MaximumLength(256);
-        RuleFor(x => x.SalaryAccountNumberEncrypted).MaximumLength(256);
+        RuleFor(x => x.AadhaarNumberEncrypted).MaximumLength(512);
+        RuleFor(x => x.PanNumberEncrypted).MaximumLength(512);
+        RuleFor(x => x.PranNumberEncrypted).MaximumLength(512);
+        RuleFor(x => x.SalaryAccountNumberEncrypted).MaximumLength(512);
 
-        // Blind indexes: lower-case hex HMAC-SHA256 only (never plaintext).
-        RuleFor(x => x.PanNumberHash).Matches(DomainConstants.PisFormats.BlindIndexPattern).When(x => x.PanNumberHash != null);
-        RuleFor(x => x.SalaryAccountNumberHash).Matches(DomainConstants.PisFormats.BlindIndexPattern).When(x => x.SalaryAccountNumberHash != null);
-
-        // Undefined numeric enum values (e.g. a cast from 99) are rejected.
-        RuleFor(x => x.Gender).IsInEnum().When(x => x.Gender.HasValue);
-        RuleFor(x => x.Category).IsInEnum().When(x => x.Category.HasValue);
-        RuleFor(x => x.BloodGroup).IsInEnum().When(x => x.BloodGroup.HasValue);
         RuleFor(x => x.MobileAppActivationStatus).IsInEnum();
 
-        // Only logical impossibilities, mirroring the database check constraints; no NSG service rules are invented.
+        // A birth date in the future is the only date rule. The order of the other dates is deliberately NOT checked: the source workbook contains legitimate records whose dates are out of the expected order.
         RuleFor(x => x.DateOfBirth).Must(d => d!.Value <= DateOnly.FromDateTime(IndianStandardTime.Now))
             .When(x => x.DateOfBirth.HasValue).WithMessage("Date of birth cannot be in the future.");
-        RuleFor(x => x.DateOfEnrollmentInGovtService).Must((x, d) => d!.Value >= x.DateOfBirth!.Value)
-            .When(x => x.DateOfEnrollmentInGovtService.HasValue && x.DateOfBirth.HasValue)
-            .WithMessage("Date of enrollment cannot be before the date of birth.");
-        RuleFor(x => x.DateOfSuperannuation).Must((x, d) => d!.Value > x.DateOfBirth!.Value)
-            .When(x => x.DateOfSuperannuation.HasValue && x.DateOfBirth.HasValue)
-            .WithMessage("Date of superannuation must be after the date of birth.");
-        RuleFor(x => x.DateOfRepatriation).Must((x, d) => d!.Value >= x.DateOfInductionInNsg!.Value)
-            .When(x => x.DateOfRepatriation.HasValue && x.DateOfInductionInNsg.HasValue)
-            .WithMessage("Date of repatriation cannot be before the date of induction.");
     }
 }
-
 /// <summary>Validates the plaintext sensitive identifiers before they are encrypted. All four are optional.</summary>
 public class PisSensitiveIdentifiersValidator : AbstractValidator<PisSensitiveIdentifiersInput>
 {

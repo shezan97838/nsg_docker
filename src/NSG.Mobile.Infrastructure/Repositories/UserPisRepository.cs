@@ -20,87 +20,57 @@ public class UserPisRepository : IUserPisRepository
         => await _context.UsersPis.AsNoTracking().FirstOrDefaultAsync(p => p.NsgNumber == nsgNumber, cancellationToken);
 
     public async Task<UserPis?> GetDetailAsync(long id, CancellationToken cancellationToken = default)
-        => await _context.UsersPis.AsNoTracking()
-            .Include(p => p.NsgRank)
-            .Include(p => p.NsgTrade)
-            .Include(p => p.ParentDepartmentRank)
-            .Include(p => p.PdTrade)
-            .Include(p => p.NsgUnit)
-            .Include(p => p.SideSteppedFromNsgUnit)
-            .Include(p => p.Education)
-            .Include(p => p.Religion)
-            .Include(p => p.PermanentState)
-            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        => await _context.UsersPis.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
     public async Task<(IReadOnlyList<UserPis> Items, int TotalCount)> GetPagedAsync(
-        int pageNumber, int pageSize, UserPisFilter filter, CancellationToken cancellationToken = default)
+        int pageNumber, int pageSize, UserPisFilter filter, long assignedTo, CancellationToken cancellationToken = default)
     {
-        IQueryable<UserPis> query = _context.UsersPis.AsNoTracking();
+        // The ownership restriction is the FIRST predicate and feeds the total, the page, search and every filter: a record assigned to another
+        // admin or to nobody (assigned_to IS NULL) is never counted, matched or returned.
+        IQueryable<UserPis> query = _context.UsersPis.AsNoTracking().Where(p => p.AssignedTo == assignedTo);
 
         if (filter.IsActive.HasValue)
             query = query.Where(p => p.IsActive == filter.IsActive.Value);
-        if (filter.NsgRankId.HasValue)
-            query = query.Where(p => p.NsgRankId == filter.NsgRankId.Value);
-        if (filter.NsgUnitId.HasValue)
-            query = query.Where(p => p.NsgUnitId == filter.NsgUnitId.Value);
-        if (filter.ParentDepartmentRankId.HasValue)
-            query = query.Where(p => p.ParentDepartmentRankId == filter.ParentDepartmentRankId.Value);
-        if (filter.Category.HasValue)
-            query = query.Where(p => p.Category == filter.Category.Value);
-        if (filter.MobileAppActivationStatus.HasValue)
+
+        // Lookup values are plain text on the row; the filters are exact (case-insensitive under the default MySQL collation).
+        if (!string.IsNullOrWhiteSpace(filter.NsgRank))
+        {
+            string rank = filter.NsgRank.Trim();
+            query = query.Where(p => p.NsgRank == rank);
+        }
+        if (!string.IsNullOrWhiteSpace(filter.NsgUnit))
+        {
+            string unit = filter.NsgUnit.Trim();
+            query = query.Where(p => p.NsgUnit == unit);
+        }
+        if (!string.IsNullOrWhiteSpace(filter.ParentDepartmentRank))
+        {
+            string parent = filter.ParentDepartmentRank.Trim();
+            query = query.Where(p => p.ParentDepartmentRank == parent);
+        }
+        if (!string.IsNullOrWhiteSpace(filter.Category))
+        {
+            string category = filter.Category.Trim();
+            query = query.Where(p => p.Category == category);
+        }        if (filter.MobileAppActivationStatus.HasValue)
             query = query.Where(p => p.MobileAppActivationStatus == filter.MobileAppActivationStatus.Value);
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             string term = filter.Search.Trim();
-            query = query.Where(p => p.NsgNumber.Contains(term) || p.ServiceNumber.Contains(term)
+            query = query.Where(p => p.NsgNumber.Contains(term) || (p.ServiceNumber != null && p.ServiceNumber.Contains(term))
                 || (p.FullName != null && p.FullName.Contains(term))
-                || (p.MobileNumber != null && p.MobileNumber.Contains(term)));
+                || p.MobileNumber.Contains(term));
         }
 
         int total = await query.CountAsync(cancellationToken);
         List<UserPis> items = await query
-            .Include(p => p.NsgRank)
-            .Include(p => p.NsgTrade)
-            .Include(p => p.ParentDepartmentRank)
-            .Include(p => p.PdTrade)
-            .Include(p => p.NsgUnit)
-            .Include(p => p.SideSteppedFromNsgUnit)
-            .Include(p => p.Education)
-            .Include(p => p.Religion)
-            .Include(p => p.PermanentState)
             .OrderBy(p => p.NsgNumber).ThenBy(p => p.Id)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
         return (items, total);
-    }
-
-    public async Task<IReadOnlyList<string>> GetMissingReferencesAsync(UserPis c, CancellationToken cancellationToken = default)
-    {
-        List<string> missing = new();
-
-        if (c.NsgRankId.HasValue && !await _context.RankHierarchies.AnyAsync(x => x.Id == c.NsgRankId.Value, cancellationToken))
-            missing.Add(nameof(UserPis.NsgRankId));
-        if (c.ParentDepartmentRankId.HasValue && !await _context.ParentDepartmentRanks.AnyAsync(x => x.Id == c.ParentDepartmentRankId.Value, cancellationToken))
-            missing.Add(nameof(UserPis.ParentDepartmentRankId));
-        if (c.NsgTradeId.HasValue && !await _context.NsgTrades.AnyAsync(x => x.Id == c.NsgTradeId.Value, cancellationToken))
-            missing.Add(nameof(UserPis.NsgTradeId));
-        if (c.PdTradeId.HasValue && !await _context.PdTrades.AnyAsync(x => x.Id == c.PdTradeId.Value, cancellationToken))
-            missing.Add(nameof(UserPis.PdTradeId));
-        if (c.NsgUnitId.HasValue && !await _context.NsgUnits.AnyAsync(x => x.Id == c.NsgUnitId.Value, cancellationToken))
-            missing.Add(nameof(UserPis.NsgUnitId));
-        if (c.SideSteppedFromNsgUnitId.HasValue && !await _context.NsgUnits.AnyAsync(x => x.Id == c.SideSteppedFromNsgUnitId.Value, cancellationToken))
-            missing.Add(nameof(UserPis.SideSteppedFromNsgUnitId));
-        if (c.EducationId.HasValue && !await _context.EducationQualifications.AnyAsync(x => x.Id == c.EducationId.Value, cancellationToken))
-            missing.Add(nameof(UserPis.EducationId));
-        if (c.ReligionId.HasValue && !await _context.Religions.AnyAsync(x => x.Id == c.ReligionId.Value, cancellationToken))
-            missing.Add(nameof(UserPis.ReligionId));
-        if (c.PermanentStateId.HasValue && !await _context.States.AnyAsync(x => x.Id == c.PermanentStateId.Value, cancellationToken))
-            missing.Add(nameof(UserPis.PermanentStateId));
-
-        return missing;
     }
 
     public async Task<PisSaveOutcome> AddAsync(UserPis entity, CancellationToken cancellationToken = default)
@@ -111,8 +81,27 @@ public class UserPisRepository : IUserPisRepository
 
     // The entity is tracked, so SaveChanges detects what changed. DbSet.Update() is deliberately not used: it would mark
     // every column (including the immutable NSG number) as modified.
-    public async Task<PisSaveOutcome> UpdateAsync(UserPis entity, CancellationToken cancellationToken = default)
-        => await TrySaveAsync(cancellationToken);
+    public async Task<PisSaveOutcome> UpdateAsync(UserPis entity, long ownerAdminId, CancellationToken cancellationToken = default)
+    {
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            // Ownership guard, first statement of the transaction: matches the row only while it is still assigned to this admin and rewrites the
+            // value it already holds, so nothing changes but the row stays locked until commit. A transfer that committed after the record was
+            // loaded leaves no match (refused, nothing saved); one still open makes this wait and re-evaluate. Same lock as a transfer takes.
+            int locked = await _context.UsersPis.Where(p => p.Id == entity.Id && p.AssignedTo == ownerAdminId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.AssignedTo, ownerAdminId), cancellationToken);
+            if (locked == 0
+                && !await _context.UsersPis.AsNoTracking().AnyAsync(p => p.Id == entity.Id && p.AssignedTo == ownerAdminId, cancellationToken))
+                return PisSaveOutcome.NotOwner;
+
+            PisSaveOutcome outcome = await TrySaveAsync(cancellationToken);
+            if (outcome == PisSaveOutcome.Saved) await transaction.CommitAsync(cancellationToken);
+            return outcome;
+        });
+    }
 
     /// <summary>Saves, translating a unique-index violation into an outcome; any other failure propagates.</summary>
     private async Task<PisSaveOutcome> TrySaveAsync(CancellationToken cancellationToken)
@@ -134,8 +123,6 @@ public class UserPisRepository : IUserPisRepository
     {
         if (message.Contains("ix_users_pis_nsg_number", StringComparison.OrdinalIgnoreCase)) return PisSaveOutcome.DuplicateNsgNumber;
         if (message.Contains("ix_users_pis_mobile_number", StringComparison.OrdinalIgnoreCase)) return PisSaveOutcome.DuplicateMobileNumber;
-        if (message.Contains("ix_users_pis_pan_number_hash", StringComparison.OrdinalIgnoreCase)) return PisSaveOutcome.DuplicatePanNumber;
-        if (message.Contains("ix_users_pis_salary_account_number_hash", StringComparison.OrdinalIgnoreCase)) return PisSaveOutcome.DuplicateSalaryAccountNumber;
         return null;
     }
 }

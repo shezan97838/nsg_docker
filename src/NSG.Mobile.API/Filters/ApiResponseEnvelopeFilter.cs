@@ -46,7 +46,8 @@ public sealed class ApiResponseEnvelopeFilter : IAlwaysRunResultFilter
             ProblemDetails problem => ApiEnvelope.ForProblem(problem, status),
             IApiMessageCarrier carrier => ApiResponse.Ok(
                 string.IsNullOrWhiteSpace(carrier.Message) ? ApiEnvelope.DefaultSuccessMessage(status) : carrier.Message,
-                carrier.Payload),
+                carrier.Payload,
+                carrier.Code),
             null => ApiEnvelope.ForStatus(status),
             _ when status >= StatusCodes.Status400BadRequest => ApiEnvelope.ForStatus(status),
             _ => ApiResponse.Ok(ApiEnvelope.DefaultSuccessMessage(status), value)

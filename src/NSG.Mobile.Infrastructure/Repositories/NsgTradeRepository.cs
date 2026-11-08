@@ -42,9 +42,6 @@ public class NsgTradeRepository : INsgTradeRepository
     public async Task<bool> NameExistsAsync(string name, int? excludeId, CancellationToken cancellationToken = default)
         => await _context.NsgTrades.AnyAsync(t => t.NsgTradeName == name && (!excludeId.HasValue || t.Id != excludeId.Value), cancellationToken);
 
-    public async Task<bool> IsInUseAsync(int id, CancellationToken cancellationToken = default)
-        => await _context.UsersPis.AnyAsync(u => u.NsgTradeId == id, cancellationToken);
-
     public async Task<bool> AddAsync(NsgTrade entity, CancellationToken cancellationToken = default)
     {
         await _context.NsgTrades.AddAsync(entity, cancellationToken);

@@ -24,7 +24,6 @@ public class PisSensitiveRoundTripTests
     private const string Aadhaar = "123546789532", Pan = "AGIPR3625F", Pran = "321654987321", Account = "30927989329";
 
     private readonly AesEncryptionService _aes = new(Options.Create(new EncryptionOptions { Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }));
-    private readonly HmacBlindIndexService _hmac = new(Options.Create(new BlindIndexOptions { Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }));
     private readonly UserPis _stored;
     private readonly UserPisService _service;
 
@@ -32,13 +31,13 @@ public class PisSensitiveRoundTripTests
     {
         _stored = new UserPis
         {
-            Id = 1, NsgNumber = "N-1", ServiceNumber = "S-1",
+            Id = 1, NsgNumber = "N-1", ServiceNumber = "S-1", AssignedTo = 9100,
             AadhaarNumberEncrypted = _aes.Encrypt(Aadhaar),
-            PanNumberEncrypted = _aes.Encrypt(Pan), PanNumberHash = _hmac.ForPan(Pan),
+            PanNumberEncrypted = _aes.Encrypt(Pan),
             PranNumberEncrypted = _aes.Encrypt(Pran),
-            SalaryAccountNumberEncrypted = _aes.Encrypt(Account), SalaryAccountNumberHash = _hmac.ForSalaryAccountNumber(Account)
+            SalaryAccountNumberEncrypted = _aes.Encrypt(Account)
         };
-        _service = new UserPisService(new Repo(_stored), _aes, _hmac, new FakeAudit(), new FakeCurrentUser { UserId = 9001 },
+        _service = new UserPisService(new Repo(_stored), _aes, new FakeAudit(), new FakeCurrentUser { UserId = 9001, AdminProfileId = 9100 },
             NullLogger<UserPisService>.Instance);
     }
 
@@ -49,23 +48,21 @@ public class PisSensitiveRoundTripTests
         public Task<UserPis?> GetByIdAsync(long id, CancellationToken ct = default) => Task.FromResult<UserPis?>(_row);
         public Task<UserPis?> GetDetailAsync(long id, CancellationToken ct = default) => Task.FromResult<UserPis?>(_row);
         public Task<UserPis?> GetByNsgNumberAsync(string nsgNumber, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<(IReadOnlyList<UserPis> Items, int TotalCount)> GetPagedAsync(int pageNumber, int pageSize, UserPisFilter filter, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<string>> GetMissingReferencesAsync(UserPis candidate, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        public Task<(IReadOnlyList<UserPis> Items, int TotalCount)> GetPagedAsync(int pageNumber, int pageSize, UserPisFilter filter, long assignedTo, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<PisSaveOutcome> AddAsync(UserPis entity, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<PisSaveOutcome> UpdateAsync(UserPis entity, CancellationToken ct = default) => Task.FromResult(PisSaveOutcome.Saved);
+        public Task<PisSaveOutcome> UpdateAsync(UserPis entity, long ownerAdminId, CancellationToken ct = default) => Task.FromResult(PisSaveOutcome.Saved);
     }
 
     private static UpdateUserPisRequestDto Request(string? aadhaar = null, string? pan = null, string? pran = null, string? account = null)
-        => new() { ServiceNumber = "S-1", IsActive = true, AadhaarNumber = aadhaar, PanNumber = pan, PranNumber = pran, SalaryAccountNumber = account };
+        => new() { ServiceNumber = "S-1", MobileNumber = "9876543210", IsActive = true, AadhaarNumber = aadhaar, PanNumber = pan, PranNumber = pran, SalaryAccountNumber = account };
 
     private static ValidationResult Validate(UpdateUserPisRequestDto r) => new UpdateUserPisRequestValidator().Validate(r);
 
     /// <summary>What GET returns for the stored record, so the tests use the real masks rather than hand-written ones.</summary>
     private async Task<UserPisResponseDto> GetAsync() => (await _service.GetByIdAsync(1, default)).Data!;
 
-    private (string Aadhaar, string Pan, string Pran, string Account, string PanHash, string AccountHash) Snapshot()
-        => (_stored.AadhaarNumberEncrypted!, _stored.PanNumberEncrypted!, _stored.PranNumberEncrypted!, _stored.SalaryAccountNumberEncrypted!,
-            _stored.PanNumberHash!, _stored.SalaryAccountNumberHash!);
+    private (string Aadhaar, string Pan, string Pran, string Account) Snapshot()
+        => (_stored.AadhaarNumberEncrypted!, _stored.PanNumberEncrypted!, _stored.PranNumberEncrypted!, _stored.SalaryAccountNumberEncrypted!);
 
     // ── Exact GET mask round-trips ──
 
@@ -107,7 +104,7 @@ public class PisSensitiveRoundTripTests
     // ── New values ──
 
     [Fact]
-    public async Task New_unmasked_values_replace_the_stored_ones_and_recompute_the_blind_indexes()
+    public async Task New_unmasked_values_replace_the_stored_ciphertext_and_nothing_else()
     {
         var before = Snapshot();
         UpdateUserPisRequestDto request = Request("999988887777", "abcde1234f", "111122223333", "123456789012");
@@ -119,10 +116,8 @@ public class PisSensitiveRoundTripTests
         Assert.Equal("ABCDE1234F", _aes.Decrypt(_stored.PanNumberEncrypted!));
         Assert.Equal("111122223333", _aes.Decrypt(_stored.PranNumberEncrypted!));
         Assert.Equal("123456789012", _aes.Decrypt(_stored.SalaryAccountNumberEncrypted!));
-        Assert.NotEqual(before.PanHash, _stored.PanNumberHash);
-        Assert.Equal(_hmac.ForPan("ABCDE1234F"), _stored.PanNumberHash);
-        Assert.NotEqual(before.AccountHash, _stored.SalaryAccountNumberHash);
-        Assert.Equal(_hmac.ForSalaryAccountNumber("123456789012"), _stored.SalaryAccountNumberHash);
+        Assert.NotEqual(before.Pan, _stored.PanNumberEncrypted);
+        Assert.NotEqual(before.Account, _stored.SalaryAccountNumberEncrypted);   // no hash columns exist any more
     }
 
     // ── Invalid values ──
@@ -147,7 +142,7 @@ public class PisSensitiveRoundTripTests
     {
         CreateUserPisRequestDto create = new()
         {
-            NsgNumber = "N-2", ServiceNumber = "S-2", Gender = NSG.Mobile.Domain.Enums.Gender.Male,
+            NsgNumber = "N-2", ServiceNumber = "S-2", MobileNumber = "9876543211", Gender = "Male",
             AadhaarNumber = "XXXXXXXX9532", PanNumber = "XXXXXX625F", PranNumber = "XXXXXXXX7321", SalaryAccountNumber = "XXXXXXX9329"
         };
 

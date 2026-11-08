@@ -53,6 +53,23 @@ public class MobileUserProfile
 
     public DateTime? LastLoginAtIst { get; set; }
 
+    // ── PIS Admin block (explicit "Block Mobile Access") ──
+    // A non-null AccessBlockedAtIst is the one marker of a block made through the PIS Admin API. It is set together with IsActive = false
+    // (a check constraint keeps the two consistent) so every existing IsActive guard keeps working; restore only touches a profile that carries it.
+    // MobileAppActivationStatus (onboarding/approval, on UserPis) is unrelated and never changed by a block.
+
+    /// <summary>When a PIS Admin blocked mobile access (IST). Null when the profile is not blocked this way.</summary>
+    public DateTime? AccessBlockedAtIst { get; set; }
+
+    /// <summary>Admin Portal profile id of the PIS Admin who blocked access (no FK, following <see cref="CreatedBy"/>).</summary>
+    public int? AccessBlockedBy { get; set; }
+
+    /// <summary>Optional reason given by the PIS Admin (at most 500 characters).</summary>
+    public string? AccessBlockReason { get; set; }
+
+    /// <summary>True while a PIS Admin block is in force.</summary>
+    public bool IsAdminBlocked => AccessBlockedAtIst.HasValue;
+
     // ── Audit ──
 
     public DateTime CreatedAtIst { get; set; } = NSG.Mobile.Domain.Common.IndianStandardTime.Now;

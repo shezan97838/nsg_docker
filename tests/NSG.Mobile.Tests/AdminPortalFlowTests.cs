@@ -54,10 +54,10 @@ public class AdminPortalFlowTests : IAsyncLifetime
 
     // ───────────────────────── helpers ─────────────────────────
 
-    private async Task SeedPisAsync(string nsg, string mobile, string name, bool active = true, string dob = Dob)
+    private async Task SeedPisAsync(string nsg, string mobile, string name, bool active = true, string dob = Dob, long? assignedTo = null)
     {
         await using AppDbContext ctx = _factory.CreateContext();
-        ctx.UsersPis.Add(new UserPis { NsgNumber = nsg, ServiceNumber = "S-" + nsg, FullName = name, MobileNumber = mobile, DateOfBirth = DateOnly.Parse(dob), IsActive = active });
+        ctx.UsersPis.Add(new UserPis { NsgNumber = nsg, ServiceNumber = "S-" + nsg, FullName = name, MobileNumber = mobile, DateOfBirth = DateOnly.Parse(dob), IsActive = active, AssignedTo = assignedTo });
         await ctx.SaveChangesAsync();
     }
 
@@ -317,12 +317,12 @@ public class AdminPortalFlowTests : IAsyncLifetime
 
         (HttpStatusCode listStatus, JsonElement list) = await GetAsync(superAdmin, Accounts);
         Assert.Equal(HttpStatusCode.OK, listStatus);
-        Assert.Equal(1, list.GetProperty("totalCount").GetInt32());
+        Assert.Equal(1, list.GetProperty("data").GetProperty("totalCount").GetInt32());
 
         (HttpStatusCode emptyStatus, JsonElement empty) = await GetAsync(superAdmin, Accounts + "?roleCode=GRIEVANCE_ADMIN");
         Assert.Equal(HttpStatusCode.OK, emptyStatus);
         Assert.Equal("No admin accounts found.", empty.GetProperty("message").GetString());
-        Assert.False(empty.TryGetProperty("items", out _));
+        Assert.Equal(JsonValueKind.Null, empty.GetProperty("data").ValueKind);
 
         (HttpStatusCode missing, JsonElement missingBody) = await GetAsync(superAdmin, Accounts + "/987654");
         Assert.Equal(HttpStatusCode.NotFound, missing);
@@ -513,9 +513,9 @@ public class AdminPortalFlowTests : IAsyncLifetime
         // An admin token, even a Super Admin's, is refused by mobile-profile and staff endpoints.
         Assert.Equal(HttpStatusCode.Unauthorized, (await GetAsync(superAdmin, "/api/v1/profile")).Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(superAdmin, "/api/v1/onboarding/pending")).Status);
-        // Mobile approval is an admin-portal endpoint restricted to REGISTRATION_ADMIN: a Super Admin is authenticated but lacks the role.
+        // Mobile approval is an admin-portal endpoint restricted to PIS_ADMIN (own personnel only): a Super Admin is authenticated but lacks the role.
         Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(superAdmin, "/api/v1/mobile-approval-requests")).Status);
-        Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(pisAdmin, "/api/v1/mobile-approval-requests")).Status);
+        Assert.Equal(HttpStatusCode.OK, (await GetAsync(pisAdmin, "/api/v1/mobile-approval-requests")).Status);   // nothing assigned yet: a message, not an error
 
         // PIS lookups are accessible to PIS_ADMIN, while a Super Admin lacks the role.
         Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(superAdmin, "/api/v1/ranks")).Status);
@@ -532,9 +532,9 @@ public class AdminPortalFlowTests : IAsyncLifetime
         return await ReadAsync(response, "PUT " + url);
     }
 
-    private async Task<long> SeedPendingRequestAsync(string nsg, string mobile)
+    private async Task<long> SeedPendingRequestAsync(string nsg, string mobile, long? owner = null)
     {
-        await SeedPisAsync(nsg, mobile, "Applicant " + nsg);
+        await SeedPisAsync(nsg, mobile, "Applicant " + nsg, assignedTo: owner);
         await using AppDbContext ctx = _factory.CreateContext();
         ApproveMobileUser request = new() { NsgNumber = nsg, MobileNumber = mobile, DateOfBirth = DateOnly.Parse(Dob) };
         ctx.ApproveMobileUsers.Add(request);
@@ -543,21 +543,21 @@ public class AdminPortalFlowTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Registration_admin_can_approve_and_reject_and_their_admin_id_is_stored_in_approved_by_and_the_audit()
+    public async Task Pis_admin_can_approve_and_reject_their_own_personnel_and_their_admin_id_is_stored_in_approved_by_and_the_audit()
     {
         HttpClient superAdmin = await SuperAdminClientAsync();
-        await SeedPisAsync(RegNsg, RegMobile, "Registration Person");
-        await CreateAccountAsync(superAdmin, RegNsg, RegMobile, AdminRoleCodes.RegistrationAdmin);
-        await ActivateAsync(RegNsg, RegMobile);
-        string accessToken = (await SignInAsync(RegNsg)).GetProperty("accessToken").GetString()!;
-        HttpClient registrationAdmin = Bearer(accessToken);
+        await SeedPisAsync(PisNsg, PisMobile, "Pis Person");
+        await CreateAccountAsync(superAdmin, PisNsg, PisMobile, AdminRoleCodes.PisAdmin);
+        await ActivateAsync(PisNsg, PisMobile);
+        string accessToken = (await SignInAsync(PisNsg)).GetProperty("accessToken").GetString()!;
+        HttpClient registrationAdmin = Bearer(accessToken);   // (a PIS Admin session; the variable keeps its old name)
         int adminProfileId = int.Parse(new JwtSecurityTokenHandler().ReadJwtToken(accessToken).Claims.Single(c => c.Type == DomainConstants.AdminClaims.ProfileId).Value);
 
         // The list works for the role.
         Assert.Equal(HttpStatusCode.OK, (await GetAsync(registrationAdmin, Decision)).Status);
 
-        long toApprove = await SeedPendingRequestAsync("REQ-0001", "9811110011");
-        long toReject = await SeedPendingRequestAsync("REQ-0002", "9811110012");
+        long toApprove = await SeedPendingRequestAsync("REQ-0001", "9811110011", owner: adminProfileId);
+        long toReject = await SeedPendingRequestAsync("REQ-0002", "9811110012", owner: adminProfileId);
 
         (HttpStatusCode approveStatus, JsonElement approved) = await PutAsync(registrationAdmin, $"{Decision}/{toApprove}/decision", new { decision = "Approved", remarks = "ok" });
         Assert.Equal(HttpStatusCode.OK, approveStatus);
@@ -590,9 +590,13 @@ public class AdminPortalFlowTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Only_a_registration_admin_may_decide_every_other_caller_is_refused_and_nothing_changes()
+    public async Task Only_the_assigned_pis_admin_may_decide_every_other_caller_is_refused_and_nothing_changes()
     {
         HttpClient superAdmin = await SuperAdminClientAsync();
+        await SeedPisAsync(RegNsg, RegMobile, "Registration Person");
+        await CreateAccountAsync(superAdmin, RegNsg, RegMobile, AdminRoleCodes.RegistrationAdmin);
+        await ActivateAsync(RegNsg, RegMobile);
+        HttpClient registrationAdmin = Bearer((await SignInAsync(RegNsg)).GetProperty("accessToken").GetString()!);
         await SeedPisAsync(PisNsg, PisMobile, "Pis Person");
         await CreateAccountAsync(superAdmin, PisNsg, PisMobile, AdminRoleCodes.PisAdmin);
         await ActivateAsync(PisNsg, PisMobile);
@@ -603,7 +607,8 @@ public class AdminPortalFlowTests : IAsyncLifetime
         object body = new { decision = "Approved" };
 
         Assert.Equal(HttpStatusCode.Forbidden, (await PutAsync(superAdmin, url, body)).Status);
-        Assert.Equal(HttpStatusCode.Forbidden, (await PutAsync(pisAdmin, url, body)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await PutAsync(registrationAdmin, url, body)).Status);   // the retired role no longer approves
+        Assert.Equal(HttpStatusCode.Forbidden, (await PutAsync(pisAdmin, url, body)).Status);   // a PIS Admin, but the request is unassigned
         Assert.Equal(HttpStatusCode.Unauthorized, (await PutAsync(_anonymous, url, body)).Status);
         foreach (string role in new[] { DomainConstants.Roles.PisAdmin, DomainConstants.Roles.SuperAdmin, AdminRoleCodes.RegistrationAdmin })
             Assert.Equal(HttpStatusCode.Unauthorized, (await PutAsync(_factory.CreateClientFor(role), url, body)).Status); // staff/mobile-audience tokens, even with the role name

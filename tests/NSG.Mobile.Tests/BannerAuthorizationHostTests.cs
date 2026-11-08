@@ -17,7 +17,7 @@ namespace NSG.Mobile.Tests;
 /// <summary>
 /// The Banner module through the REAL pipeline: real JWT validation (both schemes), real policies, middleware, multipart binding, controller,
 /// service, validator, the file result and the envelope filter. Only the outermost edges are in-memory fakes: banner and NSG-unit repositories,
-/// private object storage (never real R2), audit and the two session look-ups. A dummy connection string and disabled migrations guarantee
+/// private object storage (no real storage), audit and the two session look-ups. A dummy connection string and disabled migrations guarantee
 /// nothing can reach MySQL.
 /// </summary>
 [Collection("GrievanceHost")]
@@ -26,7 +26,7 @@ public sealed class BannerAuthorizationHostTests : IDisposable
     private static readonly string[] Variables =
     {
         "ConnectionStrings__MySql", "Database__MigrateOnStartup", "Security__DisableAuthorization", "Jwt__Secret",
-        "Encryption__Key", "BlindIndex__Key", "ASPNETCORE_ENVIRONMENT"
+        "Encryption__Key", "ASPNETCORE_ENVIRONMENT"
     };
 
     private const long AdminId = 9001, EmployeeId = 501;
@@ -49,7 +49,6 @@ public sealed class BannerAuthorizationHostTests : IDisposable
         Environment.SetEnvironmentVariable("Security__DisableAuthorization", "false");
         Environment.SetEnvironmentVariable("Jwt__Secret", Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)));
         Environment.SetEnvironmentVariable("Encryption__Key", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
-        Environment.SetEnvironmentVariable("BlindIndex__Key", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
 
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services =>
@@ -566,7 +565,7 @@ public sealed class BannerAuthorizationHostTests : IDisposable
         public Task<bool> IsSessionActiveAsync(Guid sessionId, long profileId, CancellationToken cancellationToken = default)
             => Task.FromResult(Active.Contains((sessionId, profileId)));
 
-        public Task StartSessionAsync(MobileRefreshToken first, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<SessionStartOutcome> StartSessionAsync(MobileRefreshToken first, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<RefreshRotationResult> RotateAsync(string presentedTokenHash, MobileRefreshToken next, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> RevokeSessionByTokenAsync(string tokenHash, string reason, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task RevokeAllForProfileAsync(long profileId, string reason, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();

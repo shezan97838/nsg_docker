@@ -24,6 +24,21 @@ public static class MobileAuthMessages
     public const string ApprovalRaised = "Your approval request has been raised successfully.";
     public const string RequestAlreadyPending = "Your request is already pending. Please wait for approval.";
     public const string AccessUnavailable = "Your access is unavailable. Please contact the IT Admin.";
+
+    /// <summary>Shown with the machine-readable code <c>SURAKSHA_1001</c>: access was blocked by a PIS Admin.</summary>
+    public const string AccessBlockedByPisAdmin = "Your mobile access has been blocked by the PIS Admin. Please contact the PIS cell.";
+
+    /// <summary>Shown with the machine-readable code <c>SURAKSHA_1002</c>: the session was replaced by a newer login of the same account.</summary>
+    public const string SessionReplacedByNewLogin = "Your session has been terminated because your account was signed in on another device.";
+
+    /// <summary>The client-safe message of a public session code (<c>SURAKSHA_1001</c> / <c>SURAKSHA_1002</c>); null for any other code.</summary>
+    public static string? ForSessionCode(string? code) => code switch
+    {
+        Common.ApiErrorCodes.MobileAccessBlocked => AccessBlockedByPisAdmin,
+        Common.ApiErrorCodes.MobileSessionReplaced => SessionReplacedByNewLogin,
+        _ => null
+    };
+
     public const string NotMatched = "We could not find a matching record for the details provided. Please check and try again.";
     public const string InvalidCredentials = "Invalid credentials.";
     public const string AccountLocked = "Your account is temporarily locked because of too many failed attempts. Please try again later.";

@@ -26,7 +26,6 @@ public class PdTradeService : IPdTradeService
     private const string EntityType = "PdTrade";
     private const string NotFoundMessage = "PD trade not found.";
     private const string DuplicateMessage = "A PD trade with this name already exists.";
-    private const string InUseMessage = "PD trade is used by personnel records and cannot be deactivated.";
 
     private readonly IPdTradeRepository _repository;
     private readonly IAuditService _auditService;
@@ -65,6 +64,9 @@ public class PdTradeService : IPdTradeService
 
     public async Task<Result<PdTradeResponseDto>> CreateAsync(CreatePdTradeRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure<PdTradeResponseDto>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         string name = request.PdTradeName.Trim();
 
         // Pre-check gives a clear message; the repository also maps a unique-index violation (race) to the same outcome.
@@ -82,16 +84,15 @@ public class PdTradeService : IPdTradeService
 
     public async Task<Result<PdTradeResponseDto>> UpdateAsync(int id, UpdatePdTradeRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure<PdTradeResponseDto>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         PdTrade? entity = await _repository.GetByIdAsync(id, cancellationToken);
         if (entity == null)
             return Result.Failure<PdTradeResponseDto>(ApiErrorCodes.NotFound, NotFoundMessage);
 
         string name = request.PdTradeName.Trim();
         bool newActive = request.IsActive ?? entity.IsActive;
-
-        // Same rule as DELETE: a trade used by personnel cannot be deactivated (renaming it is fine).
-        if (entity.IsActive && !newActive && await _repository.IsInUseAsync(id, cancellationToken))
-            return Result.Failure<PdTradeResponseDto>(ApiErrorCodes.Conflict, InUseMessage);
 
         if (await _repository.NameExistsAsync(name, id, cancellationToken))
             return Result.Failure<PdTradeResponseDto>(ApiErrorCodes.Conflict, DuplicateMessage);
@@ -108,6 +109,9 @@ public class PdTradeService : IPdTradeService
 
     public async Task<Result> DeactivateAsync(int id, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         PdTrade? entity = await _repository.GetByIdAsync(id, cancellationToken);
         if (entity == null)
             return Result.Failure(ApiErrorCodes.NotFound, NotFoundMessage);
@@ -115,9 +119,6 @@ public class PdTradeService : IPdTradeService
         // Idempotent: an already inactive trade stays inactive.
         if (entity.IsActive)
         {
-            if (await _repository.IsInUseAsync(id, cancellationToken))
-                return Result.Failure(ApiErrorCodes.Conflict, InUseMessage);
-
             entity.IsActive = false;
             await _repository.UpdateAsync(entity, cancellationToken);
             await AuditAsync("PdTradeDeactivated", id, cancellationToken);
@@ -129,11 +130,11 @@ public class PdTradeService : IPdTradeService
     private async Task AuditAsync(string operation, int id, CancellationToken cancellationToken)
     {
         await _auditService.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success,
-            userId: _currentUserService.UserId, entityType: EntityType, entityId: id.ToString(),
+            userId: _currentUserService.AuditUserId(), entityType: EntityType, entityId: id.ToString(),
             correlationId: _currentUserService.CorrelationId,
             additionalData: $"{{\"operation\":\"{operation}\"}}",
             cancellationToken: cancellationToken);
 
-        _logger.LogInformation("{Operation} PD trade {EntityId} by admin {AdminId}", operation, id, _currentUserService.UserId);
+        _logger.LogInformation("{Operation} PD trade {EntityId} by admin {AdminId}", operation, id, _currentUserService.AuditUserId());
     }
 }

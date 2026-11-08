@@ -33,8 +33,10 @@ public static class DomainConstants
         /// <summary>Any active Admin Portal account, whatever its role.</summary>
         public const string RequireAdminAccount = nameof(RequireAdminAccount);
         public const string RequireSuperAdmin = nameof(RequireSuperAdmin);
-        public const string RequireRegistrationAdmin = nameof(RequireRegistrationAdmin);
         public const string RequirePisAdmin = nameof(RequirePisAdmin);
+
+        /// <summary>PIS_ADMIN through the Admin Portal only (AdminBearer). Unlike <see cref="RequirePisAdmin"/> it never admits the staff Bearer path.</summary>
+        public const string RequirePisAdminPortal = nameof(RequirePisAdminPortal);
         public const string RequireGrievanceAdmin = nameof(RequireGrievanceAdmin);
         public const string RequireMediaCellAdmin = nameof(RequireMediaCellAdmin);
         public const string RequireSalaryManagementAdmin = nameof(RequireSalaryManagementAdmin);
@@ -70,6 +72,15 @@ public static class DomainConstants
         public const string MobileAccess = "mobile_access";
     }
 
+    /// <summary>
+    /// <c>HttpContext.Items</c> key under which authentication records why it rejected a mobile access token, so the bare 401 can carry
+    /// the machine-readable code. The value is only ever set for a PIS Admin block.
+    /// </summary>
+    public static class AuthFailure
+    {
+        public const string CodeItemKey = "AuthFailureCode";
+    }
+
     /// <summary>Mobile number normalization constants.</summary>
     public static class MobileNumber
     {
@@ -77,7 +88,7 @@ public static class DomainConstants
         public const int ExpectedDigitCount = 10;
     }
 
-    /// <summary>Format rules for PIS (personnel master) fields. Shared by validators; mirrored by database check constraints.</summary>
+    /// <summary>Format rules for PIS (personnel) fields, used by the API validators. The database itself only enforces a ten-digit mobile number.</summary>
     public static class PisFormats
     {
         /// <summary>Exactly ten digits, starting 6-9 (Indian mobile, no country code).</summary>
@@ -100,18 +111,6 @@ public static class DomainConstants
         /// rule exists yet (see OQ-024).
         /// </summary>
         public const string SalaryAccountPattern = @"^[0-9]{9,18}$";
-
-        /// <summary>Blind index: 64 lower-case hex characters (HMAC-SHA256).</summary>
-        public const string BlindIndexPattern = @"^[0-9a-f]{64}$";
-
-        /// <summary>Six-digit PIN code, first digit 1-9.</summary>
-        public const string PinCodePattern = @"^[1-9][0-9]{5}$";
-
-        /// <summary>Largest value of MySQL DECIMAL(5,2), used for weight in kilograms.</summary>
-        public const decimal MaxWeightKg = 999.99m;
-
-        /// <summary>Largest value of MySQL DECIMAL(7,2), used for the leave-due quantities.</summary>
-        public const decimal MaxLeaveDue = 99999.99m;
     }
 
     /// <summary>Audit log result values.</summary>

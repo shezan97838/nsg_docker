@@ -74,5 +74,9 @@ public enum AuditAction
     // Banner management events
     BannerCreated = 110,
     BannerUpdated = 111,
-    BannerStatusChanged = 112
+    BannerStatusChanged = 112,
+
+    // Mobile access management events (PIS Admin block / restore)
+    MobileAccessBlocked = 120,
+    MobileAccessRestored = 121
 }

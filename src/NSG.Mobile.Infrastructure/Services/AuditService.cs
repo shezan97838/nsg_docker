@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using NSG.Mobile.Application.Interfaces.Repositories;
 using NSG.Mobile.Application.Interfaces.Services;
 using NSG.Mobile.Domain.Common;
@@ -13,10 +14,12 @@ namespace NSG.Mobile.Infrastructure.Services;
 public class AuditService : IAuditService
 {
     private readonly IAuditLogRepository _auditLogRepository;
+    private readonly ILogger<AuditService> _logger;
 
-    public AuditService(IAuditLogRepository auditLogRepository)
+    public AuditService(IAuditLogRepository auditLogRepository, ILogger<AuditService> logger)
     {
         _auditLogRepository = auditLogRepository;
+        _logger = logger;
     }
 
     public async Task LogAsync(
@@ -49,10 +52,12 @@ public class AuditService : IAuditService
 
             await _auditLogRepository.AddAsync(auditLog, cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Audit logging failures must not break the primary operation.
-            // In production, this should be logged to a secondary sink (e.g., structured logging).
+            // Audit logging failures must not break the primary operation, but they are never silent: the failure goes to the
+            // structured log (the secondary sink) with what is needed to find the event again. No audit payload is logged.
+            _logger.LogError(ex, "Audit write failed for action {AuditAction} ({AuditResult}), entity {EntityType}/{EntityId}, CorrelationId {CorrelationId}.",
+                action, result, entityType, entityId, correlationId);
         }
     }
 }

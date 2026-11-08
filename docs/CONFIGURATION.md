@@ -27,15 +27,10 @@ In an environment variable name, `__` stands for `:` (for example `ConnectionStr
 | `Jwt__Secret` | **yes** | yes | HMAC-SHA256 signing key, at least 32 random bytes. Generate with `openssl rand -base64 48`. |
 | `Jwt__Issuer`, `Jwt__Audience` | no | yes | Per environment; they must match what the mobile apps expect. |
 | `Encryption__Key` | **yes** | yes | AES-256 field-encryption key: base64 of **exactly 32 bytes**. Generate with `openssl rand -base64 32`. |
-| `BlindIndex__Key` | **yes** | yes | HMAC key for the PAN / salary-account uniqueness hashes: base64, **at least 32 bytes** and **different from `Encryption__Key`**. Generate with `openssl rand -base64 32`. |
 | `Redis__ConnectionString` | yes | optional | Empty means in-memory cache. |
 | `Sms__ApiKey`, `Hrms__ApiKey`, `Payroll__ApiKey` | **yes** | when those integrations go live | Currently stubs. |
 | `Fcm__CredentialPath` | path only | when push goes live | Path to the Firebase service-account file, which itself is a secret and stays outside the repository. |
-| `FileStorage__BasePath` | no | yes on Linux | The default in `appsettings.json` is a Windows path; set an absolute Linux path. Still required outside Development when R2 is used. |
-| `R2Storage__ServiceUrl` | no | to use R2 | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`. A real value switches grievance document storage to Cloudflare R2; the committed placeholder means off (ADR-018, `GRIEVANCE-MODULE.md`). |
-| `R2Storage__BucketName` | no | with R2 | The private bucket. |
-| `R2Storage__AccessKey`, `R2Storage__SecretKey` | **yes** | with R2 | Bucket-scoped R2 API token (Object Read & Write). User-secrets or environment only. Missing values stop startup when R2 is on. |
-| `R2Storage__KeyPrefix` | no | optional | Folder in front of every object, for example one per environment. |
+| `Storage__RootPath` | no | **yes, in every environment** | **The one root for every stored document (the local file system is the only storage; ADR-027)**: `Form16/`, `SalarySlips/`, `Grievance/`, `DgMessages/`, `Banners/`, `DigitalLibrary/` and `_incoming/` live under it (Digital Library limit: `DigitalLibrary__MaxFileSizeBytes`, default 10 MB). Windows development: `D:\NSGStorage`. Ubuntu local storage: `/var/lib/nsg-mobile/uploads` (supported, **not yet run on Ubuntu**). It must be an absolute path to a folder that **already exists** and is writable, outside the deployment directory and `wwwroot`; it is never created for you, and symbolic links or junctions inside it are refused. Missing, blank, relative, absent or unwritable values stop startup with a message naming `Storage:RootPath`. **No fallback exists** (see below). On Render (free) the Dockerfile sets `/var/data/files`, which is ephemeral unless a persistent disk is mounted. See ADR-023 and ADR-027. |
 | `RateLimiting__GrievanceWritePermitLimit` | no | optional | Grievance creates + uploads per client IP per minute; default 10. |
 
 Tools and tests:
@@ -43,7 +38,7 @@ Tools and tests:
 | Variable | Used by | Notes |
 |---|---|---|
 | `ConnectionStrings__MySql` | `tools/NSG.Mobile.GeoImport` | Read only from the environment. |
-| `NSG_TEST_MYSQL` | `tests/NSG.Mobile.Tests` | Connection string to a **scratch** database whose name ends in `_test`; the suite drops and recreates it. The tests generate throw-away JWT, encryption and blind-index keys in memory unless `Jwt__Secret`, `Encryption__Key`, `BlindIndex__Key` are already set. |
+| `NSG_TEST_MYSQL` | `tests/NSG.Mobile.Tests` | Connection string to a **scratch** database whose name ends in `_test`; the suite drops and recreates it. The tests generate throw-away JWT and encryption keys in memory unless `Jwt__Secret` and `Encryption__Key` are already set. |
 
 `/.env.example` lists these names with placeholders.
 
@@ -56,7 +51,6 @@ The API project has a `UserSecretsId`. Secrets are stored per user outside the r
 dotnet user-secrets set "ConnectionStrings:MySql" "<connection string>" --project src/NSG.Mobile.API
 dotnet user-secrets set "Jwt:Secret"              "<random base64>"      --project src/NSG.Mobile.API
 dotnet user-secrets set "Encryption:Key"          "<base64 of 32 bytes>" --project src/NSG.Mobile.API
-dotnet user-secrets set "BlindIndex:Key"          "<base64, >= 32 bytes>" --project src/NSG.Mobile.API
 dotnet user-secrets list --project src/NSG.Mobile.API     # shows values: do this only in a private terminal
 dotnet user-secrets remove "Jwt:Secret" --project src/NSG.Mobile.API
 ```
@@ -90,7 +84,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON `<schema>`.* TO 'nsg_app'@'<app-host>';
 -- no GRANT OPTION, no global privileges, no access to mysql.* or other schemas
 ```
 
-The API does not apply migrations and does not seed data at startup, so the runtime account never needs DDL rights;
+**Production (NIC Ubuntu):** the API must not apply migrations or seed data at startup, so the runtime account never needs DDL rights. Set `Database__MigrateOnStartup=false` explicitly in production: the committed `appsettings.json` default is `true` for the Render development deployment (disposable database; see `DEPLOYMENT-RENDER.md` and OQ-034). Migrations reach production as a reviewed script or bundle run by a separate migrator account. Reference data (ranks, states, cities, lookups) lives only in the database.
 reference data (ranks, states, cities, lookups) lives only in the database.
 
 ## 7. Rotation procedures
@@ -130,17 +124,7 @@ Safe procedure (maintenance window, database backup first, writes to `users_pis`
 Current state: `users_pis` is empty in the development database; production volumes are not known. Before production data exists,
 decide whether to add a key-version prefix to the ciphertext (an ADR) so future rotations can be gradual.
 
-### 7.4 Blind-index key (`BlindIndex__Key`) — affects uniqueness protection
-
-Impact: `UsersPIS.PanNumberHash` and `SalaryAccountNumberHash` are HMACs of the plaintext and cannot be recomputed from themselves.
-If the key changes without re-indexing, new submissions are hashed with the new key and will **not match** the old hashes, so
-duplicates of existing PANs and salary accounts are silently accepted and uniqueness is lost for existing rows.
-
-Procedure (same maintenance window as 7.3 if both rotate): pause writes, decrypt each PAN and account number with the
-current encryption key, recompute both hashes with the new blind-index key, update the rows in batches, then deploy the new key.
-Verify with a duplicate-submission test.
-
-### 7.5 If a key is compromised (not routine rotation)
+### 7.4 If a key is compromised (not routine rotation)
 
 Rotating is not enough on its own: a leaked encryption key means previously stored ciphertext (and any backups) can be read. Follow the
 security incident process, rotate as above, and assess notification duties for the personal data involved.
@@ -211,5 +195,6 @@ The BSNL SMS gateway is not available yet. `Otp:Mode` selects how OTPs are produ
 * **Mobile tokens:** login returns an access JWT (`Jwt:AccessTokenExpirationMinutes`, default 15) and a single-use refresh token (`Jwt:RefreshTokenExpirationDays`, default 7). Only the SHA-256 hash of the refresh token is stored (`mobile_refresh_tokens`). One active session per profile: a new login ends the previous one. See ADR-015.
 * **`ForwardedHeaders`:** `Enabled` (default false), `KnownProxies`, `KnownNetworks` (CIDR). Required behind nginx; empty lists with `Enabled=true` stop startup.
 * **`PublicApi:BaseUrl`:** the public address of this API as the mobile app reaches it (for example `https://api.example.org`, a path prefix is allowed). Used for absolute links such as banner `imageUrl`. Leave empty to derive it from the incoming request (scheme, host, path base; honours `ForwardedHeaders`). Must be an absolute http(s) address without credentials, query or fragment. Set it per environment (local, UAT, production) with the `PublicApi__BaseUrl` environment variable.
-* **`FileStorage:BasePath`:** empty in the committed file. Development uses `App_Data/filestorage`; every other environment must set an absolute path or the host refuses to start.
+* **`Storage:RootPath` (ADR-023, ADR-027):** the single root for all document modules (Form 16, salary slips, digital library, grievance documents, DG message images, banner images). **`LocalFileStorageService` is the only storage provider; there is no R2, S3 or other provider and no provider selection.** `Storage:RootPath` is mandatory in every environment and the host refuses to start without a valid one. The committed `appsettings.json` leaves it empty; `appsettings.Development.json` sets `D:\NSGStorage`; the `Dockerfile` sets `/var/data/files` (ephemeral on Render Free); Ubuntu sets `Storage__RootPath=/var/lib/nsg-mobile/uploads` (persistent).
+* **No legacy root fallback:** the old per-module root settings were removed from the code and from `appsettings.json` and have no effect. `Form16Storage:MaxPdfSizeBytes`, `SalarySlips:*` and `FileStorage:MaxFileSizeBytes`/`AllowedExtensions` remain as limits. `Program.cs` does not demand any other storage path. Any leftover `R2Storage__*` variable is ignored.
 * **Demo outside Development** additionally requires a database whose name ends in `_demo`.

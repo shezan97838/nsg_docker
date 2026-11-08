@@ -6,48 +6,45 @@ using NSG.Mobile.Domain.Enums;
 
 namespace NSG.Mobile.Infrastructure.Persistence.Configurations;
 
+/// <summary>
+/// Self-contained personnel row: no foreign keys, lookup ids or navigations. Workbook text columns are strings, exactly
+/// seven columns are DATE, and the four sensitive identifiers are ciphertext only (no hash columns, no unique index).
+/// </summary>
 public class UserPisConfiguration : IEntityTypeConfiguration<UserPis>
 {
     public void Configure(EntityTypeBuilder<UserPis> builder)
     {
         builder.ToTable("users_pis", t =>
         {
-            // Date sanity: logical impossibilities only — no NSG service rules are invented. NULLs are allowed.
-            t.HasCheckConstraint("ck_users_pis_enrollment_after_birth", "`date_of_enrollment_in_govt_service` IS NULL OR `date_of_birth` IS NULL OR `date_of_enrollment_in_govt_service` >= `date_of_birth`");
-            t.HasCheckConstraint("ck_users_pis_superannuation_after_birth", "`date_of_superannuation` IS NULL OR `date_of_birth` IS NULL OR `date_of_superannuation` > `date_of_birth`");
-            t.HasCheckConstraint("ck_users_pis_repatriation_after_induction", "`date_of_repatriation` IS NULL OR `date_of_induction_in_nsg` IS NULL OR `date_of_repatriation` >= `date_of_induction_in_nsg`");
+            // Only two constraints besides the keys. There are deliberately NO date-order checks: the source workbook contains
+            // records whose dates are out of the "expected" order (for example a superannuation date before the birth date), and a
+            // personnel table that must accept those rows cannot reject them.
 
-            // Numeric sanity.
-            t.HasCheckConstraint("ck_users_pis_numbers", "(`height_cm` IS NULL OR `height_cm` > 0) AND (`weight_kg` IS NULL OR `weight_kg` > 0) AND (`number_of_children` IS NULL OR `number_of_children` >= 0) " +
-                "AND (`earned_leave_due` IS NULL OR `earned_leave_due` >= 0) AND (`half_pay_leave_due` IS NULL OR `half_pay_leave_due` >= 0)");
-
-            // Closed value sets.
-            t.HasCheckConstraint("ck_users_pis_category", "`category` IS NULL OR `category` IN (1, 2, 3, 4)");
-            t.HasCheckConstraint("ck_users_pis_blood_group", "`blood_group` IS NULL OR `blood_group` BETWEEN 1 AND 8");
+            // Onboarding state: 0 = Pending, 1 = Approved, 2 = Rejected.
             t.HasCheckConstraint("ck_users_pis_mobile_app_activation_status", "`mobile_app_activation_status` IN (0, 1, 2)");
 
-            // Formats: ten-digit Indian mobile (no country code) and six-digit PIN.
-            t.HasCheckConstraint("ck_users_pis_mobile_number_format", "`mobile_number` IS NULL OR `mobile_number` REGEXP '^[6-9][0-9]{9}$'");
-            t.HasCheckConstraint("ck_users_pis_pin_code_format", "`permanent_pin_code` IS NULL OR `permanent_pin_code` REGEXP '^[1-9][0-9]{5}$'");
-
-            // Blind indexes are 64 lower-case hex characters (HMAC-SHA256).
-            t.HasCheckConstraint("ck_users_pis_hashes_format", "(`pan_number_hash` IS NULL OR `pan_number_hash` REGEXP '^[0-9a-f]{64}$') AND (`salary_account_number_hash` IS NULL OR `salary_account_number_hash` REGEXP '^[0-9a-f]{64}$')");
+            // The individual's mobile number is the unique login/contact key: exactly ten digits.
+            t.HasCheckConstraint("ck_users_pis_mobile_number_format", "`mobile_number` REGEXP '^[0-9]{10}$'");
         });
 
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Id).HasColumnType("bigint").ValueGeneratedOnAdd();
 
-        // ── Identity ──
+        // ── Identity and service ──
         builder.Property(p => p.NsgNumber).IsRequired().HasMaxLength(30);
-        builder.Property(p => p.ServiceNumber).IsRequired().HasMaxLength(30);
+        builder.Property(p => p.ServiceNumber).HasMaxLength(30);
+        builder.Property(p => p.NsgRank).HasMaxLength(100);
+        builder.Property(p => p.ParentDepartmentRank).HasMaxLength(100);
         builder.Property(p => p.FullName).HasMaxLength(200);
+        builder.Property(p => p.NsgUnit).HasMaxLength(100);
+        builder.Property(p => p.Education).HasMaxLength(100);
+        builder.Property(p => p.SideSteppedDetails).HasMaxLength(255);
 
         // An NSG number is never changed by an ordinary update; EF throws if a tracked entity's value is modified.
         builder.Property(p => p.NsgNumber).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
 
-        // ── Dates (MySQL DATE) ──
+        // ── Dates (MySQL DATE): exactly these seven ──
         builder.Property(p => p.DateOfInductionInNsg).HasColumnType("date");
-        builder.Property(p => p.SideSteppedOn).HasColumnType("date");
         builder.Property(p => p.DateOfRepatriation).HasColumnType("date");
         builder.Property(p => p.DateOfBirth).HasColumnType("date");
         builder.Property(p => p.DateOfEnrollmentInGovtService).HasColumnType("date");
@@ -55,36 +52,37 @@ public class UserPisConfiguration : IEntityTypeConfiguration<UserPis>
         builder.Property(p => p.DateOfAme).HasColumnType("date");
         builder.Property(p => p.DateOfImmovablePropertyReturn).HasColumnType("date");
 
-        // ── Personal and family ──
-        builder.Property(p => p.Gender).HasConversion<int?>();
-        builder.Property(p => p.Category).HasConversion<int?>();
-        builder.Property(p => p.BloodGroup).HasConversion<int?>();
+        // ── Personal and family (text) ──
+        builder.Property(p => p.Gender).HasMaxLength(30);
+        builder.Property(p => p.Category).HasMaxLength(30);
+        builder.Property(p => p.Religion).HasMaxLength(100);
+        builder.Property(p => p.BloodGroup).HasMaxLength(20);
+        builder.Property(p => p.HeightCm).HasMaxLength(50);
+        builder.Property(p => p.WeightKg).HasMaxLength(50);
         builder.Property(p => p.FatherName).HasMaxLength(200);
         builder.Property(p => p.MotherName).HasMaxLength(200);
         builder.Property(p => p.SpouseName).HasMaxLength(200);
         builder.Property(p => p.NextOfKinMobileNumber).HasMaxLength(15);
-        builder.Property(p => p.MobileNumber).HasMaxLength(15);
-        builder.Property(p => p.HeightCm).HasColumnType("tinyint unsigned");
-        builder.Property(p => p.WeightKg).HasColumnType("decimal(5,2)");
+        builder.Property(p => p.NumberOfChildren).HasMaxLength(50);
+        builder.Property(p => p.MobileNumber).IsRequired().HasMaxLength(10);
 
-        // ── Sensitive (ciphertext: base64 of IV + AES-CBC block data) ──
-        builder.Property(p => p.AadhaarNumberEncrypted).HasMaxLength(256);
-        builder.Property(p => p.PanNumberEncrypted).HasMaxLength(256);
-        builder.Property(p => p.PranNumberEncrypted).HasMaxLength(256);
-        builder.Property(p => p.SalaryAccountNumberEncrypted).HasMaxLength(256);
-        builder.Property(p => p.PanNumberHash).HasMaxLength(64);
-        builder.Property(p => p.SalaryAccountNumberHash).HasMaxLength(64);
+        // ── Sensitive (ciphertext: base64 of IV + AES-CBC block data). No hashes, no unique indexes. ──
+        builder.Property(p => p.AadhaarNumberEncrypted).HasMaxLength(512);
+        builder.Property(p => p.PanNumberEncrypted).HasMaxLength(512);
+        builder.Property(p => p.PranNumberEncrypted).HasMaxLength(512);
+        builder.Property(p => p.SalaryAccountNumberEncrypted).HasMaxLength(512);
 
         // ── Address ──
         builder.Property(p => p.PermanentVillage).HasMaxLength(150);
         builder.Property(p => p.PermanentPostOffice).HasMaxLength(150);
         builder.Property(p => p.PermanentPoliceStation).HasMaxLength(150);
         builder.Property(p => p.PermanentDistrict).HasMaxLength(100);
-        builder.Property(p => p.PermanentPinCode).HasMaxLength(6);
+        builder.Property(p => p.PermanentState).HasMaxLength(100);
+        builder.Property(p => p.PermanentPinCode).HasMaxLength(10);
 
-        // ── Leave summaries ──
-        builder.Property(p => p.EarnedLeaveDue).HasColumnType("decimal(7,2)");
-        builder.Property(p => p.HalfPayLeaveDue).HasColumnType("decimal(7,2)");
+        // ── Leave summaries (text) ──
+        builder.Property(p => p.EarnedLeaveDue).HasMaxLength(100);
+        builder.Property(p => p.HalfPayLeaveDue).HasMaxLength(100);
         builder.Property(p => p.PaternityLeaveAvailed).HasMaxLength(100);
         builder.Property(p => p.MaternityLeaveAvailed).HasMaxLength(100);
         builder.Property(p => p.ChildCareLeaveAvailed).HasMaxLength(100);
@@ -97,29 +95,18 @@ public class UserPisConfiguration : IEntityTypeConfiguration<UserPis>
         builder.Property(p => p.CreatedAtIst).IsRequired().HasColumnType("datetime(6)");
         builder.Property(p => p.UpdatedAtIst).HasColumnType("datetime(6)");
 
+        // ── Ownership: admin_profiles.id of the responsible PIS Admin (nullable, deliberately no FK like the rest of this table) ──
+        builder.Property(p => p.AssignedTo).HasColumnType("bigint");
+
         // ── Indexes ──
         builder.HasIndex(p => p.NsgNumber).IsUnique().HasDatabaseName("ix_users_pis_nsg_number");
         builder.HasIndex(p => p.ServiceNumber).HasDatabaseName("ix_users_pis_service_number"); // deliberately NOT unique
-        builder.HasIndex(p => p.MobileNumber).IsUnique().HasDatabaseName("ix_users_pis_mobile_number"); // NULLs may repeat
+        builder.HasIndex(p => p.MobileNumber).IsUnique().HasDatabaseName("ix_users_pis_mobile_number");
         builder.HasIndex(p => p.IsActive).HasDatabaseName("ix_users_pis_is_active");
-        builder.HasIndex(p => p.PanNumberHash).IsUnique().HasDatabaseName("ix_users_pis_pan_number_hash"); // NULLs may repeat
-        builder.HasIndex(p => p.SalaryAccountNumberHash).IsUnique().HasDatabaseName("ix_users_pis_salary_account_number_hash"); // NULLs may repeat
-
-        // ── Relationships (all Restrict: lookups and ranks are never cascaded away) ──
-        builder.HasOne(p => p.NsgRank).WithMany().HasForeignKey(p => p.NsgRankId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(p => p.ParentDepartmentRank).WithMany().HasForeignKey(p => p.ParentDepartmentRankId).OnDelete(DeleteBehavior.Restrict);
-        // Column and constraint names come from DatabaseNamingStandard (nsg_trade_id, pd_trade_id, fk_users_pis_nsg_trade_nsg_trade_id).
-        builder.HasIndex(p => p.NsgTradeId).HasDatabaseName("ix_users_pis_nsg_trade_id");
-        builder.HasIndex(p => p.PdTradeId).HasDatabaseName("ix_users_pis_pd_trade_id");
-        builder.HasOne(p => p.NsgTrade).WithMany().HasForeignKey(p => p.NsgTradeId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(p => p.PdTrade).WithMany().HasForeignKey(p => p.PdTradeId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(p => p.NsgUnit).WithMany().HasForeignKey(p => p.NsgUnitId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(p => p.SideSteppedFromNsgUnit).WithMany().HasForeignKey(p => p.SideSteppedFromNsgUnitId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(p => p.Education).WithMany().HasForeignKey(p => p.EducationId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(p => p.Religion).WithMany().HasForeignKey(p => p.ReligionId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(p => p.PermanentState).WithMany().HasForeignKey(p => p.PermanentStateId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(p => p.AssignedTo).HasDatabaseName("ix_users_pis_assigned_to");
     }
 }
+
 
 internal static class PisLookupMapping
 {

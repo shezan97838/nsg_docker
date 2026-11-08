@@ -19,6 +19,11 @@ public class MobileUserProfileConfiguration : IEntityTypeConfiguration<MobileUse
 
             // A credential column is either NULL (not set up) or a non-empty hash; never an empty string.
             t.HasCheckConstraint("ck_mobile_user_profiles_credentials", "(`mpin_hash` IS NULL OR CHAR_LENGTH(`mpin_hash`) > 0) AND (`password_hash` IS NULL OR CHAR_LENGTH(`password_hash`) > 0)");
+
+            // A PIS Admin block is all-or-nothing and always means "not active": the reason and the admin never exist without the
+            // timestamp, and a blocked profile can never be active. Block and restore change all four columns in one statement.
+            t.HasCheckConstraint("ck_mobile_user_profiles_access_block",
+                "(`access_blocked_at_ist` IS NULL AND `access_blocked_by` IS NULL AND `access_block_reason` IS NULL) OR (`access_blocked_at_ist` IS NOT NULL AND `is_active` = 0)");
         });
 
         builder.HasKey(p => p.Id);
@@ -36,6 +41,11 @@ public class MobileUserProfileConfiguration : IEntityTypeConfiguration<MobileUse
         builder.Property(p => p.FailedLoginAttempts).IsRequired().HasDefaultValue(0);
         builder.Property(p => p.LockedUntilIst).HasColumnType("datetime(6)");
         builder.Property(p => p.LastLoginAtIst).HasColumnType("datetime(6)");
+
+        builder.Property(p => p.AccessBlockedAtIst).HasColumnType("datetime(6)");
+        builder.Property(p => p.AccessBlockedBy);
+        builder.Property(p => p.AccessBlockReason).HasMaxLength(500);
+        builder.Ignore(p => p.IsAdminBlocked);
 
         builder.Property(p => p.CreatedAtIst).IsRequired().HasColumnType("datetime(6)");
         builder.Property(p => p.UpdatedAtIst).HasColumnType("datetime(6)");

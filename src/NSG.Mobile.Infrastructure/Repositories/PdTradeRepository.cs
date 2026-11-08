@@ -42,9 +42,6 @@ public class PdTradeRepository : IPdTradeRepository
     public async Task<bool> NameExistsAsync(string name, int? excludeId, CancellationToken cancellationToken = default)
         => await _context.PdTrades.AnyAsync(t => t.PdTradeName == name && (!excludeId.HasValue || t.Id != excludeId.Value), cancellationToken);
 
-    public async Task<bool> IsInUseAsync(int id, CancellationToken cancellationToken = default)
-        => await _context.UsersPis.AnyAsync(u => u.PdTradeId == id, cancellationToken);
-
     public async Task<bool> AddAsync(PdTrade entity, CancellationToken cancellationToken = default)
     {
         await _context.PdTrades.AddAsync(entity, cancellationToken);

@@ -331,67 +331,77 @@ Generated from the EF model and the pre-change model script. Columns marked `=` 
 - Indexes: `ix_users_force_number` (unique) (force_number); `ix_users_mobile_number` (unique) (mobile_number); `ix_users_status` (status)
 - Check constraints: none
 
-#### `users_pis` (was `UsersPIS`)
+#### `users_pis` (final schema, migration `Rebuild_Users_Pis_Final_Schema`, ADR-020)
 
-| Old column | New column | MySQL type | Null | Notes |
-|---|---|---|---|---|
-| `Id` | `id` | bigint | no | auto_increment |
-| `NsgNumber` | `nsg_number` | varchar(30) | no |  |
-| `ServiceNumber` | `service_number` | varchar(30) | no |  |
-| `NsgRankId` | `nsg_rank_id` | int | yes |  |
-| `ParentDepartmentRankId` | `parent_department_rank_id` | int | yes |  |
-| = | `nsg_trade_id` | int | yes |  |
-| = | `pd_trade_id` | int | yes |  |
-| `FullName` | `full_name` | varchar(200) | yes |  |
-| `NsgUnitId` | `nsg_unit_id` | int | yes |  |
-| `EducationId` | `education_id` | int | yes |  |
-| `DateOfInductionInNsg` | `date_of_induction_in_nsg` | date | yes |  |
-| `SideSteppedOn` | `side_stepped_on` | date | yes |  |
-| `SideSteppedFromNsgUnitId` | `side_stepped_from_nsg_unit_id` | int | yes |  |
-| `DateOfRepatriation` | `date_of_repatriation` | date | yes |  |
-| `DateOfBirth` | `date_of_birth` | date | yes |  |
-| `DateOfEnrollmentInGovtService` | `date_of_enrollment_in_govt_service` | date | yes |  |
-| `DateOfSuperannuation` | `date_of_superannuation` | date | yes |  |
-| `Category` | `category` | int | yes |  |
-| `ReligionId` | `religion_id` | int | yes |  |
-| `FatherName` | `father_name` | varchar(200) | yes |  |
-| `MotherName` | `mother_name` | varchar(200) | yes |  |
-| `SpouseName` | `spouse_name` | varchar(200) | yes |  |
-| `NextOfKinMobileNumber` | `next_of_kin_mobile_number` | varchar(15) | yes |  |
-| `NumberOfChildren` | `number_of_children` | int | yes |  |
-| `MobileNumber` | `mobile_number` | varchar(15) | yes |  |
-| `BloodGroup` | `blood_group` | int | yes |  |
-| `HeightCm` | `height_cm` | tinyint unsigned | yes |  |
-| `WeightKg` | `weight_kg` | decimal(5,2) | yes |  |
-| `AadhaarNumberEncrypted` | `aadhaar_number_encrypted` | varchar(256) | yes |  |
-| `PanNumberEncrypted` | `pan_number_encrypted` | varchar(256) | yes |  |
-| `PranNumberEncrypted` | `pran_number_encrypted` | varchar(256) | yes |  |
-| `SalaryAccountNumberEncrypted` | `salary_account_number_encrypted` | varchar(256) | yes |  |
-| `PanNumberHash` | `pan_number_hash` | varchar(64) | yes |  |
-| `SalaryAccountNumberHash` | `salary_account_number_hash` | varchar(64) | yes |  |
-| `PermanentVillage` | `permanent_village` | varchar(150) | yes |  |
-| `PermanentPostOffice` | `permanent_post_office` | varchar(150) | yes |  |
-| `PermanentPoliceStation` | `permanent_police_station` | varchar(150) | yes |  |
-| `PermanentDistrict` | `permanent_district` | varchar(100) | yes |  |
-| `PermanentStateId` | `permanent_state_id` | int | yes |  |
-| `PermanentPinCode` | `permanent_pin_code` | varchar(6) | yes |  |
-| `DateOfAme` | `date_of_ame` | date | yes |  |
-| `DateOfImmovablePropertyReturn` | `date_of_immovable_property_return` | date | yes |  |
-| `EarnedLeaveDue` | `earned_leave_due` | decimal(7,2) | yes |  |
-| `HalfPayLeaveDue` | `half_pay_leave_due` | decimal(7,2) | yes |  |
-| `PaternityLeaveAvailed` | `paternity_leave_availed` | varchar(100) | yes |  |
-| `MaternityLeaveAvailed` | `maternity_leave_availed` | varchar(100) | yes |  |
-| `ChildCareLeaveAvailed` | `child_care_leave_availed` | varchar(100) | yes |  |
-| `MobileAppActivationStatus` | `mobile_app_activation_status` | int | no | default 0 |
-| `IsActive` | `is_active` | tinyint(1) | no | default TRUE |
-| `CreatedAtUtc` | `created_at_utc` | datetime(6) | no |  |
-| `CreatedBy` | `created_by` | int | yes |  |
-| `UpdatedAtUtc` | `updated_at_utc` | datetime(6) | yes |  |
-| `UpdatedBy` | `updated_by` | int | yes |  |
+Self-contained personnel table: no lookup ids, no foreign keys, no hash columns. Rebuilt from scratch (the previous table is dropped).
 
-- Primary key: (`id`) (MySQL always names it PRIMARY)
-- Foreign keys: `fk_users_pis_education_qualifications_education_id` (`education_id`) REFERENCES `education_qualifications` (`id`) (RESTRICT); `fk_users_pis_nsg_trade_nsg_trade_id` (`nsg_trade_id`) REFERENCES `nsg_trade` (`id`) (RESTRICT); `fk_users_pis_nsg_units_nsg_unit_id` (`nsg_unit_id`) REFERENCES `nsg_units` (`id`) (RESTRICT); `fk_users_pis_nsg_units_side_stepped_from_nsg_unit_id` (`side_stepped_from_nsg_unit_id`) REFERENCES `nsg_units` (`id`) (RESTRICT); `fk_users_pis_parent_department_ranks_parent_department_rank_id` (`parent_department_rank_id`) REFERENCES `parent_department_ranks` (`id`) (RESTRICT); `fk_users_pis_pd_trade_pd_trade_id` (`pd_trade_id`) REFERENCES `pd_trade` (`id`) (RESTRICT); `fk_users_pis_rank_hierarchy_nsg_rank_id` (`nsg_rank_id`) REFERENCES `rank_hierarchy` (`id`) (RESTRICT); `fk_users_pis_religions_religion_id` (`religion_id`) REFERENCES `religions` (`id`) (RESTRICT); `fk_users_pis_states_permanent_state_id` (`permanent_state_id`) REFERENCES `states` (`id`) (RESTRICT)
-- Indexes: `ix_users_pis_education_id` (education_id); `ix_users_pis_is_active` (is_active); `ix_users_pis_mobile_number` (unique) (mobile_number); `ix_users_pis_nsg_number` (unique) (nsg_number); `ix_users_pis_nsg_rank_id` (nsg_rank_id); `ix_users_pis_nsg_trade_id` (nsg_trade_id); `ix_users_pis_nsg_unit_id` (nsg_unit_id); `ix_users_pis_pan_number_hash` (unique) (pan_number_hash); `ix_users_pis_parent_department_rank_id` (parent_department_rank_id); `ix_users_pis_pd_trade_id` (pd_trade_id); `ix_users_pis_permanent_state_id` (permanent_state_id); `ix_users_pis_religion_id` (religion_id); `ix_users_pis_salary_account_number_hash` (unique) (salary_account_number_hash); `ix_users_pis_service_number` (service_number); `ix_users_pis_side_stepped_from_nsg_unit_id` (side_stepped_from_nsg_unit_id)
-- Check constraints: `ck_users_pis_blood_group`, `ck_users_pis_category`, `ck_users_pis_enrollment_after_birth`, `ck_users_pis_hashes_format`, `ck_users_pis_mobile_app_activation_status`, `ck_users_pis_mobile_number_format`, `ck_users_pis_numbers`, `ck_users_pis_pin_code_format`, `ck_users_pis_repatriation_after_induction`, `ck_users_pis_superannuation_after_birth`
+| Column | MySQL type | Null | Notes |
+|---|---|---|---|
+| `id` | bigint | no | auto_increment, primary key |
+| `nsg_number` | varchar(30) | no | unique |
+| `service_number` | varchar(30) | yes |  |
+| `nsg_rank` | varchar(100) | yes |  |
+| `parent_department_rank` | varchar(100) | yes |  |
+| `full_name` | varchar(200) | yes |  |
+| `nsg_unit` | varchar(100) | yes |  |
+| `education` | varchar(100) | yes |  |
+| `date_of_induction_in_nsg` | date | yes |  |
+| `side_stepped_details` | varchar(255) | yes | one free-text value |
+| `date_of_repatriation` | date | yes |  |
+| `date_of_birth` | date | yes |  |
+| `date_of_enrollment_in_govt_service` | date | yes |  |
+| `date_of_superannuation` | date | yes |  |
+| `gender` | varchar(30) | yes | free text |
+| `category` | varchar(30) | yes | free text |
+| `religion` | varchar(100) | yes |  |
+| `father_name` | varchar(200) | yes |  |
+| `mother_name` | varchar(200) | yes |  |
+| `spouse_name` | varchar(200) | yes |  |
+| `next_of_kin_mobile_number` | varchar(15) | yes |  |
+| `number_of_children` | varchar(50) | yes |  |
+| `mobile_number` | varchar(10) | no | unique, exactly 10 digits |
+| `blood_group` | varchar(20) | yes | free text |
+| `height_cm` | varchar(50) | yes |  |
+| `weight_kg` | varchar(50) | yes |  |
+| `aadhaar_number_encrypted` | varchar(512) | yes | AES ciphertext |
+| `pan_number_encrypted` | varchar(512) | yes | AES ciphertext |
+| `pran_number_encrypted` | varchar(512) | yes | AES ciphertext |
+| `salary_account_number_encrypted` | varchar(512) | yes | AES ciphertext |
+| `permanent_village` | varchar(150) | yes |  |
+| `permanent_post_office` | varchar(150) | yes |  |
+| `permanent_police_station` | varchar(150) | yes |  |
+| `permanent_district` | varchar(100) | yes |  |
+| `permanent_state` | varchar(100) | yes |  |
+| `permanent_pin_code` | varchar(10) | yes |  |
+| `date_of_ame` | date | yes |  |
+| `date_of_immovable_property_return` | date | yes |  |
+| `earned_leave_due` | varchar(100) | yes |  |
+| `half_pay_leave_due` | varchar(100) | yes |  |
+| `paternity_leave_availed` | varchar(100) | yes |  |
+| `maternity_leave_availed` | varchar(100) | yes |  |
+| `child_care_leave_availed` | varchar(100) | yes |  |
+| `mobile_app_activation_status` | int | no | default 0 (0 Pending, 1 Approved, 2 Rejected) |
+| `is_active` | tinyint(1) | no | default 1 |
+| `created_at_ist` | datetime(6) | no |  |
+| `created_by` | int | yes |  |
+| `updated_at_ist` | datetime(6) | yes |  |
+| `updated_by` | int | yes |  |
+
+- Primary key: (`id`)
+- Foreign keys: none (in either direction)
+- Indexes: `ix_users_pis_nsg_number` (unique), `ix_users_pis_mobile_number` (unique), `ix_users_pis_service_number`, `ix_users_pis_is_active`
+- Check constraints: `ck_users_pis_mobile_app_activation_status` (0, 1, 2), `ck_users_pis_mobile_number_format` (exactly ten digits)
 
 
+## Later additions
+
+### `mobile_user_profiles`: PIS Admin block marker (migration `Add_Mobile_Access_Block`, ADR-024, 2026-11-06)
+
+| Column | MySQL type | Null | Notes |
+|---|---|---|---|
+| `access_blocked_at_ist` | datetime(6) | yes | non-null = blocked through the PIS Admin API (IST) |
+| `access_blocked_by` | int | yes | Admin Portal profile id, no foreign key |
+| `access_block_reason` | varchar(500) | yes | optional reason |
+
+- Check constraint `ck_mobile_user_profiles_access_block`: all three NULL, or `access_blocked_at_ist` NOT NULL and `is_active` = 0.
+- No new index (lookups are by `nsg_number`). Applied to the local `nsg_mobile_dev` only; pinned in `tests/NSG.Mobile.Tests/ExpectedDatabaseSchema.cs`.

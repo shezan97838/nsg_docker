@@ -46,4 +46,7 @@ public static class MobileSessionRevokeReasons
     public const string MpinReset = "MpinReset";
     public const string ReuseDetected = "ReuseDetected";
     public const string ProfileInactive = "ProfileInactive";
+
+    /// <summary>A PIS Admin blocked mobile access. The only reason that is reported to the app as <c>SURAKSHA_1001</c>.</summary>
+    public const string AdminBlocked = "AdminBlocked";
 }

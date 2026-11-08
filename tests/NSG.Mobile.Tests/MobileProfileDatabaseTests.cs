@@ -59,7 +59,7 @@ public class MobileProfileDatabaseTests : IAsyncLifetime
         return new UserPis
         {
             NsgNumber = nsg, ServiceNumber = "SVC-" + nsg, FullName = name, MobileNumber = mobile, DateOfBirth = DateOnly.Parse(Dob),
-            Gender = Gender.Female,
+            Gender = "Female",
             AadhaarNumberEncrypted = encryption.Encrypt(Aadhaar), PanNumberEncrypted = encryption.Encrypt(Pan),
             PranNumberEncrypted = encryption.Encrypt(Pran), SalaryAccountNumberEncrypted = encryption.Encrypt(Account)
         };

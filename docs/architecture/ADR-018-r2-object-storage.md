@@ -1,6 +1,6 @@
 # ADR-018: Cloudflare R2 behind IFileStorageService
 
-**Status**: Accepted (code complete; not yet smoke-tested against a real bucket)
+**Status**: Superseded by ADR-027 (2026-11-08). Historical record: R2 has been removed from the code. Original status: Accepted, code complete, never smoke-tested against a real bucket.
 **Date**: 2026-10-22
 **SOW Reference**: §3.8 (Grievance supporting documents). Builds on ADR-011 (external integration abstraction) and ADR-012 (file security).
 

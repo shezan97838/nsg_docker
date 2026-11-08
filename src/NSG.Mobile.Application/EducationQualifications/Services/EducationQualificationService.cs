@@ -76,6 +76,9 @@ public class EducationQualificationService : IEducationQualificationService
     public async Task<Result<ApiResult<EducationQualificationResponseDto>>> CreateAsync(
         CreateEducationQualificationRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure<ApiResult<EducationQualificationResponseDto>>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         string name = request.CourseName.Trim();
 
         // Pre-check gives a clear message; the repository also maps a unique-index violation (race) to the same outcome.
@@ -94,6 +97,9 @@ public class EducationQualificationService : IEducationQualificationService
     public async Task<Result<ApiResult<EducationQualificationResponseDto>>> UpdateAsync(
         int id, UpdateEducationQualificationRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure<ApiResult<EducationQualificationResponseDto>>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         EducationQualification? entity = await _repository.GetByIdAsync(id, cancellationToken);
         if (entity == null)
             return Result.Failure<ApiResult<EducationQualificationResponseDto>>(ApiErrorCodes.NotFound, NotFoundMessage);
@@ -120,6 +126,9 @@ public class EducationQualificationService : IEducationQualificationService
 
     public async Task<Result<ApiMessageResponse>> DeactivateAsync(int id, CancellationToken cancellationToken)
     {
+        if (_currentUserService.HasUnusableAdminId())
+            return Result.Failure<ApiMessageResponse>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         EducationQualification? entity = await _repository.GetByIdAsync(id, cancellationToken);
         if (entity == null)
             return Result.Failure<ApiMessageResponse>(ApiErrorCodes.NotFound, NotFoundMessage);
@@ -140,11 +149,11 @@ public class EducationQualificationService : IEducationQualificationService
     private async Task AuditAsync(string operation, int id, CancellationToken cancellationToken)
     {
         await _auditService.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success,
-            userId: _currentUserService.UserId, entityType: EntityType, entityId: id.ToString(),
+            userId: _currentUserService.AuditUserId(), entityType: EntityType, entityId: id.ToString(),
             correlationId: _currentUserService.CorrelationId,
             additionalData: $"{{\"operation\":\"{operation}\"}}",
             cancellationToken: cancellationToken);
 
-        _logger.LogInformation("{Operation} education qualification {EntityId} by admin {AdminId}", operation, id, _currentUserService.UserId);
+        _logger.LogInformation("{Operation} education qualification {EntityId} by admin {AdminId}", operation, id, _currentUserService.AuditUserId());
     }
 }

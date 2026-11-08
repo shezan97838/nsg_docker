@@ -2,7 +2,7 @@ namespace NSG.Mobile.Domain.Entities;
 
 /// <summary>
 /// Education qualification lookup (workbook column "EDUCATION", for example "B.Tech"). Table <c>education_qualifications</c>.
-/// Independent lookup: the only reference to it is the optional <see cref="UserPis.EducationId"/>.
+/// Independent lookup: <see cref="UserPis"/> no longer references it (it stores the course name as text).
 /// </summary>
 public class EducationQualification
 {

@@ -52,9 +52,12 @@ public class OnboardingController : ControllerBase
         var result = await _onboardingService.ApproveRegistrationAsync(userId, request?.Reason, cancellationToken);
 
         if (!result.IsSuccess)
-            return result.ErrorCode == ApiErrorCodes.NotFound
-                ? NotFound(new ProblemDetails { Status = 404, Title = "Not Found", Detail = result.ErrorMessage })
-                : BadRequest(new ProblemDetails { Status = 400, Title = result.ErrorCode, Detail = result.ErrorMessage });
+            return result.ErrorCode switch
+            {
+                ApiErrorCodes.NotFound => NotFound(new ProblemDetails { Status = 404, Title = "Not Found", Detail = result.ErrorMessage }),
+                ApiErrorCodes.Unauthorized => Unauthorized(new ProblemDetails { Status = 401, Title = "Unauthorized", Detail = result.ErrorMessage }),
+                _ => BadRequest(new ProblemDetails { Status = 400, Title = result.ErrorCode, Detail = result.ErrorMessage })
+            };
 
         return NoContent();
     }
@@ -72,9 +75,12 @@ public class OnboardingController : ControllerBase
         var result = await _onboardingService.RejectRegistrationAsync(userId, request?.Reason, cancellationToken);
 
         if (!result.IsSuccess)
-            return result.ErrorCode == ApiErrorCodes.NotFound
-                ? NotFound(new ProblemDetails { Status = 404, Title = "Not Found", Detail = result.ErrorMessage })
-                : BadRequest(new ProblemDetails { Status = 400, Title = result.ErrorCode, Detail = result.ErrorMessage });
+            return result.ErrorCode switch
+            {
+                ApiErrorCodes.NotFound => NotFound(new ProblemDetails { Status = 404, Title = "Not Found", Detail = result.ErrorMessage }),
+                ApiErrorCodes.Unauthorized => Unauthorized(new ProblemDetails { Status = 401, Title = "Unauthorized", Detail = result.ErrorMessage }),
+                _ => BadRequest(new ProblemDetails { Status = 400, Title = result.ErrorCode, Detail = result.ErrorMessage })
+            };
 
         return NoContent();
     }

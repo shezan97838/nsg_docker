@@ -19,14 +19,13 @@ public class PreDeploymentReviewTests
 {
     // ───── secrets must be real before the host starts ─────
 
-    private static IConfiguration Config(string? jwt = null, string? encryption = null, string? blind = null, string issuer = "NSG.Mobile.API", string audience = "NSG.Mobile.App")
+    private static IConfiguration Config(string? jwt = null, string? encryption = null, string issuer = "NSG.Mobile.API", string audience = "NSG.Mobile.App")
         => new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Jwt:Secret"] = jwt ?? new string('s', 48),
             ["Jwt:Issuer"] = issuer,
             ["Jwt:Audience"] = audience,
-            ["Encryption:Key"] = encryption ?? Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray()),
-            ["BlindIndex:Key"] = blind ?? Convert.ToBase64String(Enumerable.Repeat((byte)2, 32).ToArray())
+            ["Encryption:Key"] = encryption ?? Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray())
         }).Build();
 
     [Fact]
@@ -62,11 +61,16 @@ public class PreDeploymentReviewTests
         => Assert.Throws<InvalidOperationException>(() => StartupSecretsValidator.EnsureValid(Config(encryption: key)));
 
     [Fact]
-    public void Blind_index_key_must_be_long_enough_and_different_from_the_encryption_key()
+    public void A_blind_index_key_is_no_longer_required_or_checked()
     {
-        string same = Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray());
-        Assert.Throws<InvalidOperationException>(() => StartupSecretsValidator.EnsureValid(Config(encryption: same, blind: same)));
-        Assert.Throws<InvalidOperationException>(() => StartupSecretsValidator.EnsureValid(Config(blind: "AAAA")));
+        // The PAN / salary-account blind index was removed with the hash columns, so the key is neither needed nor validated.
+        IConfiguration withoutKey = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Jwt:Secret"] = new string('s', 48), ["Jwt:Issuer"] = "NSG.Mobile.API", ["Jwt:Audience"] = "NSG.Mobile.App",
+            ["Encryption:Key"] = Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray())
+        }).Build();
+
+        StartupSecretsValidator.EnsureValid(withoutKey);
     }
 
     [Theory]

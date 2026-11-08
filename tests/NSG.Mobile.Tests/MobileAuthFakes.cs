@@ -37,10 +37,9 @@ internal sealed class FakePisRepository : IUserPisRepository
 
     public Task<UserPis?> GetByIdAsync(long id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<UserPis?> GetDetailAsync(long id, CancellationToken cancellationToken = default) => Task.FromResult(Rows.FirstOrDefault(p => p.Id == id));
-    public Task<(IReadOnlyList<UserPis> Items, int TotalCount)> GetPagedAsync(int pageNumber, int pageSize, UserPisFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<IReadOnlyList<string>> GetMissingReferencesAsync(UserPis candidate, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<(IReadOnlyList<UserPis> Items, int TotalCount)> GetPagedAsync(int pageNumber, int pageSize, UserPisFilter filter, long assignedTo, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<PisSaveOutcome> AddAsync(UserPis entity, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<PisSaveOutcome> UpdateAsync(UserPis entity, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<PisSaveOutcome> UpdateAsync(UserPis entity, long ownerAdminId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 }
 
 internal sealed class FakeGrantRepository : IMobileAuthGrantRepository
@@ -161,7 +160,7 @@ internal sealed class FakeRequestRepository : IApproveMobileUserRepository
     public List<ApproveMobileUser> Requests { get; } = new();
 
     // Recorded for the approval-service tests.
-    public (long Id, MobileAppActivationStatus Decision, int Approver, string? Remarks, DateTime Now)? LastDecision { get; private set; }
+    public (long Id, MobileAppActivationStatus Decision, long Approver, string? Remarks, DateTime Now)? LastDecision { get; private set; }
     public ApprovalDecisionResult NextDecisionResult { get; set; } = new(ApprovalDecisionOutcome.Decided, new ApproveMobileUser { Id = 1, NsgNumber = "N", MobileNumber = "9876543210" });
 
     public Task<ApproveMobileUser?> GetPendingByNsgNumberAsync(string nsgNumber, CancellationToken cancellationToken = default)
@@ -182,19 +181,48 @@ internal sealed class FakeRequestRepository : IApproveMobileUserRepository
         return Task.FromResult(PendingRequestOutcome.Created);
     }
 
-    public Task<(IReadOnlyList<ApprovalRequestRow> Items, int TotalCount)> GetPagedAsync(int pageNumber, int pageSize, MobileAppActivationStatus? status, string? search, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The CURRENT <c>users_pis.assigned_to</c> per NSG number (case-insensitive). A missing key = no personnel row; a null value = unassigned.
+    /// Change an entry to simulate an ownership transfer: nothing else needs to move, exactly as with the SQL join.
+    /// </summary>
+    public Dictionary<string, long?> Owners { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task<(IReadOnlyList<ApprovalRequestRow> Items, int TotalCount)> GetPagedAsync(
+        long ownerAdminId, int pageNumber, int pageSize, MobileAppActivationStatus? status, string? search, CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<ApprovalRequestRow> rows = Requests.Where(r => status == null || r.ApprovalStatus == status)
-            .Select(r => new ApprovalRequestRow(r, null)).ToList();
-        return Task.FromResult((rows, rows.Count));
+        // Mirrors the repository query: ownership first (inner join on the personnel row, assigned_to = caller), then status and search, then the page.
+        IEnumerable<ApproveMobileUser> own = Requests.Where(r => Owners.TryGetValue(r.NsgNumber, out long? owner) && owner == ownerAdminId);
+        if (status != null) own = own.Where(r => r.ApprovalStatus == status);
+        if (!string.IsNullOrWhiteSpace(search)) own = own.Where(r => r.NsgNumber.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        List<ApproveMobileUser> all = own.OrderByDescending(r => r.RequestedAtIst).ThenByDescending(r => r.Id).ToList();
+        IReadOnlyList<ApprovalRequestRow> rows = all.Skip((pageNumber - 1) * pageSize).Take(pageSize).Select(r => new ApprovalRequestRow(r, null)).ToList();
+        return Task.FromResult((rows, all.Count));
     }
 
-    public Task<ApprovalDecisionResult> DecideAsync(long id, MobileAppActivationStatus decision, int approverUserId, string? remarks, DateTime nowUtc, CancellationToken cancellationToken = default)
+    public Task<ApprovalDecisionResult> DecideAsync(long id, MobileAppActivationStatus decision, long adminProfileId, string? remarks, DateTime nowIst, CancellationToken cancellationToken = default)
     {
-        LastDecision = (id, decision, approverUserId, remarks, nowUtc);
-        return Task.FromResult(NextDecisionResult);
+        LastDecision = (id, decision, adminProfileId, remarks, nowIst);
+
+        // Scripted mode (older service tests): the test dictates the outcome.
+        if (Owners.Count == 0) return Task.FromResult(NextDecisionResult);
+
+        // Ownership mode: same order as the repository - ownership first, then the pending claim.
+        ApproveMobileUser? request = Requests.FirstOrDefault(r => r.Id == id);
+        if (request == null) return Task.FromResult(new ApprovalDecisionResult(ApprovalDecisionOutcome.NotFound));
+        if (!Owners.TryGetValue(request.NsgNumber, out long? owner)) return Task.FromResult(new ApprovalDecisionResult(ApprovalDecisionOutcome.PersonnelRecordMissing));
+        if (owner != adminProfileId) return Task.FromResult(new ApprovalDecisionResult(ApprovalDecisionOutcome.NotOwner));
+        if (request.ApprovalStatus != MobileAppActivationStatus.Pending)
+            return Task.FromResult(new ApprovalDecisionResult(ApprovalDecisionOutcome.AlreadyDecided, CurrentStatus: request.ApprovalStatus));
+
+        request.ApprovalStatus = decision;
+        request.ApprovedBy = checked((int)adminProfileId);
+        request.ApprovedAtIst = nowIst;
+        request.Remarks = remarks;
+        return Task.FromResult(new ApprovalDecisionResult(ApprovalDecisionOutcome.Decided, request));
     }
 }
+
 
 /// <summary>OTP service and OTP repository in one: the code is always <see cref="Code"/>; resend cooldown, expiry and attempt limits behave like <c>OtpService</c>.</summary>
 internal sealed class FakeOtp : IOtpService, IOtpRequestRepository
@@ -384,12 +412,20 @@ internal sealed class FakeSessionRepository : IMobileRefreshTokenRepository
     public List<MobileRefreshToken> Tokens { get; } = new();
     public FakeProfileRepository? Profiles { get; set; }
 
-    public Task StartSessionAsync(MobileRefreshToken first, DateTime nowUtc, CancellationToken cancellationToken = default)
+    /// <summary>Test hook: runs inside <c>StartSessionAsync</c> before the profile check (simulates a block committing between the login's profile read and the session insert).</summary>
+    public Action? BeforeStartSession { get; set; }
+
+    public Task<SessionStartOutcome> StartSessionAsync(MobileRefreshToken first, DateTime nowUtc, CancellationToken cancellationToken = default)
     {
+        BeforeStartSession?.Invoke();
+        MobileUserProfile? profile = Profiles?.Profiles.FirstOrDefault(p => p.Id == first.ProfileId);
+        if (profile is { IsAdminBlocked: true }) return Task.FromResult(SessionStartOutcome.AdminBlocked);
+        if (profile is { IsActive: false }) return Task.FromResult(SessionStartOutcome.ProfileInactive);
+
         RevokeLive(t => t.ProfileId == first.ProfileId, MobileSessionRevokeReasons.NewLogin, nowUtc);
         first.Id = _nextId++;
         Tokens.Add(first);
-        return Task.CompletedTask;
+        return Task.FromResult(SessionStartOutcome.Started);
     }
 
     public Task<RefreshRotationResult> RotateAsync(string presentedTokenHash, MobileRefreshToken next, DateTime nowUtc, CancellationToken cancellationToken = default)
@@ -405,11 +441,17 @@ internal sealed class FakeSessionRepository : IMobileRefreshTokenRepository
         }
         if (t.RevokedAtIst != null && t.RevokeReason == MobileSessionRevokeReasons.Rotated)
         {
+            // Same decision as the SQL implementation: a live token of the family means reuse; none live and the family's latest row
+            // was replaced by a newer login means "replaced" (nothing changes); otherwise reuse as before.
+            bool anyLive = Tokens.Any(x => x.FamilyId == t.FamilyId && x.RevokedAtIst == null);
+            if (!anyLive && Tokens.Where(x => x.FamilyId == t.FamilyId).OrderByDescending(x => x.Id).First().RevokeReason == MobileSessionRevokeReasons.NewLogin)
+                return Task.FromResult(new RefreshRotationResult(RefreshRotationOutcome.Invalid, t.ProfileId, t.FamilyId, MobileSessionRevokeReasons.NewLogin));
+
             t.ReuseDetectedAtIst = nowUtc;
             RevokeLive(x => x.FamilyId == t.FamilyId, MobileSessionRevokeReasons.ReuseDetected, nowUtc);
             return Task.FromResult(new RefreshRotationResult(RefreshRotationOutcome.ReuseDetected, t.ProfileId, t.FamilyId));
         }
-        return Task.FromResult(new RefreshRotationResult(t.RevokedAtIst == null ? RefreshRotationOutcome.Expired : RefreshRotationOutcome.Invalid, t.ProfileId, t.FamilyId));
+        return Task.FromResult(new RefreshRotationResult(t.RevokedAtIst == null ? RefreshRotationOutcome.Expired : RefreshRotationOutcome.Invalid, t.ProfileId, t.FamilyId, t.RevokeReason));
     }
 
     public Task<bool> RevokeSessionByTokenAsync(string tokenHash, string reason, DateTime nowUtc, CancellationToken cancellationToken = default)
@@ -429,6 +471,21 @@ internal sealed class FakeSessionRepository : IMobileRefreshTokenRepository
     public Task<bool> IsSessionActiveAsync(Guid sessionId, long profileId, CancellationToken cancellationToken = default)
         => Task.FromResult(Tokens.Any(t => t.FamilyId == sessionId && t.ProfileId == profileId && t.RevokedAtIst == null)
                            && (Profiles?.Profiles.FirstOrDefault(p => p.Id == profileId)?.IsActive ?? true));
+
+    public Task<MobileSessionState> GetSessionStateAsync(Guid sessionId, long profileId, CancellationToken cancellationToken = default)
+    {
+        // Without profiles attached (host tests that only fake the session lookup) the old boolean semantics apply: no block can exist.
+        if (Profiles == null)
+            return Task.FromResult(Tokens.Any(t => t.FamilyId == sessionId && t.ProfileId == profileId && t.RevokedAtIst == null) ? MobileSessionState.Active : MobileSessionState.Revoked);
+
+        MobileUserProfile? profile = Profiles.Profiles.FirstOrDefault(p => p.Id == profileId);
+        MobileRefreshToken? latest = Tokens.Where(t => t.FamilyId == sessionId && t.ProfileId == profileId).OrderByDescending(t => t.Id).FirstOrDefault();
+        if (profile == null || latest == null) return Task.FromResult(MobileSessionState.Revoked);
+        if (latest.RevokedAtIst == null)
+            return Task.FromResult(profile.IsAdminBlocked ? MobileSessionState.AdminBlocked : profile.IsActive ? MobileSessionState.Active : MobileSessionState.Revoked);
+        if (latest.RevokeReason == MobileSessionRevokeReasons.AdminBlocked) return Task.FromResult(MobileSessionState.AdminBlocked);
+        return Task.FromResult(latest.RevokeReason == MobileSessionRevokeReasons.NewLogin && !profile.IsAdminBlocked ? MobileSessionState.Replaced : MobileSessionState.Revoked);
+    }
 
     /// <summary>What <c>SetMpinAsync</c> / <c>ResetMpinWithGrantAsync</c> do to sessions in the same transaction as the MPIN update.</summary>
     public void RevokeForMpinChange(long profileId, string reason, DateTime nowUtc) => RevokeLive(t => t.ProfileId == profileId, reason, nowUtc);

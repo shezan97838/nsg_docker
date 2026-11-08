@@ -55,15 +55,14 @@ public class LeaveBulkUploadService : ILeaveBulkUploadService
 
     public async Task<Result<LeaveUploadBatchDto>> UploadAsync(LeaveUploadFile file, CancellationToken cancellationToken)
     {
-        long? adminId = _currentUser.AdminProfileId;
-        if (adminId == null)
+        if (!_currentUser.TryGetAdminActor(out AdminActor actor))
             return Result.Failure<LeaveUploadBatchDto>(ApiErrorCodes.Unauthorized, LeaveMessages.IdentityMissing);
 
         DateTime startedAt = NowIst();
         int year = LeaveRules.CurrentYear(startedAt);
 
         // The batch is written first: from here on every outcome, including a crash, leaves a trace the admin can look up.
-        long? batchId = await _repository.TryStartBatchAsync(SafeFileName(file.FileName), year, adminId.Value, startedAt,
+        long? batchId = await _repository.TryStartBatchAsync(SafeFileName(file.FileName), year, actor.Id, startedAt,
             TimeSpan.FromMinutes(_settings.StaleBatchMinutes), cancellationToken);
         if (batchId == null)
             return Result.Failure<LeaveUploadBatchDto>(ApiErrorCodes.Conflict, LeaveMessages.UploadInProgress);
@@ -89,7 +88,7 @@ public class LeaveBulkUploadService : ILeaveBulkUploadService
             }
 
             if (fileProblem != null)
-                return await RejectAsync(batchId.Value, adminId.Value, 0, 1, new[] { new LeaveUploadIssue(null, null, fileProblem) }, cancellationToken);
+                return await RejectAsync(batchId.Value, actor.Id, 0, 1, new[] { new LeaveUploadIssue(null, null, fileProblem) }, cancellationToken);
 
             totalRows = excelRows!.Count;
 
@@ -134,31 +133,31 @@ public class LeaveBulkUploadService : ILeaveBulkUploadService
             if (issues.Count > 0)
             {
                 int failedRows = issues.Select(i => i.RowNumber).Distinct().Count();
-                return await RejectAsync(batchId.Value, adminId.Value, totalRows, failedRows,
+                return await RejectAsync(batchId.Value, actor.Id, totalRows, failedRows,
                     issues.OrderBy(i => i.RowNumber).ThenBy(i => i.Message, StringComparer.Ordinal).ToList(), cancellationToken);
             }
 
             // ── 3. Apply: one transaction, all or nothing ──
-            LeaveBulkResult applied = await _repository.ApplyBulkAsync(batchId.Value, year, totalRows, valid, adminId.Value, NowIst(), cancellationToken);
+            LeaveBulkResult applied = await _repository.ApplyBulkAsync(batchId.Value, year, totalRows, valid, actor.Id, NowIst(), cancellationToken);
             switch (applied.Outcome)
             {
                 case LeaveBulkOutcome.Committed:
-                    await AuditAsync(batchId.Value, adminId.Value, DomainConstants.AuditResults.Success, "Completed", applied.Created, applied.Updated, applied.Unchanged);
+                    await AuditAsync(batchId.Value, actor.Id, DomainConstants.AuditResults.Success, "Completed", applied.Created, applied.Updated, applied.Unchanged);
                     PersonnelLeaveUploadBatch? done = await _repository.GetBatchAsync(batchId.Value, CancellationToken.None);
-                    return Result.Success(done != null ? done.ToDto() : SummaryOf(batchId.Value, file, year, startedAt, adminId.Value, totalRows, applied));
+                    return Result.Success(done != null ? done.ToDto() : SummaryOf(batchId.Value, file, year, startedAt, actor.Id, totalRows, applied));
 
                 case LeaveBulkOutcome.RolledBackConflict:
-                    return await FailProcessingAsync(batchId.Value, adminId.Value, totalRows, ApiErrorCodes.Conflict,
+                    return await FailProcessingAsync(batchId.Value, actor.Id, totalRows, ApiErrorCodes.Conflict,
                         "A leave record was created or changed by someone else while the upload was running. Nothing was saved; upload the file again.", cancellationToken);
 
                 case LeaveBulkOutcome.RolledBackFailure:
-                    return await FailProcessingAsync(batchId.Value, adminId.Value, totalRows, LeaveErrorCodes.ProcessingFailed,
+                    return await FailProcessingAsync(batchId.Value, actor.Id, totalRows, LeaveErrorCodes.ProcessingFailed,
                         "The upload could not be saved because of a database error. The transaction was rolled back and no leave record was changed.", cancellationToken);
 
                 default:
                     // The transaction failed and its outcome could not be read back. Nothing is claimed: the batch stays Processing and
                     // is neither marked failed nor completed; the admin checks it before retrying.
-                    await AuditAsync(batchId.Value, adminId.Value, DomainConstants.AuditResults.Failure, "OutcomeUnknown", 0, 0, 0);
+                    await AuditAsync(batchId.Value, actor.Id, DomainConstants.AuditResults.Failure, "OutcomeUnknown", 0, 0, 0);
                     return Result.Failure<LeaveUploadBatchDto>(LeaveErrorCodes.OutcomeUnknown,
                         $"The upload failed and the result could not be confirmed. Do not upload again yet: check the status of batch {batchId.Value} " +
                         "(it stays 'Processing' until it is resolved) and the leave records first.");
@@ -275,6 +274,7 @@ public class LeaveBulkUploadService : ILeaveBulkUploadService
 
     private Task AuditAsync(long batchId, long adminId, string result, string status, int created, int updated, int unchanged)
         => _audit.LogAsync(AuditAction.LeaveBulkUploadProcessed, result,
+            userId: _currentUser.AuditUserId(),   // the admin validated at the start of UploadAsync (same request), never a legacy id and never NULL
             entityType: nameof(PersonnelLeaveUploadBatch), entityId: batchId.ToString(), correlationId: _currentUser.CorrelationId,
             additionalData: JsonSerializer.Serialize(new { actorId = adminId, status, created, updated, unchanged }),
             cancellationToken: CancellationToken.None);

@@ -206,11 +206,13 @@ public class ApproveMobileUserRepository : IApproveMobileUserRepository
     }
 
     public async Task<(IReadOnlyList<ApprovalRequestRow> Items, int TotalCount)> GetPagedAsync(
-        int pageNumber, int pageSize, MobileAppActivationStatus? status, string? search, CancellationToken cancellationToken = default)
+        long ownerAdminId, int pageNumber, int pageSize, MobileAppActivationStatus? status, string? search, CancellationToken cancellationToken = default)
     {
+        // Ownership is resolved here, from the CURRENT users_pis.assigned_to (never a copy on the request). The inner join drops requests whose
+        // personnel row is missing, and the equality drops unassigned (NULL) and other admins' rows - before the count, the filters and the page.
         var query = from a in _context.ApproveMobileUsers.AsNoTracking()
-                    join p in _context.UsersPis.AsNoTracking() on a.NsgNumber equals p.NsgNumber into joined
-                    from p in joined.DefaultIfEmpty()
+                    join p in _context.UsersPis.AsNoTracking() on a.NsgNumber equals p.NsgNumber
+                    where p.AssignedTo == ownerAdminId
                     select new { Request = a, FullName = p.FullName };
 
         if (status.HasValue)
@@ -233,23 +235,51 @@ public class ApproveMobileUserRepository : IApproveMobileUserRepository
     }
 
     public async Task<ApprovalDecisionResult> DecideAsync(
-        long id, MobileAppActivationStatus decision, int approverUserId, string? remarks, DateTime nowUtc, CancellationToken cancellationToken = default)
+        long id, MobileAppActivationStatus decision, long adminProfileId, string? remarks, DateTime nowIst, CancellationToken cancellationToken = default)
     {
+        // approved_by is an int column: refuse (throws) rather than truncate. The service has already refused an id this large.
+        int approvedBy = checked((int)adminProfileId);
+
         var strategy = _context.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
+            _context.ChangeTracker.Clear();
             await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
-            // Claim the request: only a row that is still Pending is updated, so of two simultaneous decisions exactly one wins.
+            // 1. Ownership lock - the FIRST statement of the transaction (no earlier read may fix a snapshot). It matches the personnel row of this
+            //    request only while assigned_to is still this admin, and rewrites the value it already holds: no data changes, but the row stays
+            //    locked until commit/rollback. A transfer that committed first leaves no match (refused); one that is still open makes this wait,
+            //    then re-evaluates against the committed value; one that starts later waits for this transaction. Lock order is always
+            //    users_pis row, then approve_mobile_users row.
+            int locked = await _context.UsersPis
+                .Where(p => p.AssignedTo == adminProfileId && _context.ApproveMobileUsers.Any(a => a.Id == id && a.NsgNumber == p.NsgNumber))
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.AssignedTo, adminProfileId), cancellationToken);
+
+            if (locked == 0)
+            {
+                // A connection that counts changed rows instead of matched rows reports 0 for the no-op above; the row is still locked if it matched.
+                bool owned = await _context.UsersPis.AsNoTracking()
+                    .AnyAsync(p => p.AssignedTo == adminProfileId && _context.ApproveMobileUsers.Any(a => a.Id == id && a.NsgNumber == p.NsgNumber), cancellationToken);
+                if (!owned)
+                {
+                    string? nsg = await _context.ApproveMobileUsers.AsNoTracking().Where(a => a.Id == id).Select(a => a.NsgNumber).FirstOrDefaultAsync(cancellationToken);
+                    if (nsg == null) return new ApprovalDecisionResult(ApprovalDecisionOutcome.NotFound);
+
+                    bool personnelExists = await _context.UsersPis.AsNoTracking().AnyAsync(p => p.NsgNumber == nsg, cancellationToken);
+                    return new ApprovalDecisionResult(personnelExists ? ApprovalDecisionOutcome.NotOwner : ApprovalDecisionOutcome.PersonnelRecordMissing);
+                }
+            }
+
+            // 2. Claim the request: only a row that is still Pending is updated, so of two simultaneous decisions exactly one wins.
             int claimed = await _context.ApproveMobileUsers
                 .Where(a => a.Id == id && a.ApprovalStatus == MobileAppActivationStatus.Pending)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(a => a.ApprovalStatus, decision)
-                    .SetProperty(a => a.ApprovedBy, (int?)approverUserId)
-                    .SetProperty(a => a.ApprovedAtIst, (DateTime?)nowUtc)
+                    .SetProperty(a => a.ApprovedBy, (int?)approvedBy)
+                    .SetProperty(a => a.ApprovedAtIst, (DateTime?)nowIst)
                     .SetProperty(a => a.Remarks, remarks)
-                    .SetProperty(a => a.UpdatedAtIst, (DateTime?)nowUtc)
-                    .SetProperty(a => a.UpdatedBy, (int?)approverUserId), cancellationToken);
+                    .SetProperty(a => a.UpdatedAtIst, (DateTime?)nowIst)
+                    .SetProperty(a => a.UpdatedBy, (int?)approvedBy), cancellationToken);
 
             if (claimed == 0)
             {
@@ -262,13 +292,13 @@ public class ApproveMobileUserRepository : IApproveMobileUserRepository
 
             ApproveMobileUser request = await _context.ApproveMobileUsers.AsNoTracking().FirstAsync(a => a.Id == id, cancellationToken);
 
-            // Keep users_pis in step with the request, in the same transaction.
+            // 3. Keep users_pis in step with the request, in the same transaction (the row is already locked by step 1).
             int updated = await _context.UsersPis
                 .Where(p => p.NsgNumber == request.NsgNumber)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(p => p.MobileAppActivationStatus, decision)
-                    .SetProperty(p => p.UpdatedAtIst, (DateTime?)nowUtc)
-                    .SetProperty(p => p.UpdatedBy, (int?)approverUserId), cancellationToken);
+                    .SetProperty(p => p.UpdatedAtIst, (DateTime?)nowIst)
+                    .SetProperty(p => p.UpdatedBy, (int?)approvedBy), cancellationToken);
 
             if (updated == 0)
             {

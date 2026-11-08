@@ -1,15 +1,14 @@
 using NSG.Mobile.Application.Common;
 using NSG.Mobile.Application.Grievances;
 using NSG.Mobile.Application.Grievances.Services;
-using NSG.Mobile.Infrastructure.Options;
 using NSG.Mobile.Infrastructure.Services;
 
 namespace NSG.Mobile.Tests;
 
-/// <summary>The pure parts of the document rules and of the R2 storage layer (no network, no bucket).</summary>
+/// <summary>The pure parts of the document rules and of the local storage layer (no network).</summary>
 public class GrievanceStorageTests
 {
-    // ── R2 object keys: only the exact shape the application generates is ever read or deleted ──
+    // ── Object keys: only the exact shape the application generates is ever read or deleted ──
 
     [Theory]
     [InlineData("grievances/2026/10/0f8fad5b-d9cb-469f-a165-70867728950e.pdf", true)]
@@ -25,53 +24,7 @@ public class GrievanceStorageTests
     [InlineData("", false)]
     [InlineData(null, false)]
     public void Only_keys_of_the_generated_shape_are_valid(string? key, bool expected)
-        => Assert.Equal(expected, R2FileStorageService.IsValidKey(key));
-
-    // ── R2 options ──
-
-    [Fact]
-    public void A_placeholder_or_empty_service_url_means_R2_is_off_so_Development_and_tests_keep_local_storage()
-    {
-        Assert.False(new R2Options().IsEnabled);
-        Assert.False(new R2Options { ServiceUrl = "REPLACE_WITH_R2_SERVICE_URL" }.IsEnabled);
-        Assert.True(new R2Options { ServiceUrl = "https://acct.r2.cloudflarestorage.com" }.IsEnabled);
-    }
-
-    [Fact]
-    public void Enabled_but_incomplete_settings_stop_startup_naming_each_missing_setting_and_never_a_value()
-    {
-        R2Options options = new() { ServiceUrl = "https://acct.r2.cloudflarestorage.com", BucketName = "nsg-grievances", AccessKey = "", SecretKey = "super-secret-value" };
-
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(options.EnsureValid);
-
-        Assert.Contains("R2Storage:AccessKey", ex.Message);
-        Assert.Contains("R2Storage__AccessKey", ex.Message);
-        Assert.DoesNotContain("R2Storage:SecretKey is missing", ex.Message);
-        Assert.DoesNotContain("super-secret-value", ex.Message);
-        Assert.DoesNotContain("nsg-grievances", ex.Message);
-    }
-
-    [Theory]
-    [InlineData("http://acct.r2.cloudflarestorage.com")]    // plain http is refused
-    [InlineData("acct.r2.cloudflarestorage.com")]
-    public void The_service_url_must_be_an_absolute_https_url(string url)
-    {
-        R2Options options = new() { ServiceUrl = url, BucketName = "b", AccessKey = "a", SecretKey = "s" };
-        Assert.Contains("https", Assert.Throws<InvalidOperationException>(options.EnsureValid).Message);
-    }
-
-    [Fact]
-    public void A_complete_configuration_is_valid()
-        => new R2Options { ServiceUrl = "https://acct.r2.cloudflarestorage.com", BucketName = "b", AccessKey = "a", SecretKey = "s" }.EnsureValid();
-
-    [Theory]
-    [InlineData("", "")]
-    [InlineData("  ", "")]
-    [InlineData("prod", "prod/")]
-    [InlineData("/prod/", "prod/")]
-    [InlineData("env/prod", "env/prod/")]
-    public void The_key_prefix_is_normalised(string prefix, string expected)
-        => Assert.Equal(expected, new R2Options { KeyPrefix = prefix }.NormalizedPrefix);
+        => Assert.Equal(expected, LocalFileStorageService.IsValidKey(key));
 
     [Fact]
     public void The_storage_availability_flag_simply_reports_what_it_was_given()

@@ -77,6 +77,9 @@ public class StateService : IStateService
 
     public async Task<Result<StateResponseDto>> CreateAsync(CreateStateRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<StateResponseDto>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         State state = request.ToEntity(IndianStandardTime.Now);
 
         Result? conflict = await CheckConflictsAsync(state.Name, state.Code, null, cancellationToken);
@@ -90,6 +93,9 @@ public class StateService : IStateService
 
     public async Task<Result<StateResponseDto>> UpdateAsync(int id, UpdateStateRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<StateResponseDto>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         State? state = await _states.GetByIdAsync(id, cancellationToken);
         if (state == null)
             return Result.Failure<StateResponseDto>(ApiErrorCodes.NotFound, "State not found.");
@@ -107,6 +113,9 @@ public class StateService : IStateService
 
     public async Task<Result> DeleteAsync(int id, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         State? state = await _states.GetByIdAsync(id, cancellationToken);
         if (state == null)
             return Result.Failure(ApiErrorCodes.NotFound, "State not found.");
@@ -133,11 +142,11 @@ public class StateService : IStateService
     private async Task AuditAsync(string operation, int id, CancellationToken cancellationToken)
     {
         await _audit.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success,
-            userId: _currentUser.UserId, entityType: EntityType, entityId: id.ToString(),
+            userId: _currentUser.AuditUserId(), entityType: EntityType, entityId: id.ToString(),
             correlationId: _currentUser.CorrelationId,
             additionalData: $"{{\"operation\":\"{operation}\"}}",
             cancellationToken: cancellationToken);
-        _logger.LogInformation("{Operation} state {StateId} by admin {AdminId}", operation, id, _currentUser.UserId);
+        _logger.LogInformation("{Operation} state {StateId} by admin {AdminId}", operation, id, _currentUser.AuditUserId());
     }
 }
 
@@ -187,6 +196,9 @@ public class CityService : ICityService
 
     public async Task<Result<CityResponseDto>> CreateAsync(CreateCityRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<CityResponseDto>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         if (!await _states.ExistsAsync(request.StateId, cancellationToken))
             return Result.Failure<CityResponseDto>(ApiErrorCodes.ValidationFailed, $"State {request.StateId} does not exist.");
 
@@ -203,6 +215,9 @@ public class CityService : ICityService
 
     public async Task<Result<CityResponseDto>> UpdateAsync(int id, UpdateCityRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<CityResponseDto>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         City? city = await _cities.GetByIdAsync(id, cancellationToken);
         if (city == null)
             return Result.Failure<CityResponseDto>(ApiErrorCodes.NotFound, "City not found.");
@@ -223,6 +238,9 @@ public class CityService : ICityService
 
     public async Task<Result> DeleteAsync(int id, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         City? city = await _cities.GetByIdAsync(id, cancellationToken);
         if (city == null)
             return Result.Failure(ApiErrorCodes.NotFound, "City not found.");
@@ -235,10 +253,10 @@ public class CityService : ICityService
     private async Task AuditAsync(string operation, int id, CancellationToken cancellationToken)
     {
         await _audit.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success,
-            userId: _currentUser.UserId, entityType: EntityType, entityId: id.ToString(),
+            userId: _currentUser.AuditUserId(), entityType: EntityType, entityId: id.ToString(),
             correlationId: _currentUser.CorrelationId,
             additionalData: $"{{\"operation\":\"{operation}\"}}",
             cancellationToken: cancellationToken);
-        _logger.LogInformation("{Operation} city {CityId} by admin {AdminId}", operation, id, _currentUser.UserId);
+        _logger.LogInformation("{Operation} city {CityId} by admin {AdminId}", operation, id, _currentUser.AuditUserId());
     }
 }

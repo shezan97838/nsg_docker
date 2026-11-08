@@ -24,7 +24,8 @@ public class MobileAuthFlowTests : IAsyncLifetime
 
     private readonly ApiFactory _factory;
     private readonly HttpClient _anonymous;
-    private HttpClient _admin = null!;   // a real Registration Admin session, created in InitializeAsync
+    private HttpClient _admin = null!;   // a real PIS Admin session (the owner of every seeded person), created in InitializeAsync
+    private long _adminId;
 
     public MobileAuthFlowTests(DatabaseFixture fixture)
     {
@@ -35,7 +36,9 @@ public class MobileAuthFlowTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await CleanAsync();
-        _admin = await RegistrationAdminSession.CreateAsync(_factory);
+        ApprovalAdmins admins = await ApprovalAdminSession.CreateAsync(_factory);
+        _admin = admins.PisA;
+        _adminId = admins.PisAId;
     }
     public async Task DisposeAsync() => await CleanAsync();
 
@@ -56,7 +59,7 @@ public class MobileAuthFlowTests : IAsyncLifetime
     private async Task SeedPisAsync(MobileAppActivationStatus status = MobileAppActivationStatus.Pending)
     {
         await using AppDbContext ctx = _factory.CreateContext();
-        ctx.UsersPis.Add(new UserPis { NsgNumber = Nsg, ServiceNumber = "S", FullName = "Flow Person", MobileNumber = Mobile, DateOfBirth = DateOnly.Parse(Dob), MobileAppActivationStatus = status });
+        ctx.UsersPis.Add(new UserPis { NsgNumber = Nsg, ServiceNumber = "S", FullName = "Flow Person", MobileNumber = Mobile, DateOfBirth = DateOnly.Parse(Dob), MobileAppActivationStatus = status, AssignedTo = _adminId });
         await ctx.SaveChangesAsync();
     }
 

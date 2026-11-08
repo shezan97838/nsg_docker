@@ -30,6 +30,22 @@ public static class ApiErrorCodes
     public const string OtpRateLimited = "OTP_RATE_LIMITED";
     public const string GrantInvalid = "GRANT_INVALID";
 
+    /// <summary>
+    /// Machine-readable code for "mobile access blocked by the PIS Admin". Reserved exclusively for that action: it is the only
+    /// code that is ever placed in the response envelope's <c>code</c> field (see <see cref="PublicCodes"/>).
+    /// </summary>
+    public const string MobileAccessBlocked = "SURAKSHA_1001";
+
+    /// <summary>
+    /// Machine-readable code for "this mobile session was replaced by a newer successful login of the same user" (latest login wins).
+    /// Reserved exclusively for that: never for logout, expiry, MPIN change/reset, reuse detection, or a PIS Admin block (that is
+    /// <see cref="MobileAccessBlocked"/>).
+    /// </summary>
+    public const string MobileSessionReplaced = "SURAKSHA_1002";
+
+    /// <summary>The codes the API is allowed to send to the client in the envelope's <c>code</c> field. Every other code stays server-side.</summary>
+    public static readonly IReadOnlySet<string> PublicCodes = new HashSet<string>(StringComparer.Ordinal) { MobileAccessBlocked, MobileSessionReplaced };
+
     // Token errors
     public const string RefreshTokenInvalid = "TOKEN_INVALID";
     public const string RefreshTokenExpired = "TOKEN_EXPIRED";

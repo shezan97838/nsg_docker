@@ -42,13 +42,7 @@ NSG.Mobile.Infrastructure.Security.OtpModeGuard.EnsureDemoDatabase(
     builder.Environment.EnvironmentName,
     builder.Configuration.GetConnectionString("MySql"));
 
-// ── File storage: outside Development the root must be an absolute path set by the environment (never a committed Windows path) ──
-if (!builder.Environment.IsDevelopment())
-{
-    string? fileStorageRoot = builder.Configuration["FileStorage:BasePath"];
-    if (string.IsNullOrWhiteSpace(fileStorageRoot) || !Path.IsPathRooted(fileStorageRoot))
-        throw new InvalidOperationException("FileStorage:BasePath must be an absolute path for this platform (set the FileStorage__BasePath environment variable, for example /var/lib/nsg/files).");
-}
+// (File storage root: validated at startup by StorageStartupValidator - Storage:RootPath is mandatory whenever the local file system is used.)
 
 // ── Forwarded headers: trusted only from explicitly listed reverse proxies; otherwise never ──
 var forwardedHeaders = ForwardedHeadersSetup.Build(
@@ -125,7 +119,10 @@ builder.Services.AddAuthorization(options =>
         AdminRoleCodes.SuperAdmin, AdminRoleCodes.RegistrationAdmin, AdminRoleCodes.PisAdmin,
         AdminRoleCodes.GrievanceAdmin, AdminRoleCodes.MediaCellAdmin, AdminRoleCodes.SalaryManagementAdmin, AdminRoleCodes.LeaveAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireSuperAdmin, AdminRoleCodes.SuperAdmin);
-    AddAdminPolicy(DomainConstants.Policies.RequireRegistrationAdmin, AdminRoleCodes.RegistrationAdmin);
+    // PIS_ADMIN through the Admin Portal only: mobile access block / restore, registration approval (own personnel only), PIS uploads and writes.
+    // RequirePisAdmin below also admits the staff Bearer path; this one never does. (There is no Registration Admin policy any more:
+    // registration approval belongs to the PIS Admin the personnel record is currently assigned to.)
+    AddAdminPolicy(DomainConstants.Policies.RequirePisAdminPortal, AdminRoleCodes.PisAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireGrievanceAdmin, AdminRoleCodes.GrievanceAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireMediaCellAdmin, AdminRoleCodes.MediaCellAdmin);
     AddAdminPolicy(DomainConstants.Policies.RequireSalaryManagementAdmin, AdminRoleCodes.SalaryManagementAdmin);

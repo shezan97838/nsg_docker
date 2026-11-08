@@ -14,8 +14,8 @@ using NSG.Mobile.Infrastructure.Services;
 namespace NSG.Mobile.Tests;
 
 /// <summary>
-/// Reviewer identity for mobile approval decisions. A Registration Admin's token has a non-numeric 'sub' ("admin:{id}") and carries the
-/// account id in 'admin_profile_id'; staff tokens keep resolving through the numeric 'sub'. No database needed.
+/// Reviewer identity. The approval service reads the PIS Admin's id from the token's admin_profile_id (long) only; the older
+/// ReviewerIdentityResolver, which no longer feeds approvals, is still exercised here. No database needed.
 /// </summary>
 public class MobileApprovalReviewerTests
 {
@@ -65,44 +65,49 @@ public class MobileApprovalReviewerTests
     public void A_mobile_profile_id_is_not_a_reviewer()
         => Assert.Null(Resolver(new FakeCurrentUser { ProfileId = 5 }).Resolve());
 
-    // ───── decisions by a Registration Admin ─────
+    // ───── decisions by a PIS Admin (reviewer = admin_profile_id; ownership is covered by MobileApprovalOwnershipTests) ─────
+
+    private static (MobileApprovalService Service, FakeRequestRepository Repo, FakeAudit Audit) OwnedKit(long admin)
+    {
+        FakeRequestRepository repo = new();
+        repo.Requests.Add(new ApproveMobileUser { Id = 1, NsgNumber = "N", MobileNumber = "9876543210" });
+        repo.Owners["N"] = admin;
+        FakeAudit audit = new();
+        return (new MobileApprovalService(repo, audit, new FakeCurrentUser { AdminProfileId = admin }, new TestClock()), repo, audit);
+    }
 
     [Theory]
     [InlineData(MobileAppActivationStatus.Approved, AuditAction.ITApprovalGranted, "Mobile approval request approved successfully.")]
     [InlineData(MobileAppActivationStatus.Rejected, AuditAction.ITApprovalRejected, "Mobile approval request rejected successfully.")]
-    public async Task Registration_admin_decision_records_the_admin_id_for_the_request_and_the_audit(
+    public async Task Pis_admin_decision_records_the_admin_id_for_the_request_and_the_audit(
         MobileAppActivationStatus decision, AuditAction expectedAction, string expectedMessage)
     {
-        FakeRequestRepository repo = new();
-        FakeAudit audit = new();
-        FakeCurrentUser admin = new() { AdminProfileId = 17 };
-        MobileApprovalService service = new(repo, audit, admin, Resolver(admin), new TestClock());
+        (MobileApprovalService service, FakeRequestRepository repo, FakeAudit audit) = OwnedKit(17);
 
         Result<ApiResult<MobileApprovalRequestDto>> result = await service.DecideAsync(1, new MobileApprovalDecisionRequestDto { Decision = decision });
 
         Assert.True(result.IsSuccess);
         Assert.Equal(expectedMessage, result.Data!.Message);
-        Assert.Equal(17, repo.LastDecision!.Value.Approver);
+        Assert.Equal(17L, repo.LastDecision!.Value.Approver);
         Assert.Equal(decision, repo.LastDecision.Value.Decision);
 
         (AuditAction Action, string Result, int? UserId, string? EntityId, string? Data) entry = Assert.Single(audit.Entries);
         Assert.Equal(expectedAction, entry.Action);
         Assert.Equal(17, entry.UserId);
-        Assert.Null(entry.Data); // a real token carries no display name
     }
 
     [Fact]
-    public async Task Staff_user_decision_still_records_the_staff_user_id()
+    public async Task A_staff_user_id_is_not_a_reviewer()
     {
         FakeRequestRepository repo = new();
         FakeAudit audit = new();
-        FakeCurrentUser staff = new() { UserId = 42 };
-        MobileApprovalService service = new(repo, audit, staff, Resolver(staff), new TestClock());
+        MobileApprovalService service = new(repo, audit, new FakeCurrentUser { UserId = 42 }, new TestClock());
 
-        Assert.True((await service.DecideAsync(1, new MobileApprovalDecisionRequestDto { Decision = MobileAppActivationStatus.Approved })).IsSuccess);
+        Result<ApiResult<MobileApprovalRequestDto>> result = await service.DecideAsync(1, new MobileApprovalDecisionRequestDto { Decision = MobileAppActivationStatus.Approved });
 
-        Assert.Equal(42, repo.LastDecision!.Value.Approver);
-        Assert.Equal(42, Assert.Single(audit.Entries).UserId);
+        Assert.Equal(ApiErrorCodes.Unauthorized, result.ErrorCode);
+        Assert.Null(repo.LastDecision);
+        Assert.Empty(audit.Entries);
     }
 
     [Fact]
@@ -110,8 +115,7 @@ public class MobileApprovalReviewerTests
     {
         FakeRequestRepository repo = new();
         FakeAudit audit = new();
-        FakeCurrentUser nobody = new();
-        MobileApprovalService service = new(repo, audit, nobody, Resolver(nobody), new TestClock());
+        MobileApprovalService service = new(repo, audit, new FakeCurrentUser(), new TestClock());
 
         Result<ApiResult<MobileApprovalRequestDto>> result = await service.DecideAsync(1, new MobileApprovalDecisionRequestDto { Decision = MobileAppActivationStatus.Approved });
 
@@ -119,31 +123,5 @@ public class MobileApprovalReviewerTests
         Assert.Equal(ApiErrorCodes.Unauthorized, result.ErrorCode);
         Assert.Null(repo.LastDecision);
         Assert.Empty(audit.Entries);
-    }
-
-    // ───── authorization wiring ─────
-
-    [Fact]
-    public void Every_approval_endpoint_requires_the_registration_admin_policy_and_no_action_weakens_it()
-    {
-        Type controller = typeof(MobileApprovalRequestsController);
-
-        AuthorizeAttribute classLevel = controller.GetCustomAttribute<AuthorizeAttribute>()!;
-        Assert.Equal(DomainConstants.Policies.RequireRegistrationAdmin, classLevel.Policy);
-
-        foreach (MethodInfo action in controller.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
-        {
-            Assert.Null(action.GetCustomAttribute<AllowAnonymousAttribute>());
-            AuthorizeAttribute? own = action.GetCustomAttribute<AuthorizeAttribute>();
-            if (own != null) Assert.Equal(DomainConstants.Policies.RequireRegistrationAdmin, own.Policy);
-        }
-    }
-
-    [Fact]
-    public void The_registration_admin_policy_is_a_different_policy_from_the_staff_and_super_admin_ones()
-    {
-        Assert.NotEqual(DomainConstants.Policies.RequirePisAdmin, DomainConstants.Policies.RequireRegistrationAdmin);
-        Assert.NotEqual(DomainConstants.Policies.RequireSuperAdmin, DomainConstants.Policies.RequireRegistrationAdmin);
-        Assert.Equal("REGISTRATION_ADMIN", AdminRoleCodes.RegistrationAdmin);
     }
 }

@@ -11,7 +11,7 @@ namespace NSG.Mobile.Tests;
 
 /// <summary>
 /// Resolving a grievance (Action Taken → Closed) needs a resolution comment and one supporting file; the owner can download that file.
-/// Services over in-memory fakes: no database, no storage, no network. Real SQL, MySQL and R2 behaviour is NOT covered here.
+/// Services over in-memory fakes: no database, no storage, no network. Real SQL and MySQL behaviour is NOT covered here.
 /// </summary>
 public class GrievanceResolutionTests
 {

@@ -25,9 +25,9 @@ namespace NSG.Mobile.Tests;
 /// The Grievance module through the REAL pipeline: Kestrel-less test host, real JWT validation (both schemes), real policies, real middleware, real
 /// controllers and real services. Only the outermost edges are replaced by in-memory fakes: the grievance repository, file storage, audit, and the two
 /// session look-ups (so a valid session can be simulated without a database). A dummy connection string and disabled migrations guarantee that nothing
-/// can reach MySQL or R2.
+/// can reach MySQL.
 ///
-/// NOT covered: the real SQL of the repositories (including whether the session look-up really checks the role), real MySQL and real R2.
+/// NOT covered: the real SQL of the repositories (including whether the session look-up really checks the role), and real MySQL.
 /// </summary>
 [Collection("GrievanceHost")]
 public sealed class GrievanceAuthorizationHostTests : IDisposable
@@ -35,7 +35,7 @@ public sealed class GrievanceAuthorizationHostTests : IDisposable
     private static readonly string[] Variables =
     {
         "ConnectionStrings__MySql", "Database__MigrateOnStartup", "Security__DisableAuthorization", "Jwt__Secret",
-        "Encryption__Key", "BlindIndex__Key", "ASPNETCORE_ENVIRONMENT", "RateLimiting__GrievanceWritePermitLimit"
+        "Encryption__Key", "ASPNETCORE_ENVIRONMENT", "RateLimiting__GrievanceWritePermitLimit"
     };
 
     private const long AdminId = 9001, OtherAdminId = 9002, EmployeeId = 501, OtherEmployeeId = 502;
@@ -57,7 +57,6 @@ public sealed class GrievanceAuthorizationHostTests : IDisposable
         Environment.SetEnvironmentVariable("Security__DisableAuthorization", "false");
         Environment.SetEnvironmentVariable("Jwt__Secret", Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)));
         Environment.SetEnvironmentVariable("Encryption__Key", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
-        Environment.SetEnvironmentVariable("BlindIndex__Key", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
         Environment.SetEnvironmentVariable("RateLimiting__GrievanceWritePermitLimit", "1000");
 
@@ -556,7 +555,7 @@ public sealed class GrievanceAuthorizationHostTests : IDisposable
         public Task<bool> IsSessionActiveAsync(Guid sessionId, long profileId, CancellationToken cancellationToken = default)
             => Task.FromResult(Active.Contains((sessionId, profileId)));
 
-        public Task StartSessionAsync(MobileRefreshToken first, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<SessionStartOutcome> StartSessionAsync(MobileRefreshToken first, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<RefreshRotationResult> RotateAsync(string presentedTokenHash, MobileRefreshToken next, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> RevokeSessionByTokenAsync(string tokenHash, string reason, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task RevokeAllForProfileAsync(long profileId, string reason, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();

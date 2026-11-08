@@ -19,30 +19,26 @@ public abstract class UserPisWriteDtoValidator<T> : AbstractValidator<T> where T
         RuleFor(x => x.ServiceNumber).MustBeRequiredTrimmedIdentifier(30);
 
         RuleFor(x => x.FullName).MaximumLength(200);
+        RuleFor(x => x.SideSteppedDetails).MaximumLength(255);
         RuleFor(x => x.FatherName).MaximumLength(200);
         RuleFor(x => x.MotherName).MaximumLength(200);
         RuleFor(x => x.SpouseName).MaximumLength(200);
 
         RuleFor(x => x.MobileNumber).MustBeIndianMobile();
-        RuleFor(x => x.NextOfKinMobileNumber).MustBeIndianMobile();
+        RuleFor(x => x.NextOfKinMobileNumber).MaximumLength(15);   // free text: may carry a country code or spaces
 
-        RuleFor(x => x.HeightCm).InclusiveBetween(1, 255).When(x => x.HeightCm.HasValue)
-            .WithMessage("Height must be a whole number of centimetres between 1 and 255.");
-
-        RuleFor(x => x.WeightKg).GreaterThan(0m).When(x => x.WeightKg.HasValue)
-            .WithMessage("Weight must be greater than zero.");
-        RuleFor(x => x.WeightKg).LessThanOrEqualTo(DomainConstants.PisFormats.MaxWeightKg).When(x => x.WeightKg.HasValue)
-            .WithMessage("Weight must not exceed 999.99 kg.");
-        RuleFor(x => x.WeightKg).PrecisionScale(5, 2, true).When(x => x.WeightKg.HasValue)
-            .WithMessage("Weight may have at most two decimal places.");
-
-        RuleFor(x => x.NumberOfChildren).GreaterThanOrEqualTo(0).When(x => x.NumberOfChildren.HasValue);
-
-        RuleFor(x => x.EarnedLeaveDue).GreaterThanOrEqualTo(0m).LessThanOrEqualTo(DomainConstants.PisFormats.MaxLeaveDue)
-            .PrecisionScale(7, 2, true).When(x => x.EarnedLeaveDue.HasValue);
-        RuleFor(x => x.HalfPayLeaveDue).GreaterThanOrEqualTo(0m).LessThanOrEqualTo(DomainConstants.PisFormats.MaxLeaveDue)
-            .PrecisionScale(7, 2, true).When(x => x.HalfPayLeaveDue.HasValue);
-        RuleFor(x => x.PaternityLeaveAvailed).MaximumLength(100);
+        // Lookup values and the numeric-looking columns are plain text (stored exactly as sent): only the column lengths are checked.
+        RuleFor(x => x.NsgRank).MaximumLength(100);
+        RuleFor(x => x.ParentDepartmentRank).MaximumLength(100);
+        RuleFor(x => x.NsgUnit).MaximumLength(100);
+        RuleFor(x => x.Education).MaximumLength(100);
+        RuleFor(x => x.Religion).MaximumLength(100);
+        RuleFor(x => x.PermanentState).MaximumLength(100);
+        RuleFor(x => x.HeightCm).MaximumLength(50);
+        RuleFor(x => x.WeightKg).MaximumLength(50);
+        RuleFor(x => x.NumberOfChildren).MaximumLength(50);
+        RuleFor(x => x.EarnedLeaveDue).MaximumLength(100);
+        RuleFor(x => x.HalfPayLeaveDue).MaximumLength(100);        RuleFor(x => x.PaternityLeaveAvailed).MaximumLength(100);
         RuleFor(x => x.MaternityLeaveAvailed).MaximumLength(100);
         RuleFor(x => x.ChildCareLeaveAvailed).MaximumLength(100);
 
@@ -50,7 +46,7 @@ public abstract class UserPisWriteDtoValidator<T> : AbstractValidator<T> where T
         RuleFor(x => x.PermanentPostOffice).MaximumLength(150);
         RuleFor(x => x.PermanentPoliceStation).MaximumLength(150);
         RuleFor(x => x.PermanentDistrict).MaximumLength(100);
-        RuleFor(x => x.PermanentPinCode).MustBePinCode();
+        RuleFor(x => x.PermanentPinCode).MaximumLength(10);
 
         // On update a mask-shaped value is let through here only so the service can compare it with the mask of the
         // stored value (it rejects any mask that does not match). Create never accepts masks.
@@ -59,34 +55,13 @@ public abstract class UserPisWriteDtoValidator<T> : AbstractValidator<T> where T
         RuleFor(x => x.PranNumber).MustBePran().When(x => !(allowMaskedSensitive && PisMasking.LooksMasked(x.PranNumber?.Trim())));
         RuleFor(x => x.SalaryAccountNumber).MustBeSalaryAccountNumber().When(x => !(allowMaskedSensitive && PisMasking.LooksMasked(PisNormalizer.SalaryAccountNumber(x.SalaryAccountNumber))));
 
-        // Foreign-key ids must be positive; existence is checked by the service.
-        RuleFor(x => x.NsgRankId).GreaterThan(0).When(x => x.NsgRankId.HasValue).WithMessage("Reference id must be a positive number.");
-        RuleFor(x => x.ParentDepartmentRankId).GreaterThan(0).When(x => x.ParentDepartmentRankId.HasValue).WithMessage("Reference id must be a positive number.");
-        RuleFor(x => x.NsgTradeId).GreaterThan(0).When(x => x.NsgTradeId.HasValue).WithMessage("Reference id must be a positive number.");
-        RuleFor(x => x.PdTradeId).GreaterThan(0).When(x => x.PdTradeId.HasValue).WithMessage("Reference id must be a positive number.");
-        RuleFor(x => x.NsgUnitId).GreaterThan(0).When(x => x.NsgUnitId.HasValue).WithMessage("Reference id must be a positive number.");
-        RuleFor(x => x.SideSteppedFromNsgUnitId).GreaterThan(0).When(x => x.SideSteppedFromNsgUnitId.HasValue).WithMessage("Reference id must be a positive number.");
-        RuleFor(x => x.EducationId).GreaterThan(0).When(x => x.EducationId.HasValue).WithMessage("Reference id must be a positive number.");
-        RuleFor(x => x.ReligionId).GreaterThan(0).When(x => x.ReligionId.HasValue).WithMessage("Reference id must be a positive number.");
-        RuleFor(x => x.PermanentStateId).GreaterThan(0).When(x => x.PermanentStateId.HasValue).WithMessage("Reference id must be a positive number.");
-
-        // Undefined numeric enum values (e.g. 99) are rejected.
-        RuleFor(x => x.Gender).IsInEnum().When(x => x.Gender.HasValue);
-        RuleFor(x => x.Category).IsInEnum().When(x => x.Category.HasValue);
-        RuleFor(x => x.BloodGroup).IsInEnum().When(x => x.BloodGroup.HasValue);
-
-        // Only logical impossibilities, mirroring the database check constraints.
+        // Gender, category and blood group are free text (no predefined list); only the column lengths are checked.
+        RuleFor(x => x.Gender).MaximumLength(30);
+        RuleFor(x => x.Category).MaximumLength(30);
+        RuleFor(x => x.BloodGroup).MaximumLength(20);
+        // A birth date in the future is the only date rule. The order of the other dates is deliberately NOT checked: the source workbook contains legitimate records whose dates are out of the expected order.
         RuleFor(x => x.DateOfBirth).Must(d => d!.Value <= DateOnly.FromDateTime(IndianStandardTime.Now))
             .When(x => x.DateOfBirth.HasValue).WithMessage("Date of birth cannot be in the future.");
-        RuleFor(x => x.DateOfEnrollmentInGovtService).Must((x, d) => d!.Value >= x.DateOfBirth!.Value)
-            .When(x => x.DateOfEnrollmentInGovtService.HasValue && x.DateOfBirth.HasValue)
-            .WithMessage("Date of enrollment cannot be before the date of birth.");
-        RuleFor(x => x.DateOfSuperannuation).Must((x, d) => d!.Value > x.DateOfBirth!.Value)
-            .When(x => x.DateOfSuperannuation.HasValue && x.DateOfBirth.HasValue)
-            .WithMessage("Date of superannuation must be after the date of birth.");
-        RuleFor(x => x.DateOfRepatriation).Must((x, d) => d!.Value >= x.DateOfInductionInNsg!.Value)
-            .When(x => x.DateOfRepatriation.HasValue && x.DateOfInductionInNsg.HasValue)
-            .WithMessage("Date of repatriation cannot be before the date of induction.");
     }
 }
 
@@ -96,8 +71,12 @@ public class CreateUserPisRequestValidator : UserPisWriteDtoValidator<CreateUser
     {
         RuleFor(x => x.NsgNumber).MustBeRequiredTrimmedIdentifier(30);
 
-        // Gender is mandatory for new records only; update keeps the stored value when it is omitted.
-        RuleFor(x => x.Gender).NotNull().WithMessage("Gender is required.");
+        // The individual's mobile number is mandatory and unique (users_pis.mobile_number is NOT NULL). Update keeps the stored
+        // number when it is omitted, like gender and the sensitive identifiers.
+        RuleFor(x => x.MobileNumber).NotEmpty().WithMessage("{PropertyName} is required.");
+
+        // Gender (any text) is mandatory for new records only; update keeps the stored value when it is omitted.
+        RuleFor(x => x.Gender).NotEmpty().WithMessage("Gender is required.");
     }
 }
 

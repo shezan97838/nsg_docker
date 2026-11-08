@@ -43,7 +43,11 @@ public class EducationQualificationRepository : IEducationQualificationRepositor
         => await _context.EducationQualifications.AnyAsync(e => e.CourseName == courseName && (!excludeId.HasValue || e.Id != excludeId.Value), cancellationToken);
 
     public async Task<bool> IsInUseAsync(int id, CancellationToken cancellationToken = default)
-        => await _context.UsersPis.AnyAsync(u => u.EducationId == id, cancellationToken);
+    {
+        // Personnel rows store the master's name as text (no id), so usage is matched by name.
+        string? name = await _context.EducationQualifications.Where(r => r.Id == id).Select(r => r.CourseName).FirstOrDefaultAsync(cancellationToken);
+        return name != null && await _context.UsersPis.AnyAsync(u => u.Education == name, cancellationToken);
+    }
 
     public async Task<bool> AddAsync(EducationQualification entity, CancellationToken cancellationToken = default)
     {

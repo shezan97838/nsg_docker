@@ -404,7 +404,7 @@ public class GrievanceRepository : IGrievanceRepository
             where profileIds.Contains(profile.Id)
             join pis in _context.UsersPis.AsNoTracking() on profile.NsgNumber equals pis.NsgNumber into pisJoin
             from pis in pisJoin.DefaultIfEmpty()
-            select new { profile.Id, profile.NsgNumber, FullName = pis != null ? pis.FullName : null, UnitName = pis != null && pis.NsgUnit != null ? pis.NsgUnit.Name : null }
+            select new { profile.Id, profile.NsgNumber, FullName = pis != null ? pis.FullName : null, UnitName = pis != null ? pis.NsgUnit : null }
         ).ToListAsync(cancellationToken);
 
         return rows.ToDictionary(r => r.Id, r => new GrievanceEmployeeInfo(r.Id, r.NsgNumber, r.FullName, r.UnitName));

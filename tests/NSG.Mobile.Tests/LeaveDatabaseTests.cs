@@ -64,7 +64,7 @@ public sealed class LeaveDatabaseTests : IAsyncLifetime
     private async Task<long> SeedPersonAsync(string nsg)
     {
         await using AppDbContext context = Context();
-        await context.Database.ExecuteSqlRawAsync("INSERT INTO `users_pis` (`nsg_number`, `service_number`, `is_active`, `created_at_ist`) VALUES ({0}, {1}, 1, {2})", nsg, "S-" + nsg, Now);
+        await context.Database.ExecuteSqlRawAsync("INSERT INTO `users_pis` (`nsg_number`, `service_number`, `mobile_number`, `is_active`, `created_at_ist`) VALUES ({0}, {1}, {2}, 1, {3})", nsg, "S-" + nsg, TestPisData.Mobile(), Now);
         return await context.UsersPis.Where(p => p.NsgNumber == nsg).Select(p => p.Id).SingleAsync();
     }
 
@@ -302,6 +302,7 @@ public sealed class LeaveDatabaseTests : IAsyncLifetime
 
         (IReadOnlyList<PersonnelLeaveHistory> items, int total) = await WithRepoAsync(r => r.GetHistoryPagedAsync("NSG1", 1, 2));
 
-        Assert.Equal((5, new[] { 5, 4 }), (total, items.Select(h => h.NewLeaveTaken).ToArray()));
+        Assert.Equal(5, total);
+        Assert.Equal(new[] { 5, 4 }, items.Select(h => h.NewLeaveTaken).ToArray());
     }
 }

@@ -53,6 +53,10 @@ public class AdminAccountService : IAdminAccountService
 
     public async Task<Result<AdminChangeResult>> CreateAsync(CreateAdminAccountRequestDto request, long actorAdminId, string? ipAddress, CancellationToken cancellationToken = default)
     {
+        // The acting Super Admin must be a usable id before anything is read or written (the audit user column is an int).
+        if (!AdminActor.TryFrom(actorAdminId, out AdminActor actor))
+            return Result.Failure<AdminChangeResult>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         string nsg = MobileAuthInput.Nsg(request.NsgNumber);
 
         // PIS decides who this person is. The supplied mobile number and date of birth are only checks against it.
@@ -81,7 +85,7 @@ public class AdminAccountService : IAdminAccountService
         if (await _profiles.AddAsync(profile, cancellationToken) == AdminCreateOutcome.DuplicateNsgNumber)
             return Result.Failure<AdminChangeResult>(ApiErrorCodes.Conflict, AdminMessages.AccountExists);
 
-        await _audit.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success, entityType: nameof(AdminProfile), entityId: profile.Id.ToString(),
+        await _audit.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success, userId: actor.Key, entityType: nameof(AdminProfile), entityId: profile.Id.ToString(),
             ipAddress: ipAddress, correlationId: _currentUser.CorrelationId,
             additionalData: AdminSupport.Audit(("operation", "AdminAccountCreated"), ("actorAdminId", actorAdminId), ("roleCode", role.RoleCode)), cancellationToken: cancellationToken);
 
@@ -105,6 +109,10 @@ public class AdminAccountService : IAdminAccountService
 
     public async Task<Result<AdminChangeResult>> DeactivateAsync(long id, long actorAdminId, string? ipAddress, CancellationToken cancellationToken = default)
     {
+        // The acting Super Admin must be a usable id before anything is read or written (the audit user column is an int).
+        if (!AdminActor.TryFrom(actorAdminId, out AdminActor actor))
+            return Result.Failure<AdminChangeResult>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         if (id == actorAdminId)
             return Result.Failure<AdminChangeResult>(ApiErrorCodes.Conflict, AdminMessages.CannotDeactivateSelf);
 
@@ -127,7 +135,7 @@ public class AdminAccountService : IAdminAccountService
         // Sessions end now; the access token stops working at its next request, the refresh token at its next use.
         await _sessions.RevokeAllForProfileAsync(id, AdminSessionRevokeReasons.AccountDeactivated, now, cancellationToken);
 
-        await _audit.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success, entityType: nameof(AdminProfile), entityId: id.ToString(),
+        await _audit.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success, userId: actor.Key, entityType: nameof(AdminProfile), entityId: id.ToString(),
             ipAddress: ipAddress, correlationId: _currentUser.CorrelationId,
             additionalData: AdminSupport.Audit(("operation", "AdminAccountDeactivated"), ("actorAdminId", actorAdminId)), cancellationToken: cancellationToken);
 
@@ -136,6 +144,10 @@ public class AdminAccountService : IAdminAccountService
 
     public async Task<Result<AdminChangeResult>> ReactivateAsync(long id, long actorAdminId, string? ipAddress, CancellationToken cancellationToken = default)
     {
+        // The acting Super Admin must be a usable id before anything is read or written (the audit user column is an int).
+        if (!AdminActor.TryFrom(actorAdminId, out AdminActor actor))
+            return Result.Failure<AdminChangeResult>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         AdminAccountRow? row = await _profiles.GetRowByIdAsync(id, cancellationToken);
         if (row == null)
             return Result.Failure<AdminChangeResult>(ApiErrorCodes.NotFound, AdminMessages.AccountNotFound);
@@ -145,7 +157,7 @@ public class AdminAccountService : IAdminAccountService
         // Reactivation re-enables the account as it was: an account that never activated still has to activate.
         await _profiles.SetEnabledAsync(id, true, actorAdminId, Now(), cancellationToken);
 
-        await _audit.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success, entityType: nameof(AdminProfile), entityId: id.ToString(),
+        await _audit.LogAsync(AuditAction.AdminAction, DomainConstants.AuditResults.Success, userId: actor.Key, entityType: nameof(AdminProfile), entityId: id.ToString(),
             ipAddress: ipAddress, correlationId: _currentUser.CorrelationId,
             additionalData: AdminSupport.Audit(("operation", "AdminAccountReactivated"), ("actorAdminId", actorAdminId)), cancellationToken: cancellationToken);
 

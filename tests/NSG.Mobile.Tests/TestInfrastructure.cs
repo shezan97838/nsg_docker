@@ -45,7 +45,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("Security__DisableAuthorization", "false");
         SetIfMissing("Jwt__Secret", Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)));
         SetIfMissing("Encryption__Key", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
-        SetIfMissing("BlindIndex__Key", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
 
         // The per-endpoint "auth" (10/min) and "otp" (5 per 5 min) limits would throttle the end-to-end flow tests, which send every

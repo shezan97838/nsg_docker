@@ -51,6 +51,9 @@ public static class ApiEnvelope
         }
 
         string? text = !string.IsNullOrWhiteSpace(problem.Detail) ? problem.Detail : problem.Title;
-        return ApiResponse.Fail(string.IsNullOrWhiteSpace(text) ? DefaultMessage(status) : text);
+
+        // Only the allow-listed public codes (ApiErrorCodes.PublicCodes) pass; ApiResponse.Fail drops any other value.
+        string? code = problem.Extensions.TryGetValue("code", out object? value) ? value as string : null;
+        return ApiResponse.Fail(string.IsNullOrWhiteSpace(text) ? DefaultMessage(status) : text, code);
     }
 }

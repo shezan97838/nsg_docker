@@ -23,7 +23,8 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
 
     private readonly ApiFactory _factory;
     private readonly HttpClient _employee, _anonymous;
-    private HttpClient _admin = null!;   // a real Registration Admin session, created in InitializeAsync
+    private HttpClient _admin = null!;   // a real PIS Admin session (the owner of every seeded person), created in InitializeAsync
+    private long _adminId;
 
     public MobileAuthDatabaseTests(DatabaseFixture fixture)
     {
@@ -35,7 +36,9 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await CleanAsync();
-        _admin = await RegistrationAdminSession.CreateAsync(_factory);
+        ApprovalAdmins admins = await ApprovalAdminSession.CreateAsync(_factory);
+        _admin = admins.PisA;
+        _adminId = admins.PisAId;
     }
     public async Task DisposeAsync() => await CleanAsync();
 
@@ -62,7 +65,7 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
     private async Task<long> SeedPendingAsync(string nsg = "NSG-1")
     {
         await using AppDbContext ctx = _factory.CreateContext();
-        ctx.UsersPis.Add(new UserPis { NsgNumber = nsg, ServiceNumber = "S", FullName = "Test Person", MobileNumber = "9876543210", DateOfBirth = new DateOnly(1990, 5, 15) });
+        ctx.UsersPis.Add(new UserPis { NsgNumber = nsg, ServiceNumber = "S", FullName = "Test Person", MobileNumber = "9876543210", DateOfBirth = new DateOnly(1990, 5, 15), AssignedTo = _adminId });
         ApproveMobileUser request = Request(nsg);
         ctx.ApproveMobileUsers.Add(request);
         await ctx.SaveChangesAsync();
@@ -144,11 +147,11 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
         await using AppDbContext ctx = _factory.CreateContext();
         ApproveMobileUser request = await ctx.ApproveMobileUsers.SingleAsync(a => a.Id == id);
         Assert.Equal(MobileAppActivationStatus.Approved, request.ApprovalStatus);
-        Assert.Equal(9001, request.ApprovedBy);            // from the token, never from the body
+        Assert.Equal((int)_adminId, request.ApprovedBy);   // the PIS Admin from the token, never from the body
         Assert.NotNull(request.ApprovedAtIst);
         Assert.Null(request.PendingNsgNumber);
-        Assert.Equal(MobileAppActivationStatus.Approved, (await ctx.UsersPis.SingleAsync()).MobileAppActivationStatus);
-        Assert.True(await ctx.AuditLogs.AnyAsync(a => a.Action == AuditAction.ITApprovalGranted && a.UserId == 9001));
+        Assert.Equal(MobileAppActivationStatus.Approved, (await ctx.UsersPis.SingleAsync(p => p.NsgNumber == "NSG-1")).MobileAppActivationStatus);
+        Assert.True(await ctx.AuditLogs.AnyAsync(a => a.Action == AuditAction.ITApprovalGranted && a.UserId == (int)_adminId));
     }
 
     [Fact]
@@ -165,8 +168,8 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
         }
 
         await using AppDbContext ctx = _factory.CreateContext();
-        Assert.Equal(MobileAppActivationStatus.Rejected, (await ctx.UsersPis.SingleAsync()).MobileAppActivationStatus);
-        Assert.Equal(MobileAppActivationStatus.Rejected, (await ctx.ApproveMobileUsers.SingleAsync()).ApprovalStatus);
+        Assert.Equal(MobileAppActivationStatus.Rejected, (await ctx.UsersPis.SingleAsync(p => p.NsgNumber == "NSG-1")).MobileAppActivationStatus);
+        Assert.Equal(MobileAppActivationStatus.Rejected, (await ctx.ApproveMobileUsers.SingleAsync(a => a.Id == id)).ApprovalStatus);
     }
 
     [Fact]
@@ -182,7 +185,7 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
         Assert.Equal(2, responses.Count(r => r.StatusCode == HttpStatusCode.Conflict));
 
         await using AppDbContext ctx = _factory.CreateContext();
-        Assert.Equal((await ctx.ApproveMobileUsers.SingleAsync()).ApprovalStatus, (await ctx.UsersPis.SingleAsync()).MobileAppActivationStatus);
+        Assert.Equal((await ctx.ApproveMobileUsers.SingleAsync(a => a.Id == id)).ApprovalStatus, (await ctx.UsersPis.SingleAsync(p => p.NsgNumber == "NSG-1")).MobileAppActivationStatus);
     }
 
     [Fact]
@@ -276,9 +279,10 @@ public class MobileAuthDatabaseTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, change.StatusCode);
         Assert.False(string.IsNullOrWhiteSpace(await change.Content.ReadAsStringAsync()));
 
-        // A staff token is not a mobile token: mpin/change is refused even though the caller is authenticated.
+        // A genuine Admin Portal token is the wrong kind of token: the mobile authentication scheme rejects it on audience (ADR-017),
+        // so the caller is not authenticated and mpin/change answers 401, not 403.
         HttpResponseMessage staff = await _admin.PostAsync($"{Auth}/mpin/change", Json(new { currentMpin = "2580", newMpin = "1357", confirmNewMpin = "1357" }));
-        Assert.Equal(HttpStatusCode.Forbidden, staff.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, staff.StatusCode);
         Assert.False(string.IsNullOrWhiteSpace(await staff.Content.ReadAsStringAsync()));
     }
 }

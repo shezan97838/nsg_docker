@@ -36,10 +36,14 @@ public static class DependencyInjection
         services.AddScoped<INsgTradeService, NsgTradeService>();
         services.AddScoped<IPdTradeService, PdTradeService>();
         services.AddScoped<IUserPisService, UserPisService>();
+        services.AddScoped<NSG.Mobile.Application.Pis.Import.IPisImportService, NSG.Mobile.Application.Pis.Import.PisImportService>();
+        services.AddScoped<IPisAdminQueryService, PisAdminQueryService>();
+        services.AddScoped<IPisOwnershipTransferService, PisOwnershipTransferService>();
         services.AddScoped<IStateService, StateService>();
         services.AddScoped<ICityService, CityService>();
         services.AddScoped<IMobileAuthService, MobileAuthService>();
         services.AddScoped<IMobileApprovalService, MobileApprovalService>();
+        services.AddScoped<NSG.Mobile.Application.MobileAccess.IMobileAccessAdminService, NSG.Mobile.Application.MobileAccess.MobileAccessAdminService>();
         services.AddScoped<IMobileProfileService, MobileProfileService>();
         services.AddScoped<IAdminAccountService, AdminAccountService>();
         services.AddScoped<IAdminActivationService, AdminActivationService>();
@@ -54,6 +58,13 @@ public static class DependencyInjection
         services.AddScoped<IBannerService, BannerService>();
         services.AddScoped<ILeaveService, LeaveService>();
         services.AddScoped<ILeaveBulkUploadService, LeaveBulkUploadService>();
+        services.AddScoped<NSG.Mobile.Application.SalarySlips.ISalarySlipProcessingService, NSG.Mobile.Application.SalarySlips.SalarySlipProcessingService>();
+        services.AddScoped<NSG.Mobile.Application.SalarySlips.ISalarySlipAdminService, NSG.Mobile.Application.SalarySlips.SalarySlipAdminService>();
+        services.AddScoped<NSG.Mobile.Application.SalarySlips.ISalarySlipMobileService, NSG.Mobile.Application.SalarySlips.SalarySlipMobileService>();
+        services.AddScoped<NSG.Mobile.Application.Form16.IForm16AdminService, NSG.Mobile.Application.Form16.Form16AdminService>();
+        services.AddScoped<NSG.Mobile.Application.Form16.IForm16MobileService, NSG.Mobile.Application.Form16.Form16MobileService>();
+        services.AddScoped<NSG.Mobile.Application.DigitalLibrary.IDigitalLibraryAdminService, NSG.Mobile.Application.DigitalLibrary.DigitalLibraryAdminService>();
+        services.AddScoped<NSG.Mobile.Application.DigitalLibrary.IDigitalLibraryMobileService, NSG.Mobile.Application.DigitalLibrary.DigitalLibraryMobileService>();
         services.TryAddSingleton(TimeProvider.System);
 
         // FluentValidation — auto-discover all validators in this assembly

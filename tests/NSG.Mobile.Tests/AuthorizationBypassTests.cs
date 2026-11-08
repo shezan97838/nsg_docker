@@ -44,21 +44,21 @@ public class AuthorizationBypassTests
     [Fact]
     public async Task With_the_flag_on_in_development_endpoints_work_without_a_token()
     {
-        HttpStatusCode pis = default, ranks = default, write = default;
+        HttpStatusCode pis = default, ranks = default;
         WithBypass("true", () =>
         {
             using ApiFactory factory = new();
             Environment.SetEnvironmentVariable(EnvVariable, "true");   // ApiFactory's constructor resets it to false
             using HttpClient anonymous = factory.CreateClientFor(null);
-            pis = anonymous.GetAsync("/api/v1/users-pis").GetAwaiter().GetResult().StatusCode;
-            ranks = anonymous.GetAsync("/api/v1/ranks").GetAwaiter().GetResult().StatusCode;   // PIS Admin endpoint
-            write = anonymous.DeleteAsync("/api/v1/users-pis/424242").GetAwaiter().GetResult().StatusCode;
+            pis = anonymous.GetAsync("/api/v1/users-pis/1").GetAwaiter().GetResult().StatusCode;   // Admin Portal PIS Admin policy
+            ranks = anonymous.GetAsync("/api/v1/ranks").GetAwaiter().GetResult().StatusCode;   // PIS lookup policy
         });
         await Task.CompletedTask;
 
-        Assert.Equal(HttpStatusCode.OK, pis);
+        // The bypass satisfies the AUTHORIZATION requirements, so the request reaches the handler; the personnel read then needs an acting Admin Portal
+        // admin to scope the record to, and an anonymous caller has none: the service answers 401 (not the 403 of authorization, and no data is read).
+        Assert.Equal(HttpStatusCode.Unauthorized, pis);
         Assert.Equal(HttpStatusCode.OK, ranks);
-        Assert.Equal(HttpStatusCode.NotFound, write);   // reached the handler (record does not exist) instead of 401/403
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class AuthorizationBypassTests
         {
             using ApiFactory factory = new();
             using HttpClient anonymous = factory.CreateClientFor(null);
-            pis = anonymous.GetAsync("/api/v1/users-pis").GetAwaiter().GetResult().StatusCode;
+            pis = anonymous.GetAsync("/api/v1/users-pis/1").GetAwaiter().GetResult().StatusCode;
             ranks = anonymous.GetAsync("/api/v1/ranks").GetAwaiter().GetResult().StatusCode;
         });
 
@@ -85,11 +85,8 @@ public class AuthorizationBypassTests
         {
             using ApiFactory factory = new();
             Environment.SetEnvironmentVariable(EnvVariable, "true");
-            // Outside Development the host also insists on an absolute FileStorage root; give it one so the bypass check is what fails.
-            Environment.SetEnvironmentVariable("FileStorage__BasePath", Path.GetTempPath());
             using WebApplicationFactoryHolder holder = new(factory, "Staging");
             failure = Record.Exception(() => holder.CreateClient());
-            Environment.SetEnvironmentVariable("FileStorage__BasePath", null);
         });
 
         Assert.NotNull(failure);

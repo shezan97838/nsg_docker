@@ -8,10 +8,14 @@ using NSG.Mobile.Domain.Enums;
 
 namespace NSG.Mobile.API.Controllers;
 
-/// <summary>Registration Admin review of mobile activation requests. Every endpoint requires the RequireRegistrationAdmin policy (admin-portal REGISTRATION_ADMIN role).</summary>
+/// <summary>
+/// PIS Admin review of mobile activation requests. Every endpoint requires the Admin Portal PIS_ADMIN role (<c>RequirePisAdminPortal</c>): a legacy
+/// staff token, Super Admin and every other role are refused. A PIS Admin sees and decides only the requests of personnel currently assigned to
+/// them (<c>users_pis.assigned_to</c>); the acting admin always comes from the token.
+/// </summary>
 [ApiController]
 [Route("api/v1/mobile-approval-requests")]
-[Authorize(Policy = DomainConstants.Policies.RequireRegistrationAdmin)]
+[Authorize(Policy = DomainConstants.Policies.RequirePisAdminPortal)]
 [Produces("application/json")]
 public class MobileApprovalRequestsController : ControllerBase
 {
@@ -49,6 +53,7 @@ public class MobileApprovalRequestsController : ControllerBase
         PaginationRequest paging = new() { PageNumber = pageNumber, PageSize = pageSize };
         Result<PaginatedResponse<MobileApprovalRequestDto>> result =
             await _service.GetPagedAsync(paging.PageNumber, paging.PageSize, status, search, cancellationToken);
+        if (!result.IsSuccess) return MobileAuthProblem.From(this, result);
 
         return result.Data!.TotalCount == 0
             ? Ok(new ApiMessageResponse(MobileApprovalService.NoneFoundMessage))

@@ -72,7 +72,7 @@ public class DgMessageService : IDgMessageService
         if (string.IsNullOrEmpty(message.ImageStorageKey))
             return Result.Failure<GrievanceDocumentContent>(ApiErrorCodes.NotFound, "This DG message has no image.");
 
-        // Outside Development only private R2 may serve files; a host without it must never read the local disk.
+        // Storage is validated at startup; this guard stays so a host that reports storage unavailable answers 503 instead of failing.
         if (!_availability.IsAvailable)
             return Result.Failure<GrievanceDocumentContent>(GrievanceErrorCodes.StorageUnavailable, GrievanceMessages.StorageUnavailable);
 
@@ -99,6 +99,9 @@ public class DgMessageService : IDgMessageService
 
     public async Task<Result<ApiResult<DgMessageDto>>> CreateAsync(SaveDgMessageRequestDto request, DgImageUpload? image, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<ApiResult<DgMessageDto>>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         Result<Prepared> prepared = await PrepareAsync(request, image, requireIsActive: false, cancellationToken);
         if (!prepared.IsSuccess)
             return Result.Failure<ApiResult<DgMessageDto>>(prepared.ErrorCode!, prepared.ErrorMessage!);
@@ -140,6 +143,9 @@ public class DgMessageService : IDgMessageService
 
     public async Task<Result<ApiResult<DgMessageDto>>> UpdateAsync(int id, SaveDgMessageRequestDto request, DgImageUpload? image, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<ApiResult<DgMessageDto>>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         Result<Prepared> prepared = await PrepareAsync(request, image, requireIsActive: true, cancellationToken);
         if (!prepared.IsSuccess)
             return Result.Failure<ApiResult<DgMessageDto>>(prepared.ErrorCode!, prepared.ErrorMessage!);
@@ -180,6 +186,9 @@ public class DgMessageService : IDgMessageService
 
     public async Task<Result<ApiMessageResponse>> DeleteAsync(int id, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<ApiMessageResponse>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         switch (await _repository.SoftDeleteAsync(id, _currentUser.AdminProfileId, NowIst(), cancellationToken))
         {
             case DgMessageDeleteOutcome.NotFound:
@@ -304,7 +313,7 @@ public class DgMessageService : IDgMessageService
 
     private async Task AuditAsync(AuditAction action, int id, CancellationToken cancellationToken)
         => await _audit.LogAsync(action, DomainConstants.AuditResults.Success,
-            entityType: nameof(DgMessage), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
+            userId: _currentUser.AuditUserId(), entityType: nameof(DgMessage), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
             additionalData: JsonSerializer.Serialize(new { actorType = "Admin", actorId = _currentUser.AdminProfileId }),
             cancellationToken: cancellationToken);
 

@@ -24,7 +24,7 @@ RUN dotnet publish src/NSG.Mobile.API/NSG.Mobile.API.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
-# Writable locations for the non-root user: Serilog file sink (logs/ relative to /app) and file storage.
+# Writable locations for the non-root user: Serilog file sink (logs/ relative to /app) and the common document storage root (Storage:RootPath).
 # On Render the container filesystem is ephemeral; mount a persistent disk at /var/data for files that must survive a deploy.
 RUN mkdir -p /app/logs /var/data/files \
     && chown -R $APP_UID:$APP_UID /app/logs /var/data
@@ -34,11 +34,12 @@ COPY --from=build /app/publish .
 ENV ASPNETCORE_ENVIRONMENT=Production \
     DOTNET_RUNNING_IN_CONTAINER=true \
     DOTNET_NOLOGO=true \
-    FileStorage__BasePath=/var/data/files
+    Storage__RootPath=/var/data/files
 
 # Run as the unprivileged "app" user that ships with the .NET 8 images.
 USER $APP_UID
 
 # Render injects PORT (default 10000) and routes HTTPS traffic to it; fall back to 8080 elsewhere.
 EXPOSE 8080
-ENTRYPOINT ["/bin/sh", "-c", "ASPNETCORE_HTTP_PORTS=${PORT:-8080} exec dotnet NSG.Mobile.API.dll"]
+# ENTRYPOINT ["/bin/sh", "-c", "ASPNETCORE_HTTP_PORTS=${PORT:-8080} exec dotnet NSG.Mobile.API.dll"]
+ENTRYPOINT ["/bin/sh", "-c", "ASPNETCORE_HTTP_PORTS=${PORT:-8080}; export ASPNETCORE_HTTP_PORTS; exec dotnet NSG.Mobile.API.dll \"$@\"", "--"]

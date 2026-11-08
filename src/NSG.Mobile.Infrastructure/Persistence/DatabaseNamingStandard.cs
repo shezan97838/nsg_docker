@@ -25,7 +25,7 @@ public static class DatabaseNamingStandard
     private static readonly Regex SnakeCasePattern = new("^[a-z][a-z0-9_]*$", RegexOptions.CultureInvariant);
 
     /// <summary>
-    /// "UsersPIS" → "users_pis", "NsgTradeId" → "nsg_trade_id", "CreatedAtIst" → "created_at_ist",
+    /// "UsersPIS" → "users_pis", "NsgNumber" → "nsg_number", "CreatedAtIst" → "created_at_ist",
     /// "IX_UsersPIS_NsgNumber" → "ix_users_pis_nsg_number".
     /// </summary>
     public static string ToSnakeCase(string name)

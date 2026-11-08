@@ -2,7 +2,7 @@ namespace NSG.Mobile.Domain.Entities;
 
 /// <summary>
 /// NSG trade lookup (for example "GD"). Table <c>nsg_trade</c>. Completely independent: no rank, no code, and no link to
-/// <see cref="PdTrade"/>; the only reference to it is the optional <see cref="UserPis.NsgTradeId"/>.
+/// <see cref="PdTrade"/>; <see cref="UserPis"/> no longer references it (it stores the trade name as text).
 /// </summary>
 public class NsgTrade
 {
@@ -17,7 +17,7 @@ public class NsgTrade
 
 /// <summary>
 /// Parent-department trade lookup. Table <c>pd_trade</c>. Completely independent of <see cref="NsgTrade"/> and of every rank
-/// table; the only reference to it is the optional <see cref="UserPis.PdTradeId"/>.
+/// table; <see cref="UserPis"/> no longer references it (it stores the trade name as text).
 /// </summary>
 public class PdTrade
 {

@@ -65,6 +65,9 @@ public class GrievanceCategoryService : IGrievanceCategoryService
 
     public async Task<Result<ApiResult<GrievanceCategoryAdminDto>>> CreateAsync(SaveGrievanceCategoryRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<ApiResult<GrievanceCategoryAdminDto>>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         Result<string> name = ValidName(request);
         if (!name.IsSuccess)
             return Result.Failure<ApiResult<GrievanceCategoryAdminDto>>(name.ErrorCode!, name.ErrorMessage!);
@@ -88,6 +91,9 @@ public class GrievanceCategoryService : IGrievanceCategoryService
 
     public async Task<Result<ApiResult<GrievanceCategoryAdminDto>>> UpdateAsync(int id, SaveGrievanceCategoryRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<ApiResult<GrievanceCategoryAdminDto>>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         Result<string> name = ValidName(request);
         if (!name.IsSuccess)
             return Result.Failure<ApiResult<GrievanceCategoryAdminDto>>(name.ErrorCode!, name.ErrorMessage!);
@@ -114,6 +120,9 @@ public class GrievanceCategoryService : IGrievanceCategoryService
 
     public async Task<Result<ApiMessageResponse>> DeleteAsync(int id, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<ApiMessageResponse>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         CategoryDeleteOutcome outcome = await _repository.SoftDeleteCategoryAsync(id, _currentUser.AdminProfileId, NowIst(), cancellationToken);
 
         switch (outcome)
@@ -138,7 +147,7 @@ public class GrievanceCategoryService : IGrievanceCategoryService
 
     private async Task AuditAsync(int categoryId, string change, CancellationToken cancellationToken)
         => await _audit.LogAsync(AuditAction.GrievanceCategoryChanged, DomainConstants.AuditResults.Success,
-            entityType: nameof(GrievanceCategory), entityId: categoryId.ToString(), correlationId: _currentUser.CorrelationId,
+            userId: _currentUser.AuditUserId(), entityType: nameof(GrievanceCategory), entityId: categoryId.ToString(), correlationId: _currentUser.CorrelationId,
             additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = _currentUser.AdminProfileId, change }),
             cancellationToken: cancellationToken);
 

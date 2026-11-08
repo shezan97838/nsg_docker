@@ -101,8 +101,7 @@ public class GrievanceAdminService : IGrievanceAdminService
 
     public async Task<Result<GrievanceAdminDetailDto>> GetByIdAsync(long id, CancellationToken cancellationToken)
     {
-        long? adminId = _currentUser.AdminProfileId;
-        if (adminId == null)
+        if (!_currentUser.TryGetAdminActor(out AdminActor actor))
             return Result.Failure<GrievanceAdminDetailDto>(ApiErrorCodes.Unauthorized, GrievanceMessages.IdentityMissing);
 
         Result<GrievanceAdminDetailDto> detail = await LoadDetailAsync(id, cancellationToken);
@@ -110,8 +109,8 @@ public class GrievanceAdminService : IGrievanceAdminService
         {
             // An admin opening a grievance reads an employee's personal details, so every view is audited (ids only).
             await _audit.LogAsync(AuditAction.GrievanceViewed, DomainConstants.AuditResults.Success,
-                entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
-                additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = adminId.Value }),
+                userId: actor.Key, entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
+                additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = actor.Id }),
                 cancellationToken: cancellationToken);
         }
 
@@ -133,21 +132,19 @@ public class GrievanceAdminService : IGrievanceAdminService
 
     public async Task<Result<GrievanceDocumentContent>> OpenDocumentAsync(long id, int index, CancellationToken cancellationToken)
     {
-        long? adminId = _currentUser.AdminProfileId;
-        if (adminId == null)
+        if (!_currentUser.TryGetAdminActor(out AdminActor actor))
             return Result.Failure<GrievanceDocumentContent>(ApiErrorCodes.Unauthorized, GrievanceMessages.IdentityMissing);
 
         Grievance? grievance = await _repository.GetByIdAsync(id, null, cancellationToken);
         if (grievance == null)
             return Result.Failure<GrievanceDocumentContent>(ApiErrorCodes.NotFound, GrievanceMessages.GrievanceNotFound);
 
-        return await _documentAccess.OpenAsync(grievance, index, GrievanceActorType.Admin, adminId.Value, cancellationToken);
+        return await _documentAccess.OpenAsync(grievance, index, GrievanceActorType.Admin, actor.Id, cancellationToken);
     }
 
     public async Task<Result<ApiResult<GrievanceAdminDetailDto>>> UpdateStatusAsync(long id, UpdateGrievanceStatusRequestDto request, CancellationToken cancellationToken)
     {
-        long? adminId = _currentUser.AdminProfileId;
-        if (adminId == null)
+        if (!_currentUser.TryGetAdminActor(out AdminActor actor))
             return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.Unauthorized, GrievanceMessages.IdentityMissing);
 
         if (request.ToStatus is not int rawStatus || !Enum.IsDefined(typeof(GrievanceStatus), rawStatus))
@@ -174,7 +171,7 @@ public class GrievanceAdminService : IGrievanceAdminService
                 $"A grievance cannot move from {from.DisplayName()} to {to.DisplayName()}. Allowed: Submitted → Under Review → Action Taken → Closed, one step at a time.");
 
         DateTime now = IndianStandardTime.ConvertFromUtc(_time.GetUtcNow().UtcDateTime);
-        GrievanceStatusChangeResult change = await _repository.ChangeStatusAsync(id, from, to, adminId.Value, remarks, now, cancellationToken);
+        GrievanceStatusChangeResult change = await _repository.ChangeStatusAsync(id, from, to, actor.Id, remarks, now, cancellationToken);
 
         switch (change.Outcome)
         {
@@ -186,10 +183,10 @@ public class GrievanceAdminService : IGrievanceAdminService
                     $"The grievance was changed by someone else and is now {change.CurrentStatus?.DisplayName()}. Reload it and try again.");
         }
 
-        _logger.LogInformation("Grievance {GrievanceId} moved {From} -> {To} by admin {AdminId}", id, from, to, adminId.Value);
+        _logger.LogInformation("Grievance {GrievanceId} moved {From} -> {To} by admin {AdminId}", id, from, to, actor.Id);
         await _audit.LogAsync(AuditAction.GrievanceStatusChanged, DomainConstants.AuditResults.Success,
-            entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
-            additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = adminId.Value, from = (int)from, to = (int)to }),
+            userId: actor.Key, entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
+            additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = actor.Id, from = (int)from, to = (int)to }),
             cancellationToken: cancellationToken);
 
         Result<GrievanceAdminDetailDto> updated = await LoadDetailAsync(id, cancellationToken);
@@ -201,8 +198,7 @@ public class GrievanceAdminService : IGrievanceAdminService
     public async Task<Result<ApiResult<GrievanceAdminDetailDto>>> ResolveAsync(
         long id, ResolveGrievanceRequestDto request, GrievanceUploadFile? file, CancellationToken cancellationToken)
     {
-        long? adminId = _currentUser.AdminProfileId;
-        if (adminId == null)
+        if (!_currentUser.TryGetAdminActor(out AdminActor actor))
             return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.Unauthorized, GrievanceMessages.IdentityMissing);
 
         // Everything that can be checked without touching storage or the database is checked first.
@@ -223,7 +219,7 @@ public class GrievanceAdminService : IGrievanceAdminService
             return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed,
                 $"A grievance can only be resolved after action has been taken; this one is {grievance.CurrentStatus.DisplayName()}.");
 
-        // Outside Development only private R2 may receive documents; a host without it must never write to the local disk.
+        // Storage is validated at startup; this guard stays so a host that reports storage unavailable answers 503 instead of failing.
         if (!_availability.IsAvailable)
             return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(GrievanceErrorCodes.StorageUnavailable, GrievanceMessages.StorageUnavailable);
 
@@ -256,7 +252,7 @@ public class GrievanceAdminService : IGrievanceAdminService
             GrievanceStatusChangeResult change;
             try
             {
-                change = await _repository.ResolveAsync(id, adminId.Value, remarks, key, now, cancellationToken);
+                change = await _repository.ResolveAsync(id, actor.Id, remarks, key, now, cancellationToken);
             }
             catch
             {
@@ -274,14 +270,14 @@ public class GrievanceAdminService : IGrievanceAdminService
             }
 
             // From here the grievance is closed and the object must stay, whatever happens to the audit writes.
-            _logger.LogInformation("Grievance {GrievanceId} resolved by admin {AdminId} with a {ContentType} document", id, adminId.Value, document.Validated.ContentType);
+            _logger.LogInformation("Grievance {GrievanceId} resolved by admin {AdminId} with a {ContentType} document", id, actor.Id, document.Validated.ContentType);
             await _audit.LogAsync(AuditAction.GrievanceStatusChanged, DomainConstants.AuditResults.Success,
-                entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
-                additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = adminId.Value, from = (int)GrievanceStatus.ActionTaken, to = (int)GrievanceStatus.Closed, resolved = true }),
+                userId: actor.Key, entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
+                additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = actor.Id, from = (int)GrievanceStatus.ActionTaken, to = (int)GrievanceStatus.Closed, resolved = true }),
                 cancellationToken: cancellationToken);
             await _audit.LogAsync(AuditAction.GrievanceDocumentUploaded, DomainConstants.AuditResults.Success,
-                entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
-                additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = adminId.Value, resolutionDocument = true, sizeBytes = document.Size }),
+                userId: actor.Key, entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
+                additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = actor.Id, resolutionDocument = true, sizeBytes = document.Size }),
                 cancellationToken: cancellationToken);
 
             return await AnswerAsync("Grievance resolved successfully.", id, cancellationToken);
@@ -294,15 +290,14 @@ public class GrievanceAdminService : IGrievanceAdminService
 
     public async Task<Result<GrievanceDocumentContent>> OpenResolutionDocumentAsync(long id, CancellationToken cancellationToken)
     {
-        long? adminId = _currentUser.AdminProfileId;
-        if (adminId == null)
+        if (!_currentUser.TryGetAdminActor(out AdminActor actor))
             return Result.Failure<GrievanceDocumentContent>(ApiErrorCodes.Unauthorized, GrievanceMessages.IdentityMissing);
 
         Grievance? grievance = await _repository.GetByIdAsync(id, null, cancellationToken);
         if (grievance == null)
             return Result.Failure<GrievanceDocumentContent>(ApiErrorCodes.NotFound, GrievanceMessages.GrievanceNotFound);
 
-        return await _documentAccess.OpenResolutionAsync(grievance, GrievanceActorType.Admin, adminId.Value, cancellationToken);
+        return await _documentAccess.OpenResolutionAsync(grievance, GrievanceActorType.Admin, actor.Id, cancellationToken);
     }
 
     private async Task RemoveOrphanAsync(string key)
@@ -316,8 +311,7 @@ public class GrievanceAdminService : IGrievanceAdminService
 
     public async Task<Result<ApiResult<GrievanceAdminDetailDto>>> AddCommentAsync(long id, AddGrievanceCommentRequestDto request, CancellationToken cancellationToken)
     {
-        long? adminId = _currentUser.AdminProfileId;
-        if (adminId == null)
+        if (!_currentUser.TryGetAdminActor(out AdminActor actor))
             return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.Unauthorized, GrievanceMessages.IdentityMissing);
 
         string comment = (request.Comment ?? string.Empty).Trim();
@@ -326,7 +320,7 @@ public class GrievanceAdminService : IGrievanceAdminService
         if (comment.Length > GrievanceLimits.RemarksMaxLength)
             return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed, $"Comment must not exceed {GrievanceLimits.RemarksMaxLength} characters.");
 
-        switch (await _repository.AddCommentAsync(id, adminId.Value, comment, NowIst(), cancellationToken))
+        switch (await _repository.AddCommentAsync(id, actor.Id, comment, NowIst(), cancellationToken))
         {
             case GrievanceCommentOutcome.NotFound:
                 return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.NotFound, GrievanceMessages.GrievanceNotFound);
@@ -335,8 +329,8 @@ public class GrievanceAdminService : IGrievanceAdminService
         }
 
         await _audit.LogAsync(AuditAction.GrievanceCommentAdded, DomainConstants.AuditResults.Success,
-            entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
-            additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = adminId.Value }),
+            userId: actor.Key, entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
+            additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = actor.Id }),
             cancellationToken: cancellationToken);
 
         return await AnswerAsync("Comment added successfully.", id, cancellationToken);
@@ -344,8 +338,7 @@ public class GrievanceAdminService : IGrievanceAdminService
 
     public async Task<Result<ApiResult<GrievanceAdminDetailDto>>> ForwardAsync(long id, ForwardGrievanceRequestDto request, CancellationToken cancellationToken)
     {
-        long? adminId = _currentUser.AdminProfileId;
-        if (adminId == null)
+        if (!_currentUser.TryGetAdminActor(out AdminActor actor))
             return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.Unauthorized, GrievanceMessages.IdentityMissing);
 
         if (request.ToAdminId is not > 0)
@@ -358,7 +351,7 @@ public class GrievanceAdminService : IGrievanceAdminService
         if (!await _repository.IsActiveGrievanceAdminAsync(target, cancellationToken))
             return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.ValidationFailed, "toAdminId must be the id of an active Grievance Admin account.");
 
-        switch (await _repository.ForwardAsync(id, adminId.Value, target, remarks, NowIst(), cancellationToken))
+        switch (await _repository.ForwardAsync(id, actor.Id, target, remarks, NowIst(), cancellationToken))
         {
             case GrievanceForwardOutcome.NotFound:
                 return Result.Failure<ApiResult<GrievanceAdminDetailDto>>(ApiErrorCodes.NotFound, GrievanceMessages.GrievanceNotFound);
@@ -369,8 +362,8 @@ public class GrievanceAdminService : IGrievanceAdminService
         }
 
         await _audit.LogAsync(AuditAction.GrievanceForwarded, DomainConstants.AuditResults.Success,
-            entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
-            additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = adminId.Value, forwardedTo = target }),
+            userId: actor.Key, entityType: nameof(Grievance), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
+            additionalData: JsonSerializer.Serialize(new { actorType = nameof(GrievanceActorType.Admin), actorId = actor.Id, forwardedTo = target }),
             cancellationToken: cancellationToken);
 
         return await AnswerAsync("Grievance forwarded successfully.", id, cancellationToken);

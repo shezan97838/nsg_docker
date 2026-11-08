@@ -100,6 +100,13 @@ public class MobileAuthFlowDto
         set => _message = value;
     }
 
+    /// <summary>
+    /// Machine-readable code for the response envelope's <c>code</c> field (<c>SURAKSHA_1001</c> when a PIS Admin blocked the profile);
+    /// null for every other status. Not part of <c>data</c>: the controller moves it to the envelope.
+    /// </summary>
+    [JsonIgnore]
+    public string? Code { get; set; }
+
     /// <summary>Reference to quote when verifying the OTP.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Guid? OtpReferenceId { get; set; }

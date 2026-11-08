@@ -49,7 +49,11 @@ public class ParentDepartmentRankRepository : IParentDepartmentRankRepository
         => await _context.ParentDepartmentRanks.AnyAsync(l => l.Name == name && (!excludeId.HasValue || l.Id != excludeId.Value), cancellationToken);
 
     public async Task<bool> IsInUseAsync(int id, CancellationToken cancellationToken = default)
-        => await _context.UsersPis.AnyAsync(u => u.ParentDepartmentRankId == id, cancellationToken);
+    {
+        // Personnel rows store the master's name as text (no id), so usage is matched by name.
+        string? name = await _context.ParentDepartmentRanks.Where(r => r.Id == id).Select(r => r.Name).FirstOrDefaultAsync(cancellationToken);
+        return name != null && await _context.UsersPis.AnyAsync(u => u.ParentDepartmentRank == name, cancellationToken);
+    }
 
     public async Task<bool> AddAsync(ParentDepartmentRank entity, CancellationToken cancellationToken = default)
     {

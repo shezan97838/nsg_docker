@@ -93,12 +93,12 @@ public class MobileSessionDatabaseTests : IAsyncLifetime
 
     private Task<(HttpStatusCode Status, JsonElement Body)> RefreshAsync(string refreshToken) => PostAsync(_anonymous, $"{Auth}/token/refresh", new { refreshToken });
 
-    /// <summary>mpin/change with a wrong current MPIN: 401 for a bad access token, and also 401 (invalid credentials) for a good one, so the body tells them apart.</summary>
+    /// <summary>mpin/change with a wrong current MPIN: 401 for a bad access token, and also 401 ("Current MPIN is incorrect.") for a good one, so the body tells them apart.</summary>
     private async Task<bool> AccessTokenWorksAsync(string accessToken)
     {
         (HttpStatusCode status, JsonElement body) = await PostAsync(Bearer(accessToken), $"{Auth}/mpin/change", new { currentMpin = "9999", newMpin = "1357", confirmNewMpin = "1357" });
-        // A live session reaches the service, which answers with the "Invalid credentials." ProblemDetails; a dead one is rejected before it.
-        return status == HttpStatusCode.Unauthorized && body.TryGetProperty("message", out JsonElement message) && message.GetString() == NSG.Mobile.Application.MobileAuth.MobileAuthMessages.InvalidCredentials;
+        // A live session reaches the service, which answers with the "Current MPIN is incorrect." message; a dead one is rejected before it.
+        return status == HttpStatusCode.Unauthorized && body.TryGetProperty("message", out JsonElement message) && message.GetString() == "Current MPIN is incorrect.";
     }
 
     // ───── login and storage ─────
@@ -210,7 +210,9 @@ public class MobileSessionDatabaseTests : IAsyncLifetime
         Tokens old = await LoginAsync();
         Tokens current = await LoginAsync();
         Assert.False(await AccessTokenWorksAsync(old.Access));
-        Assert.Equal(HttpStatusCode.Unauthorized, (await RefreshAsync(old.Refresh)).Status);
+        (HttpStatusCode refreshStatus, JsonElement refreshBody) = await RefreshAsync(old.Refresh);
+        Assert.Equal(HttpStatusCode.Forbidden, refreshStatus);                                       // SURAKSHA_1002: replaced by a newer login
+        Assert.Equal("SURAKSHA_1002", refreshBody.GetProperty("code").GetString());
         Assert.True(await AccessTokenWorksAsync(current.Access));
     }
 

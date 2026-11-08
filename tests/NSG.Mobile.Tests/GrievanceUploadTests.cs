@@ -186,7 +186,7 @@ public class GrievanceUploadTests
     // ── Storage guard and outages ──
 
     [Fact]
-    public async Task Outside_Development_without_R2_a_submission_with_files_is_503_and_downloads_never_touch_storage()
+    public async Task Whenever_storage_reports_unavailable_a_submission_with_files_is_503_and_downloads_never_touch_storage()
     {
         (GrvKit kit, GrievanceCategory category) = Arrange();
         Grievance g = kit.Repo.AddGrievance(GrvKit.Employee, category);

@@ -158,6 +158,39 @@ public class BannerTests
     private static BannerImageUpload Png(string name = "banner.png") => new(new MemoryStream(GrvKit.PngBytes), name, "image/png", GrvKit.PngBytes.Length);
     private static BannerImageUpload Jpeg(string name = "banner.jpg") => new(new MemoryStream(GrvKit.JpegBytes), name, "image/jpeg", GrvKit.JpegBytes.Length);
 
+    // ── Audit identity ──
+
+    [Fact]
+    public async Task Create_update_and_status_changes_are_audited_with_the_admin_profile_id_in_the_user_column()
+    {
+        Kit kit = new();
+        Result<ApiResult<BannerAdminDto>> created = await kit.Service.CreateAsync(Valid(), null, default);
+        Assert.True(created.IsSuccess);
+        int id = created.Data!.Data!.Id;
+
+        Assert.True((await kit.Service.SetStatusAsync(id, new UpdateBannerStatusRequestDto { IsActive = false }, default)).IsSuccess);
+
+        Assert.Equal(2, kit.Audit.Entries.Count);
+        Assert.All(kit.Audit.Entries, e => Assert.Equal(9001, e.UserId));
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-4L)]
+    [InlineData((long)int.MaxValue + 1)]
+    public async Task An_unusable_admin_profile_id_is_refused_with_401_before_a_banner_is_written_or_audited(long admin)
+    {
+        Kit kit = new();
+        kit.User.AdminProfileId = admin;
+
+        Result<ApiResult<BannerAdminDto>> created = await kit.Service.CreateAsync(Valid(), Png(), default);
+
+        Assert.Equal((ApiErrorCodes.Unauthorized, "The administrator could not be identified."), (created.ErrorCode, created.ErrorMessage));
+        Assert.Empty(kit.Repo.Rows);
+        Assert.Empty(kit.Storage.Objects);   // not even the image was uploaded
+        Assert.Empty(kit.Audit.Entries);
+    }
+
     // ── Create ──
 
     [Fact]

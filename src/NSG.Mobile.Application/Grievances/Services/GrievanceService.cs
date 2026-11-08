@@ -82,7 +82,7 @@ public class GrievanceService : IGrievanceService
             return Result.Failure<ApiResult<GrievanceDetailDto>>(ApiErrorCodes.ValidationFailed,
                 $"A grievance can have at most {GrievanceLimits.MaxFiles} documents.");
 
-        // Outside Development only private R2 may receive documents; a host without it must never write to the local disk.
+        // Storage is validated at startup; this guard stays so a host that reports storage unavailable answers 503 instead of failing.
         if (files.Count > 0 && !_availability.IsAvailable)
             return Result.Failure<ApiResult<GrievanceDetailDto>>(GrievanceErrorCodes.StorageUnavailable, GrievanceMessages.StorageUnavailable);
 

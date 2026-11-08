@@ -9,9 +9,9 @@ using NSG.Mobile.Domain.Enums;
 
 namespace NSG.Mobile.Tests;
 
-// In-memory stand-ins for the Grievance module's dependencies, so every rule can be tested without MySQL or R2. The repository fake follows
+// In-memory stand-ins for the Grievance module's dependencies, so every rule can be tested without MySQL. The repository fake follows
 // the contract of GrievanceRepository (owner filter, optimistic updated_at_ist token, conditional status change, unique category names).
-// The real SQL, real MySQL behaviour and real R2 are NOT covered here; they need the manual smoke tests described in docs/GRIEVANCE-MODULE.md.
+// The real SQL, and real MySQL behaviour are NOT covered here; they need the manual smoke tests described in docs/GRIEVANCE-MODULE.md.
 
 internal sealed class GrvFakeRepository : IGrievanceRepository
 {

@@ -106,6 +106,9 @@ public class BannerService : IBannerService
 
     public async Task<Result<ApiResult<BannerAdminDto>>> CreateAsync(SaveBannerRequestDto request, BannerImageUpload? image, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<ApiResult<BannerAdminDto>>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         Result<Prepared> prepared = await PrepareAsync(request, image, null, isUpdate: false, cancellationToken);
         if (!prepared.IsSuccess)
             return Result.Failure<ApiResult<BannerAdminDto>>(prepared.ErrorCode!, prepared.ErrorMessage!);
@@ -154,6 +157,9 @@ public class BannerService : IBannerService
 
     public async Task<Result<ApiResult<BannerAdminDto>>> UpdateAsync(int id, SaveBannerRequestDto request, BannerImageUpload? image, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<ApiResult<BannerAdminDto>>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         Banner? existing = await _repository.GetByIdAsync(id, cancellationToken);
         Result<Prepared> prepared = await PrepareAsync(request, image, existing, isUpdate: true, cancellationToken);
         if (!prepared.IsSuccess)
@@ -198,6 +204,9 @@ public class BannerService : IBannerService
 
     public async Task<Result<ApiResult<BannerAdminDto>>> SetStatusAsync(int id, UpdateBannerStatusRequestDto request, CancellationToken cancellationToken)
     {
+        if (_currentUser.HasUnusableAdminId())
+            return Result.Failure<ApiResult<BannerAdminDto>>(ApiErrorCodes.Unauthorized, AdminActorExtensions.AdminNotIdentifiedMessage);
+
         if (request.IsActive == null)
             return Result.Failure<ApiResult<BannerAdminDto>>(ApiErrorCodes.ValidationFailed, "isActive is required.");
 
@@ -222,7 +231,7 @@ public class BannerService : IBannerService
         if (string.IsNullOrEmpty(banner.ImageStorageKey))
             return Result.Failure<GrievanceDocumentContent>(ApiErrorCodes.NotFound, BannerLimits.NoImageMessage);
 
-        // Outside Development only private R2 may serve files; a host without it must never read the local disk.
+        // Storage is validated at startup; this guard stays so a host that reports storage unavailable answers 503 instead of failing.
         if (!_availability.IsAvailable)
             return Result.Failure<GrievanceDocumentContent>(GrievanceErrorCodes.StorageUnavailable, GrievanceMessages.StorageUnavailable);
 
@@ -374,7 +383,7 @@ public class BannerService : IBannerService
 
     private async Task AuditAsync(AuditAction action, int id, CancellationToken cancellationToken)
         => await _audit.LogAsync(action, DomainConstants.AuditResults.Success,
-            entityType: nameof(Banner), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
+            userId: _currentUser.AuditUserId(), entityType: nameof(Banner), entityId: id.ToString(), correlationId: _currentUser.CorrelationId,
             additionalData: JsonSerializer.Serialize(new { actorType = "Admin", actorId = _currentUser.AdminProfileId }),
             cancellationToken: cancellationToken);
 

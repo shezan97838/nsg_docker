@@ -4,8 +4,9 @@ using NSG.Mobile.Domain.Entities;
 namespace NSG.Mobile.Application.Pis.Mappings;
 
 /// <summary>
-/// Explicit mapping for the personnel module. Ciphertext and hashes never leave the entity; the sensitive plaintext
-/// fields of a request are handled by the service (encrypt + hash), not here.
+/// Explicit mapping for the personnel module. The personnel row is a self-contained text model, so reads return every stored
+/// text column exactly as it is (no conversion, nothing hidden) and writes store trimmed text. Ciphertext never leaves the
+/// entity; the sensitive plaintext fields of a request are handled by the service (encrypt), not here.
 /// </summary>
 public static class UserPisMappingExtensions
 {
@@ -15,30 +16,19 @@ public static class UserPisMappingExtensions
         NsgNumber = p.NsgNumber,
         ServiceNumber = p.ServiceNumber,
         FullName = p.FullName,
-        NsgRankId = p.NsgRankId,
-        NsgRankName = p.NsgRank?.RankName,
-        NsgTradeId = p.NsgTradeId,
-        NsgTradeName = p.NsgTrade?.NsgTradeName,
-        ParentDepartmentRankId = p.ParentDepartmentRankId,
-        ParentDepartmentRankName = p.ParentDepartmentRank?.Name,
-        PdTradeId = p.PdTradeId,
-        PdTradeName = p.PdTrade?.PdTradeName,
-        NsgUnitId = p.NsgUnitId,
-        NsgUnitName = p.NsgUnit?.Name,
-        EducationId = p.EducationId,
-        EducationName = p.Education?.CourseName,
+        NsgRank = p.NsgRank,
+        ParentDepartmentRank = p.ParentDepartmentRank,
+        NsgUnit = p.NsgUnit,
+        Education = p.Education,
         DateOfInductionInNsg = p.DateOfInductionInNsg,
-        SideSteppedOn = p.SideSteppedOn,
-        SideSteppedFromNsgUnitId = p.SideSteppedFromNsgUnitId,
-        SideSteppedFromNsgUnitName = p.SideSteppedFromNsgUnit?.Name,
+        SideSteppedDetails = p.SideSteppedDetails,
         DateOfRepatriation = p.DateOfRepatriation,
         DateOfBirth = p.DateOfBirth,
         DateOfEnrollmentInGovtService = p.DateOfEnrollmentInGovtService,
         DateOfSuperannuation = p.DateOfSuperannuation,
         Gender = p.Gender,
         Category = p.Category,
-        ReligionId = p.ReligionId,
-        ReligionName = p.Religion?.Name,
+        Religion = p.Religion,
         FatherName = p.FatherName,
         MotherName = p.MotherName,
         SpouseName = p.SpouseName,
@@ -52,8 +42,7 @@ public static class UserPisMappingExtensions
         PermanentPostOffice = p.PermanentPostOffice,
         PermanentPoliceStation = p.PermanentPoliceStation,
         PermanentDistrict = p.PermanentDistrict,
-        PermanentStateId = p.PermanentStateId,
-        PermanentStateName = p.PermanentState?.Name,
+        PermanentState = p.PermanentState,
         PermanentPinCode = p.PermanentPinCode,
         DateOfAme = p.DateOfAme,
         DateOfImmovablePropertyReturn = p.DateOfImmovablePropertyReturn,
@@ -73,30 +62,19 @@ public static class UserPisMappingExtensions
         NsgNumber = p.NsgNumber,
         ServiceNumber = p.ServiceNumber,
         FullName = p.FullName,
-        NsgRankId = p.NsgRankId,
-        NsgRankName = p.NsgRank?.RankName,
-        NsgTradeId = p.NsgTradeId,
-        NsgTradeName = p.NsgTrade?.NsgTradeName,
-        ParentDepartmentRankId = p.ParentDepartmentRankId,
-        ParentDepartmentRankName = p.ParentDepartmentRank?.Name,
-        PdTradeId = p.PdTradeId,
-        PdTradeName = p.PdTrade?.PdTradeName,
-        NsgUnitId = p.NsgUnitId,
-        NsgUnitName = p.NsgUnit?.Name,
-        EducationId = p.EducationId,
-        EducationName = p.Education?.CourseName,
+        NsgRank = p.NsgRank,
+        ParentDepartmentRank = p.ParentDepartmentRank,
+        NsgUnit = p.NsgUnit,
+        Education = p.Education,
         DateOfInductionInNsg = p.DateOfInductionInNsg,
-        SideSteppedOn = p.SideSteppedOn,
-        SideSteppedFromNsgUnitId = p.SideSteppedFromNsgUnitId,
-        SideSteppedFromNsgUnitName = p.SideSteppedFromNsgUnit?.Name,
+        SideSteppedDetails = p.SideSteppedDetails,
         DateOfRepatriation = p.DateOfRepatriation,
         DateOfBirth = p.DateOfBirth,
         DateOfEnrollmentInGovtService = p.DateOfEnrollmentInGovtService,
         DateOfSuperannuation = p.DateOfSuperannuation,
         Gender = p.Gender,
         Category = p.Category,
-        ReligionId = p.ReligionId,
-        ReligionName = p.Religion?.Name,
+        Religion = p.Religion,
         FatherName = p.FatherName,
         MotherName = p.MotherName,
         SpouseName = p.SpouseName,
@@ -114,8 +92,7 @@ public static class UserPisMappingExtensions
         PermanentPostOffice = p.PermanentPostOffice,
         PermanentPoliceStation = p.PermanentPoliceStation,
         PermanentDistrict = p.PermanentDistrict,
-        PermanentStateId = p.PermanentStateId,
-        PermanentStateName = p.PermanentState?.Name,
+        PermanentState = p.PermanentState,
         PermanentPinCode = p.PermanentPinCode,
         DateOfAme = p.DateOfAme,
         DateOfImmovablePropertyReturn = p.DateOfImmovablePropertyReturn,
@@ -133,48 +110,47 @@ public static class UserPisMappingExtensions
     };
 
     /// <summary>
-    /// Copies the writable, non-sensitive fields onto the entity. Id, NSG number, activation status, creation metadata,
-    /// and the encrypted/hashed columns are never touched here.
+    /// Copies the writable, non-sensitive fields onto the entity as trimmed text (blank becomes null). Id, NSG number, activation
+    /// status, creation metadata and the encrypted columns are never touched here. The mobile number and gender are only replaced
+    /// when supplied, so a PUT that omits them keeps the stored values. Every text value is stored exactly as sent (trimmed); there is
+    /// no predefined list for gender, category or blood group.
     /// </summary>
     public static void ApplyTo(this UserPisWriteDto r, UserPis p)
     {
-        p.ServiceNumber = PisNormalizer.Identifier(r.ServiceNumber);
-        p.NsgRankId = r.NsgRankId;
-        p.ParentDepartmentRankId = r.ParentDepartmentRankId;
-        p.NsgTradeId = r.NsgTradeId;
-        p.PdTradeId = r.PdTradeId;
+        p.ServiceNumber = PisNormalizer.Identifier(r.ServiceNumber);   // this API still requires it; the column is nullable
+        p.NsgRank = Clean(r.NsgRank);
+        p.ParentDepartmentRank = Clean(r.ParentDepartmentRank);
         p.FullName = Clean(r.FullName);
-        p.NsgUnitId = r.NsgUnitId;
-        p.EducationId = r.EducationId;
+        p.NsgUnit = Clean(r.NsgUnit);
+        p.Education = Clean(r.Education);
         p.DateOfInductionInNsg = r.DateOfInductionInNsg;
-        p.SideSteppedOn = r.SideSteppedOn;
-        p.SideSteppedFromNsgUnitId = r.SideSteppedFromNsgUnitId;
+        p.SideSteppedDetails = Clean(r.SideSteppedDetails);
         p.DateOfRepatriation = r.DateOfRepatriation;
         p.DateOfBirth = r.DateOfBirth;
         p.DateOfEnrollmentInGovtService = r.DateOfEnrollmentInGovtService;
         p.DateOfSuperannuation = r.DateOfSuperannuation;
-        if (r.Gender.HasValue) p.Gender = r.Gender; // a PUT that omits gender keeps the stored value
-        p.Category = r.Category;
-        p.ReligionId = r.ReligionId;
+        if (!string.IsNullOrWhiteSpace(r.Gender)) p.Gender = r.Gender.Trim();
+        p.Category = Clean(r.Category);
+        p.Religion = Clean(r.Religion);
         p.FatherName = Clean(r.FatherName);
         p.MotherName = Clean(r.MotherName);
         p.SpouseName = Clean(r.SpouseName);
         p.NextOfKinMobileNumber = Clean(r.NextOfKinMobileNumber);
-        p.NumberOfChildren = r.NumberOfChildren;
-        p.MobileNumber = Clean(r.MobileNumber);
-        p.BloodGroup = r.BloodGroup;
-        p.HeightCm = r.HeightCm.HasValue ? checked((byte)r.HeightCm.Value) : null; // range-validated 1-255 beforehand
-        p.WeightKg = r.WeightKg;
+        p.NumberOfChildren = Clean(r.NumberOfChildren);
+        if (!string.IsNullOrWhiteSpace(r.MobileNumber)) p.MobileNumber = r.MobileNumber.Trim();
+        p.BloodGroup = Clean(r.BloodGroup);
+        p.HeightCm = Clean(r.HeightCm);
+        p.WeightKg = Clean(r.WeightKg);
         p.PermanentVillage = Clean(r.PermanentVillage);
         p.PermanentPostOffice = Clean(r.PermanentPostOffice);
         p.PermanentPoliceStation = Clean(r.PermanentPoliceStation);
         p.PermanentDistrict = Clean(r.PermanentDistrict);
-        p.PermanentStateId = r.PermanentStateId;
+        p.PermanentState = Clean(r.PermanentState);
         p.PermanentPinCode = Clean(r.PermanentPinCode);
         p.DateOfAme = r.DateOfAme;
         p.DateOfImmovablePropertyReturn = r.DateOfImmovablePropertyReturn;
-        p.EarnedLeaveDue = r.EarnedLeaveDue;
-        p.HalfPayLeaveDue = r.HalfPayLeaveDue;
+        p.EarnedLeaveDue = Clean(r.EarnedLeaveDue);
+        p.HalfPayLeaveDue = Clean(r.HalfPayLeaveDue);
         p.PaternityLeaveAvailed = Clean(r.PaternityLeaveAvailed);
         p.MaternityLeaveAvailed = Clean(r.MaternityLeaveAvailed);
         p.ChildCareLeaveAvailed = Clean(r.ChildCareLeaveAvailed);

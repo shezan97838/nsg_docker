@@ -10,11 +10,11 @@ Module guide: setup, API reference, Flutter contract, tests and open points. Wri
 | Rules and workflows | Covered by automated tests that use **fakes only** (`GrvFakeRepository`, `GrvFakeStorage`): transitions, remarks, comments, forwarding, isolation between users (404), magic bytes, size/count limits, all-or-nothing storage, orphan clean-up, audit rows, response codes and headers. |
 | **Repository SQL on real MySQL** | **Not smoke-tested.** Queries were translated to SQL without a connection; none was executed against a database. |
 | **Migration `20261022103033_Add_Grievance_Management`** | Generated; **not applied anywhere and its SQL not yet reviewed against a database.** It replaces the earlier, never-applied `20261022052101_Add_Grievance_Management` (regenerated on request, see section 11). |
-| **Real R2** | **Not smoke-tested.** `R2FileStorageService` has only been exercised through its pure parts. |
+| **Real local-disk storage** | **Not smoke-tested end to end.** `LocalFileStorageService` has real-file unit tests and a host round-trip test; it has not been run on Linux. |
 | **Upload limits in Kestrel** | The 400 for an oversized file is tested. The path for a request body over the 16 MB cap (HTTP 413 turned into a 400 by a filter) is tested only with synthetic exceptions. |
 | **Authorization with real tokens** | Tested through the real pipeline (JWT validation, policies, controllers, services) with in-memory fakes standing in for the repositories and the session look-ups: GRIEVANCE_ADMIN allowed, every other admin role 403, mobile/missing/forged/expired/ended-session tokens 401. The real session SQL (`IsSessionActiveAsync` checking role and account state) is untested. |
 
-Smoke-test checklist: section 9. Run later against a local Docker MySQL and a development bucket, never against a shared database or the production bucket.
+Smoke-test checklist: section 9. Run later against a local Docker MySQL and a local storage root, never against a shared database.
 
 ## 1. What it does
 
@@ -52,7 +52,7 @@ Comments and forwards are refused (409) on a closed grievance. The employee sees
 - Attached to the **single** creation call (`POST /grievances`, multipart). There is no separate upload endpoint and documents cannot be added later.
 - PDF and JPEG only (`.pdf`, `.jpg`, `.jpeg`). Extension, declared content type and the file's first bytes (`%PDF`, `FF D8 FF`) must all agree. Fixed limits for every category: **at most 3 files, at most 5 MB each** (`GrievanceLimits`). Everything is checked **before** anything is sent to storage; one bad file refuses the whole submission.
 - All files are stored first, then the grievance row (with the storage keys) is written; if that fails, every stored object is deleted again.
-- The database keeps, per document, `{ key, name, contentType, sizeBytes, uploadedAtIst }` in `grievance.document_urls` (JSON). `key` is an object key in the private bucket, never a URL, and is never returned to clients. `name` is the sanitised original name and is the download name.
+- The database keeps, per document, `{ key, name, contentType, sizeBytes, uploadedAtIst }` in `grievance.document_urls` (JSON). `key` is a storage key (`grievances/yyyy/MM/{guid}.ext`, stored under `Grievance/` in the storage root), never a URL, and is never returned to clients. `name` is the sanitised original name and is the download name.
 - Downloads stream through the API (owner: own grievance only; admin: any). Headers: `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store`, the stored validated content type. No public or pre-signed URL exists. Every download writes an audit row (ids only).
 
 ### Routing
@@ -78,43 +78,21 @@ Ticket numbers are allocated inside the create transaction against the unique in
 
 ## 3. Setup
 
-### 3.1 Cloudflare R2 bucket
-1. Create a bucket (for example `nsg-grievances-dev`). Keep it **private**: no public access, no `r2.dev` URL, no custom domain. The API is the only reader and writer.
-2. Create an **R2 API token** scoped to **this bucket only**, permission **Object Read & Write**. Do not use an account-wide or admin token.
-3. Note the account id: the service URL is `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` (no bucket name in it).
-4. No bucket CORS rules are needed (the mobile app never talks to R2). Region is `auto`.
-5. Use a separate bucket (or at least a separate `KeyPrefix`) for development, staging and production.
+### 3.1 Document storage (local file system)
+Grievance documents (supporting files and the resolution document) are stored on the local file system by `LocalFileStorageService` under the common storage root (`Storage:RootPath`), in the `Grievance/` folder (ADR-023, ADR-027). There is no external object store (the former Cloudflare R2 provider was removed, ADR-018 is superseded).
+1. Create the root folder and make it writable by the service account; it is never created for you and is kept outside the deployment directory and `wwwroot`.
+2. Keep it private: the API is the only reader and writer, and no public or pre-signed URL is ever produced.
+3. Production (Ubuntu) uses a persistent folder, for example `/var/lib/nsg-mobile/uploads`; Render Free uses the ephemeral container disk (`/var/data/files`), so documents there are lost on deploy.
 
 ### 3.2 Settings
 | Variable | Secret | Meaning |
 |---|---|---|
-| `R2Storage__ServiceUrl` | no | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`. **Setting this switches storage to R2.** The committed placeholder `REPLACE_WITH_R2_SERVICE_URL` means "off". |
-| `R2Storage__BucketName` | no | Bucket name. |
-| `R2Storage__AccessKey` | **yes** | Access key id of the bucket-scoped token. |
-| `R2Storage__SecretKey` | **yes** | Secret of the token. |
-| `R2Storage__KeyPrefix` | no | Optional folder in front of every object (for example `prod`); not part of the stored keys. |
+| `Storage__RootPath` | no | **Mandatory in every environment.** Absolute path of an existing, writable folder. Development: `D:\NSGStorage`. A missing, blank, relative, absent or unwritable value stops the application at startup. |
 | `RateLimiting__GrievanceWritePermitLimit` | no | Creations per client IP per minute; default 10. |
 | `Database__MigrateOnStartup` | no | See 3.4. |
-| `FileStorage__BasePath` | no | Still required outside Development (3.5). |
-
-AccessKey and SecretKey are read only from user-secrets or the environment; `appsettings.json` holds empty strings. They are never logged. With R2 selected, a missing bucket/key/secret, or a non-https URL, **stops the application at startup** with a message naming the setting (never the value).
-
-Local development (User Secrets, project `src/NSG.Mobile.API`):
-```
-dotnet user-secrets set "R2Storage:ServiceUrl"  "https://<ACCOUNT_ID>.r2.cloudflarestorage.com" --project src/NSG.Mobile.API
-dotnet user-secrets set "R2Storage:BucketName"  "nsg-grievances-dev"  --project src/NSG.Mobile.API
-dotnet user-secrets set "R2Storage:AccessKey"   "<access key id>"      --project src/NSG.Mobile.API
-dotnet user-secrets set "R2Storage:SecretKey"   "<secret>"             --project src/NSG.Mobile.API
-```
-Servers: set the same names as environment variables (`R2Storage__AccessKey`, ...). `.env.example` lists them.
 
 ### 3.3 Which storage is used where
-| Environment | R2 configured | Grievance upload/download |
-|---|---|---|
-| Development | no | Works on local disk (`FileStorage:BasePath`, `App_Data/filestorage`). |
-| Development | yes | Uses R2. |
-| Anything else (Staging, Production) | yes | Uses R2. |
-| Anything else | **no** | **503 `STORAGE_UNAVAILABLE`.** Local disk is never used. |
+Every environment (Development, Staging, Production) uses the local file system under `Storage:RootPath`. A genuine disk failure while reading or writing answers **503 `STORAGE_UNAVAILABLE`** without revealing any path.
 
 ### 3.4 Migration and `MigrateOnStartup` — warning
 `Database:MigrateOnStartup` is `true` in the committed `appsettings.json`. **The first start of the application against any database applies the pending migration to it, without a prompt.** Therefore:
@@ -124,8 +102,7 @@ Servers: set the same names as environment variables (`R2Storage__AccessKey`, ..
 - **If the earlier migration `20261022052101_Add_Grievance_Management` was ever applied to any database,** that database must be reset or hand-corrected first; this one replaces it and does not migrate its columns.
 - Do not apply to a shared or production database without approval (OQ-034).
 
-### 3.5 `FileStorage__BasePath` is still required
-`Program.cs` refuses to start outside Development unless `FileStorage:BasePath` is an absolute path, **even when R2 is the active provider** (R2 does not use it). Set it (for example `/var/lib/nsg/files`) in Staging/Production. This is existing behaviour that was not changed.
+
 
 ### 3.6 Optional category seed
 The migration seeds nothing. `tools/sql/seed-grievance-categories.sql` inserts Personal, Medical, Administration, Civil Dispute and Other (idempotent by name). Run it by hand on a development database after the migration.
@@ -202,7 +179,7 @@ Errors use the envelope with `success: false`, a client-safe `message` and `data
 | 404 | Unknown grievance/category/document, **or a grievance that is not yours** |
 | 409 | Status changed meanwhile; comment/forward on a closed grievance; already assigned to that admin; category name exists |
 | 429 | Rate limit |
-| 503 | R2 unreachable or no private storage in this environment; or no ticket number could be allocated after 3 attempts |
+| 503 | the local storage root could not be read or written; or no ticket number could be allocated after 3 attempts |
 
 ## 6. Flutter contract notes
 - **Ticket vs id:** show `grievanceId` to people; use `id` (number) in URLs.
@@ -217,16 +194,16 @@ Errors use the envelope with `success: false`, a client-safe `message` and `data
 ## 7. Tests
 `tests/NSG.Mobile.Tests` — `GrievanceStatusTests`, `GrievanceEmployeeTests`, `GrievanceUploadTests` (attachments in the creation call), `GrievanceCategoryTests`, `GrievanceAdminTests` (including comments and forwarding), `GrievanceControllerTests`, `GrievanceStorageTests`, `GrievanceRouteSecurityTests` (fakes in `GrievanceFakes.cs`; the route-security tests run the real pipeline with a dummy connection). `ApiResponseEnvelopeTests` covers the envelope. The schema pin `ExpectedDatabaseSchema.cs` includes the three tables.
 
-Not covered by any automated test: real SQL and MySQL semantics (unique-index races, JSON columns, group-by queries), real R2, Kestrel's request-size behaviour, genuine session tokens, a wrong-role admin (403).
+Not covered by any automated test: real SQL and MySQL semantics (unique-index races, JSON columns, group-by queries), Kestrel's request-size behaviour, genuine session tokens, a wrong-role admin (403).
 
 ## 8. Files
-Domain: `Entities/Grievance.cs`, `Enums/GrievanceStatus.cs` (status, log action, actor type). Application: `Grievances/**`, `Interfaces/Repositories/IGrievanceRepository.cs`, `Interfaces/Infrastructure/IStorageAvailability.cs`. Infrastructure: `Persistence/Configurations/GrievanceConfigurations.cs`, `Repositories/GrievanceRepository.cs`, `Services/R2FileStorageService.cs`, `Migrations/*_Add_Grievance_Management*`. API: `Controllers/GrievancesController.cs`, `Controllers/GrievanceAdminController.cs`, `Filters/ApiResponse*`.
+Domain: `Entities/Grievance.cs`, `Enums/GrievanceStatus.cs` (status, log action, actor type). Application: `Grievances/**`, `Interfaces/Repositories/IGrievanceRepository.cs`, `Interfaces/Infrastructure/IStorageAvailability.cs`. Infrastructure: `Persistence/Configurations/GrievanceConfigurations.cs`, `Repositories/GrievanceRepository.cs`, `Services/LocalFileStorageService.cs`, `Migrations/*_Add_Grievance_Management*`. API: `Controllers/GrievancesController.cs`, `Controllers/GrievanceAdminController.cs`, `Filters/ApiResponse*`.
 
-## 9. Manual smoke-test checklist (later, local Docker MySQL 8.0 + a development bucket)
-Not done yet. Do not use a shared database or the production bucket.
+## 9. Manual smoke-test checklist (later, local Docker MySQL 8.0 + a local storage root)
+Not done yet. Do not use a shared database or the production storage root.
 1. Review the migration SQL; apply to the Docker database; run `tests/NSG.Mobile.Tests` with `NSG_TEST_MYSQL` pointing at a `*_test` database; apply the seed script twice (second run inserts nothing).
 2. Create: two simultaneous creates get different ticket numbers; ticket numbers continue after a restart; the year prefix follows IST.
-3. Create with R2: PDF and JPEG succeed and appear under `grievances/yyyy/MM/<guid>.<ext>`; wrong bytes, wrong content type, `.png`, over-limit size and a fourth file are 400; a 20 MB body is a 400 (not a 500 or a reset connection); with `KeyPrefix` set, objects sit under it.
+3. Create: PDF and JPEG succeed and appear under `grievances/yyyy/MM/<guid>.<ext>`; wrong bytes, wrong content type, `.png`, over-limit size and a fourth file are 400; a 20 MB body is a 400 (not a 500 or a reset connection).
 4. Orphans: force the database write to fail after the objects are stored and confirm every object is deleted.
 5. Download: headers as in section 1; the sanitised name is saved; `Range` is ignored; a deleted object is a 404 with the "no longer available" message.
 6. Status/comment/forward: two admins acting on the same grievance at once (one 200, one 409 for status); comments and forwards appear in the employee's history in order; closed grievances refuse both.
@@ -234,7 +211,7 @@ Not done yet. Do not use a shared database or the production bucket.
 8. Dashboard and employee join queries return correct numbers on realistic data (monthly grouping near month boundaries in IST, grievances whose personnel record is missing).
 9. Security with real tokens: employee token on admin routes and admin token on employee routes (expect 401); an admin with another role (expect 403); another employee's grievance and document (expect 404); a revoked session.
 10. Rate limit: the 11th create within a minute from one IP is 429.
-11. Environments: Production without `R2Storage__ServiceUrl` answers 503 for a submission with files and for downloads, and still starts (with `FileStorage__BasePath` set).
+11. Environments: with `Storage__RootPath` missing, blank or relative the host refuses to start in every environment (covered by `StorageProviderSelectionHostTests`).
 
 ## 10. Known limitations and open points
 See `OPEN-QUESTIONS.md` OQ-011 and OQ-035 to OQ-038. In short:
@@ -257,10 +234,10 @@ See `OPEN-QUESTIONS.md` OQ-011 and OQ-035 to OQ-038. In short:
 - **Security (root cause of "valid admin token, some APIs fail"):** `GrievanceAdminController` carried `[AllowAnonymous]` with the `[Authorize(Policy = RequireGrievanceAdmin)]` line commented out. No policy named the `AdminBearer` scheme, so only the default (mobile) scheme ran and rejected the admin token; `admin_profile_id` was never loaded and every action that needs the acting admin answered 401 "identity missing", while list, dashboard and category reads (which do not need it) worked for anybody, with or without a token. `[Authorize(Policy = RequireGrievanceAdmin)]` is restored: only an `AdminBearer` token with `token_use=admin_access`, a live session and role `GRIEVANCE_ADMIN` passes; other admin roles get 403, mobile tokens and missing/invalid tokens 401. `DgMessagesController` still has the same temporary `[AllowAnonymous]` on its three write routes (not changed here; it is a different module).
 - **Resolution:** `POST /admin/grievances/{id}/resolve` (comment + file, see 4.2) replaces closing through `PUT .../status`. New nullable column `grievance.resolution_document` (JSON, same shape as one `document_urls` entry), migration `20261026132631_Add_Grievance_Resolution_Document` (additive, not applied anywhere). Grievances closed earlier have no resolution file: `resolutionDocument` is null for them.
 - **Allowed types:** the resolution file may also be PNG; employee attachments stay PDF/JPEG only.
-- **Tests:** `GrievanceAuthorizationHostTests` (real JWT, policies, controllers and services over in-memory fakes) and `GrievanceResolutionTests`. They do not cover the real repository SQL, MySQL or R2.
+- **Tests:** `GrievanceAuthorizationHostTests` (real JWT, policies, controllers and services over in-memory fakes) and `GrievanceResolutionTests`. They do not cover the real repository SQL, or MySQL.
 
 ## 13. Change 2026-10-26 (later) — `resolution_document` is a plain string
-- `grievance.resolution_document` is now a nullable `varchar(500)` holding only the **storage key** of the resolution file (for example `grievances/2026/10/<guid>.pdf`). No JSON, no JSON check constraint, no name/size/date metadata. It is a reference into the private bucket, not a public URL: the file is only served by `GET /grievances/{id}/resolution-document` (owner) and `GET /admin/grievances/{id}/resolution-document` (GRIEVANCE_ADMIN).
+- `grievance.resolution_document` is now a nullable `varchar(500)` holding only the **storage key** of the resolution file (for example `grievances/2026/10/<guid>.pdf`). No JSON, no JSON check constraint, no name/size/date metadata. It is a reference into the private storage root, not a public URL: the file is only served by `GET /grievances/{id}/resolution-document` (owner) and `GET /admin/grievances/{id}/resolution-document` (GRIEVANCE_ADMIN).
 - The employee and admin detail return `"resolutionDocument": "<that string>"` (or `null`). The download takes its content type from the key's extension (only pdf, jpg and png are ever stored) and names the file `resolution-<ticket>.<ext>`.
 - Migration `20261026135357_Change_Grievance_Resolution_Document_To_Varchar` (drops the check constraint, `MODIFY COLUMN varchar(500)`). The earlier migration had already been applied to the local dev database, so it was left untouched. Rolling the new one back (`Down`) turns the column back into `json` and fails if any row holds a value that is not valid JSON.
 

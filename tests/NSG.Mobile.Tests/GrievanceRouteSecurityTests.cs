@@ -30,7 +30,7 @@ public sealed class GrievanceRouteSecurityTests : IDisposable
     private static readonly string[] Variables =
     {
         "ConnectionStrings__MySql", "Database__MigrateOnStartup", "Security__DisableAuthorization", "Jwt__Secret",
-        "Encryption__Key", "BlindIndex__Key", "ASPNETCORE_ENVIRONMENT", "RateLimiting__GrievanceWritePermitLimit"
+        "Encryption__Key", "ASPNETCORE_ENVIRONMENT", "RateLimiting__GrievanceWritePermitLimit"
     };
 
     private readonly Dictionary<string, string?> _previous = new();
@@ -45,7 +45,6 @@ public sealed class GrievanceRouteSecurityTests : IDisposable
         Environment.SetEnvironmentVariable("Security__DisableAuthorization", "false");
         Environment.SetEnvironmentVariable("Jwt__Secret", Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)));
         Environment.SetEnvironmentVariable("Encryption__Key", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
-        Environment.SetEnvironmentVariable("BlindIndex__Key", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
         _factory = new WebApplicationFactory<Program>();
     }

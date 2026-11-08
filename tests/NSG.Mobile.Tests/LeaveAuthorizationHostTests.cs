@@ -28,7 +28,7 @@ public sealed class LeaveAuthorizationHostTests : IDisposable
     private static readonly string[] Variables =
     {
         "ConnectionStrings__MySql", "Database__MigrateOnStartup", "Security__DisableAuthorization", "Jwt__Secret",
-        "Encryption__Key", "BlindIndex__Key", "ASPNETCORE_ENVIRONMENT"
+        "Encryption__Key", "ASPNETCORE_ENVIRONMENT"
     };
 
     private const long AdminId = 9001, EmployeeId = 501, OtherEmployeeId = 502;
@@ -49,7 +49,6 @@ public sealed class LeaveAuthorizationHostTests : IDisposable
         Environment.SetEnvironmentVariable("Security__DisableAuthorization", "false");
         Environment.SetEnvironmentVariable("Jwt__Secret", Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)));
         Environment.SetEnvironmentVariable("Encryption__Key", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
-        Environment.SetEnvironmentVariable("BlindIndex__Key", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
 
         _repo.AddPerson("NSG1001");
@@ -545,7 +544,7 @@ public sealed class LeaveAuthorizationHostTests : IDisposable
         public Task<bool> IsSessionActiveAsync(Guid sessionId, long profileId, CancellationToken cancellationToken = default)
             => Task.FromResult(Active.Contains((sessionId, profileId)));
 
-        public Task StartSessionAsync(MobileRefreshToken first, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<SessionStartOutcome> StartSessionAsync(MobileRefreshToken first, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<RefreshRotationResult> RotateAsync(string presentedTokenHash, MobileRefreshToken next, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> RevokeSessionByTokenAsync(string tokenHash, string reason, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task RevokeAllForProfileAsync(long profileId, string reason, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();

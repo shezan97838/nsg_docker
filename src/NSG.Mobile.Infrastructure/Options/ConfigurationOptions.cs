@@ -86,12 +86,15 @@ public class PayrollOptions
     public int TimeoutSeconds { get; set; } = 30;
 }
 
-/// <summary>Secure file storage configuration.</summary>
+/// <summary>
+/// Upload limits for the object store (grievance documents, DG message images, banner images). The location is never configured here:
+/// local files live under <c>Storage:RootPath</c> (<see cref="StorageOptions"/>). The former <c>FileStorage:BasePath</c> no longer exists.
+/// </summary>
 public class FileStorageOptions
 {
     public const string SectionName = "FileStorage";
 
-    [Required] public string BasePath { get; set; } = string.Empty;
+
     public long MaxFileSizeBytes { get; set; } = 10 * 1024 * 1024; // 10 MB default
     public string[] AllowedExtensions { get; set; } = { ".pdf", ".jpg", ".jpeg", ".png", ".xml" };
 }
@@ -100,17 +103,6 @@ public class FileStorageOptions
 public class EncryptionOptions
 {
     public const string SectionName = "Encryption";
-
-    [Required] public string Key { get; set; } = string.Empty;
-}
-
-/// <summary>
-/// Key for the deterministic blind index (HMAC-SHA256) over PAN and salary account number.
-/// Base64, at least 32 bytes, and DIFFERENT from the encryption key. Secure config only — NEVER source code.
-/// </summary>
-public class BlindIndexOptions
-{
-    public const string SectionName = "BlindIndex";
 
     [Required] public string Key { get; set; } = string.Empty;
 }

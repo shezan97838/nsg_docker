@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using NSG.Mobile.Domain.Common;
 using NSG.Mobile.Domain.Constants;
 using NSG.Mobile.Domain.Entities;
 using NSG.Mobile.Infrastructure.Persistence;
@@ -59,15 +58,6 @@ public class TradeLookupApiTests : IAsyncLifetime
         HttpResponseMessage resp = await _admin.PostAsJsonAsync(Url(r), Body(r, name, isActive));
         Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
         return await resp.ReadDataAsync();
-    }
-
-    private async Task UseByPersonnelAsync(string r, int tradeId)
-    {
-        await using AppDbContext ctx = _factory.CreateContext();
-        UserPis p = new() { NsgNumber = "TR-" + r + tradeId, ServiceNumber = "S", CreatedAtIst = IndianStandardTime.Now };
-        if (r == Nsg) p.NsgTradeId = tradeId; else p.PdTradeId = tradeId;
-        ctx.UsersPis.Add(p);
-        await ctx.SaveChangesAsync();
     }
 
     private async Task<int> AuditCountAsync(string r, int id, string operation)
@@ -256,46 +246,16 @@ public class TradeLookupApiTests : IAsyncLifetime
         => Assert.Equal(HttpStatusCode.NotFound, (await _admin.DeleteAsync($"{Url(r)}/987654")).StatusCode);
 
     [Theory, MemberData(nameof(Resources))]
-    public async Task A_trade_used_by_personnel_cannot_be_deactivated_but_can_be_renamed(string r)
+    public async Task A_trade_can_be_renamed_and_deactivated_freely_because_no_personnel_column_references_trades(string r)
     {
         int id = (await CreateAsync(r, "GD")).GetProperty("id").GetInt32();
-        await UseByPersonnelAsync(r, id);
-
-        Assert.Equal(HttpStatusCode.Conflict, (await _admin.DeleteAsync($"{Url(r)}/{id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await _admin.PutAsJsonAsync($"{Url(r)}/{id}", Body(r, "GD", isActive: false))).StatusCode);
 
         JsonElement renamed = await (await _admin.PutAsJsonAsync($"{Url(r)}/{id}", Body(r, "General Duty"))).ReadDataAsync();
         Assert.Equal("General Duty", renamed.GetProperty(NameField(r)).GetString());
-        Assert.True(renamed.GetProperty("isActive").GetBoolean());
-        Assert.Equal(0, await AuditCountAsync(r, id, EntityType(r) + "Deactivated"));
-        await using AppDbContext ctx = _factory.CreateContext();
-        Assert.Equal(1, await ctx.UsersPis.CountAsync());   // the personnel record is untouched
-    }
-
-    [Theory, MemberData(nameof(Resources))]
-    public async Task Deactivation_becomes_possible_once_no_personnel_use_the_trade(string r)
-    {
-        int id = (await CreateAsync(r, "GD")).GetProperty("id").GetInt32();
-        await UseByPersonnelAsync(r, id);
-        Assert.Equal(HttpStatusCode.Conflict, (await _admin.DeleteAsync($"{Url(r)}/{id}")).StatusCode);
-
-        await using (AppDbContext ctx = _factory.CreateContext())
-            await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `users_pis`");
 
         Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"{Url(r)}/{id}")).StatusCode);
+        Assert.Equal(1, await AuditCountAsync(r, id, EntityType(r) + "Deactivated"));
     }
-
-    [Fact]
-    public async Task Use_of_one_trade_table_does_not_protect_the_other()
-    {
-        int nsg = (await CreateAsync(Nsg, "GD")).GetProperty("id").GetInt32();
-        int pd = (await CreateAsync(Pd, "GD")).GetProperty("id").GetInt32();
-        await UseByPersonnelAsync(Nsg, nsg);
-
-        Assert.Equal(HttpStatusCode.Conflict, (await _admin.DeleteAsync($"{Url(Nsg)}/{nsg}")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"{Url(Pd)}/{pd}")).StatusCode);
-    }
-
     // ── Schema (real MySQL, created by the migrations) ──
 
     [Fact]

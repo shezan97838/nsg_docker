@@ -2,6 +2,8 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NSG.Mobile.API.Filters;
 using NSG.Mobile.Application.Common;
+using NSG.Mobile.Application.MobileAuth;
+using NSG.Mobile.Domain.Constants;
 using NSG.Mobile.Domain.Exceptions;
 
 namespace NSG.Mobile.API.Middleware;
@@ -48,6 +50,17 @@ public class GlobalExceptionHandlingMiddleware
         if (response.HasStarted || response.StatusCode < StatusCodes.Status400BadRequest) return;
         if (response.ContentLength != null || !string.IsNullOrEmpty(response.ContentType)) return;
         if (IsExempt(context.Request.Path)) return;
+
+        // A mobile access token whose session was ended by a PIS Admin block (SURAKSHA_1001) or replaced by a newer login (SURAKSHA_1002):
+        // authentication left the code in Items. It is honoured for a 401 only, so no other bare error (404, 429, ...) can ever carry it,
+        // and only these two codes have a message, so nothing else placed in Items is ever written.
+        if (response.StatusCode == StatusCodes.Status401Unauthorized
+            && context.Items[DomainConstants.AuthFailure.CodeItemKey] is string code
+            && MobileAuthMessages.ForSessionCode(code) is { } sessionMessage)
+        {
+            await WriteEnvelopeAsync(response, response.StatusCode, ApiResponse.Fail(sessionMessage, code));
+            return;
+        }
 
         await WriteEnvelopeAsync(response, response.StatusCode, ApiResponse.Fail(ApiEnvelope.DefaultMessage(response.StatusCode)));
     }
