@@ -1,0 +1,42 @@
+# Local Docker for the NSG Mobile API (developer machine only - NOT for Render or Ubuntu production).
+#
+# Start (the --env-file is required: it supplies the ${...} values below, and the file is git-ignored):
+#   docker compose --env-file .env.local.secrets -f docker-compose.local.yml up --build
+# Stop (keeps uploaded files):   docker compose --env-file .env.local.secrets -f docker-compose.local.yml down
+# Delete uploaded files too:     ... down -v      (removes the nsg_local_files volume)
+#
+# - MySQL runs on the Windows host: database nsg_mobile_dev reached through host.docker.internal:3306 (same database as `dotnet run`).
+# - Encryption__Key and BlindIndex__Key are the SAME values as on Windows (one file). JWT values are Docker-specific (DOCKER_* in the file).
+# - Environment is Development so plain HTTP works locally. appsettings.Development.json is excluded from the image by .dockerignore,
+#   so nothing from it applies; Security__DisableAuthorization is set to false explicitly.
+# - Database__MigrateOnStartup is false: apply migrations separately.
+name: nsg-local
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nsg-mobile-api:local
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__MySql: "Server=host.docker.internal;Port=3306;Database=${LOCAL_DB_NAME:?set in .env.local.secrets};Uid=${LOCAL_DB_USER:?set in .env.local.secrets};Pwd=${LOCAL_DB_PASSWORD:?set in .env.local.secrets};AllowUserVariables=True;SslMode=None;"
+      Encryption__Key: ${Encryption__Key:?set in .env.local.secrets}
+      BlindIndex__Key: ${BlindIndex__Key:?set in .env.local.secrets}
+      Jwt__Secret: ${DOCKER_Jwt__Secret:?set in .env.local.secrets}
+      Jwt__Issuer: ${DOCKER_Jwt__Issuer:?set in .env.local.secrets}
+      Jwt__Audience: ${DOCKER_Jwt__Audience:?set in .env.local.secrets}
+      Jwt__AdminAudience: ${DOCKER_Jwt__AdminAudience:?set in .env.local.secrets}
+      Storage__RootPath: /var/data/files
+      Database__MigrateOnStartup: "false"
+      Security__DisableAuthorization: "false"
+      Otp__Mode: Demo
+    volumes:
+      - nsg_local_files:/var/data/files
+
+volumes:
+  nsg_local_files:

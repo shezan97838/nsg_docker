@@ -2,6 +2,8 @@
 
 > How the NSG Mobile API gets its configuration, which settings are secrets, and how to rotate them.
 > **This document contains no real values. Never paste a real secret into this file, a ticket, a chat or a log.**
+>
+> **Developer machine (Windows `dotnet run` and local Docker):** see [`CONFIGURATION-LOCAL.md`](CONFIGURATION-LOCAL.md) for the shared `.env.local.secrets` file, the separate Windows and Docker JWT settings, the shared Encryption and BlindIndex keys, and the start/stop/health commands.
 
 ## 1. Rules
 

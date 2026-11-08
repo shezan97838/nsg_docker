@@ -122,6 +122,7 @@ UNDERSTAND → VERIFY REQUIREMENT → INSPECT EXISTING CODE → IMPACT ANALYSIS
 
 - Update `docs/` when architecture changes
 - Update `docs/REQUIREMENT-TRACEABILITY.md` when adding features
+- Configuration and secrets: `docs/CONFIGURATION.md`; local Windows and Docker setup (`.env.local.secrets`, `scripts/run-local.ps1`, `docker-compose.local.yml`): `docs/CONFIGURATION-LOCAL.md`. Update them when configuration keys or local run steps change
 - Record new architectural decisions as ADRs
 - Document open questions, never silently resolve ambiguities
 
