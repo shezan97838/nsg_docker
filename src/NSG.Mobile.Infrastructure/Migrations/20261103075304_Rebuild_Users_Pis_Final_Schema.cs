@@ -179,7 +179,7 @@ namespace NSG.Mobile.Infrastructure.Migrations
         /// </summary>
         private static void Preflight(MigrationBuilder migrationBuilder, string tempTable, string blockedMessage, string violationQuery)
         {
-            migrationBuilder.Sql($"CREATE TEMPORARY TABLE `{tempTable}` (`violation` int NOT NULL);");
+            migrationBuilder.Sql($"CREATE TEMPORARY TABLE `{tempTable}` (`violation` int NOT NULL PRIMARY KEY);");
             migrationBuilder.Sql($"INSERT INTO `{tempTable}` (`violation`) SELECT 1 FROM DUAL WHERE EXISTS ({violationQuery});");
             migrationBuilder.Sql($"ALTER TABLE `{tempTable}` ADD CONSTRAINT `{blockedMessage}` CHECK (`violation` = 0);");
             migrationBuilder.Sql($"DROP TEMPORARY TABLE `{tempTable}`;");
