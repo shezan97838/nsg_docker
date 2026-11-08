@@ -5,7 +5,7 @@ namespace NSG.Mobile.Infrastructure.Persistence;
 
 /// <summary>
 /// Application database context — the single DbContext for the NSG Mobile API.
-/// EF Core 8 Code First with MySQL 8.x (Pomelo).
+/// EF Core 10 Code First with MySQL 8.x (Microting provider).
 /// </summary>
 public class AppDbContext : DbContext
 {
