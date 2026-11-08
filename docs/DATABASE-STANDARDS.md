@@ -4,7 +4,7 @@
 > Windows is the development environment, Ubuntu Linux the deployment environment. A green build on Windows does **not** prove Linux compatibility.
 > `.claude/rules/project-rules.md` keeps a short summary and points here. Evidence for the current schema: [DATABASE-SCHEMA-AUDIT.md](DATABASE-SCHEMA-AUDIT.md).
 
-Target: MySQL 8.0 (verified on 8.0.44), InnoDB, `utf8mb4`, Pomelo.EntityFrameworkCore.MySql 8.
+Target: MySQL 8.0 (verified on 8.0.44), InnoDB, `utf8mb4`, Microting.EntityFrameworkCore.MySql 10.
 
 ## 1. Why the naming rules exist
 MySQL on Linux treats database and table names as case-sensitive (`lower_case_table_names=0`). MySQL on Windows stores them in lowercase (`lower_case_table_names=1`) whatever case the DDL used. A name such as `UsersPIS` therefore works on a Windows server, but a dump made there contains `userspis`, and restoring it on Linux produces a table the code (asking for `UsersPIS`) cannot find. Lowercase `snake_case` means the same thing on both platforms. Column, index and constraint names are case-insensitive in MySQL, but they follow the same convention so one rule covers everything.
@@ -48,10 +48,10 @@ MySQL on Linux treats database and table names as case-sensitive (`lower_case_ta
 - A `CHECK` constraint may only reference columns of its own table, using the final snake_case names (tested).
 
 ### F. Migrations
-- Use the EF Core Pomelo provider and review the generated SQL (`dotnet ef migrations script <from> <to>`) before applying.
+- Use the EF Core Microting provider (Microting.EntityFrameworkCore.MySql) and review the generated SQL (`dotnet ef migrations script <from> <to>`) before applying.
 - **Never edit or rename a migration that was applied to a shared or deployed database.** Fix forward with a corrective migration. A migration that exists only on one developer's machine and in the disposable test database may be removed with `dotnet ef migrations remove`.
 - **Production (NIC Ubuntu):** never apply migrations at application start. Set `Database__MigrateOnStartup=false` explicitly (the committed `appsettings.json` default is `true`, see below) and use a migration bundle or script, run with a **migrator** account; the runtime account has `SELECT, INSERT, UPDATE, DELETE` only (docs/CONFIGURATION.md section 6). **Render development deployment:** `Database:MigrateOnStartup=true` is accepted there by the owner (OQ-034) because its MySQL database is disposable; it must not be copied to any environment holding real data.
-- Delete the scaffolded `DropPrimaryKey`/`AddPrimaryKey` pairs that appear when only a table name changes: MySQL primary keys are always `PRIMARY`, and Pomelo wraps those operations in stored procedures that need `CREATE ROUTINE`.
+- Delete the scaffolded `DropPrimaryKey`/`AddPrimaryKey` pairs that appear when only a table name changes: MySQL primary keys are always `PRIMARY`, and the Microting provider wraps those operations in stored procedures that need `CREATE ROUTINE`.
 - EF's differ ignores changes that differ only by letter case (it missed `CK_States_Code_Format` → `ck_states_code_format`). After a renaming migration, compare the real schema, not just the generated script.
 - Model configuration, `AppDbContextModelSnapshot`, `__EFMigrationsHistory` and the real schema must agree: run `dotnet ef migrations has-pending-model-changes` and compare `information_schema` after applying.
 - A renaming migration is tested on a **copy of real data** (scratch database whose name ends in `_test`): row counts and checksums before and after, foreign-key integrity, the rollback (`Down`), and a scan for identifiers with uppercase letters.

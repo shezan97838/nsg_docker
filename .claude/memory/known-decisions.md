@@ -5,7 +5,7 @@ Decisions made during foundation implementation. See `docs/architecture/ADR-*` f
 | ID | Decision | Rationale |
 |----|----------|-----------|
 | ADR-001 | Clean Architecture (4 projects) | Testability, maintainability, VAPT readiness |
-| ADR-002 | MySQL 8.x + EF Core 8 (Pomelo) | Strategic pivot to MySQL 8.x for Linux/container deployment |
+| ADR-002 | MySQL 8.x + EF Core 10 (Microting) | Strategic pivot to MySQL 8.x for Linux/container deployment |
 | ADR-003 | JWT access tokens (HMAC-SHA256) | SOW §3.8, stateless auth for scaling |
 | ADR-004 | Refresh token rotation with reuse detection | Protect against token theft |
 | ADR-005 | Phone number as login identifier | SOW §3.7 |

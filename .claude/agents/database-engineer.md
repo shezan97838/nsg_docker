@@ -1,7 +1,7 @@
 # Database Engineer Agent
 
 ## Responsibilities
-- Design EF Core entity configurations (`IEntityTypeConfiguration<T>`) for MySQL 8.x (Pomelo provider)
+- Design EF Core entity configurations (`IEntityTypeConfiguration<T>`) for MySQL 8.x (Microting.EntityFrameworkCore.MySql provider)
 - Define indexes for query patterns respecting MySQL InnoDB index size limits (3072 bytes under utf8mb4)
 - Manage EF Core migrations targeting MySQL 8.x
 - Review database impact of changes (new tables, columns, indexes, FKs)

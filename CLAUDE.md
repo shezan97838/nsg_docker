@@ -40,8 +40,8 @@ Infrastructure → Application + Domain
 
 ## Technology Stack
 
-- .NET 8 / ASP.NET Core 8
-- Entity Framework Core 8 (Code First, MySQL 8.x via Pomelo provider)
+- .NET 10 / ASP.NET Core 10
+- Entity Framework Core 10 (Code First, MySQL 8.x via Microting.EntityFrameworkCore.MySql provider)
 - FluentValidation
 - Serilog (structured logging)
 - JWT Bearer authentication (HMAC-SHA256)

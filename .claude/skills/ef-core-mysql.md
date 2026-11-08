@@ -1,7 +1,7 @@
 # EF Core & MySQL 8.x Skills
 
 ## DbContext & Provider
-- Provider: `Pomelo.EntityFrameworkCore.MySql` (v8.0.2)
+- Provider: `Microting.EntityFrameworkCore.MySql` (v10.0.14)
 - Server target: MySQL 8.x (InnoDB engine)
 - Single context: `AppDbContext` in `Infrastructure/Persistence/`
 - Configurations discovered via `ApplyConfigurationsFromAssembly()`
@@ -58,7 +58,7 @@ public class MyEntityConfiguration : IEntityTypeConfiguration<MyEntity> {
    - Under MySQL InnoDB `utf8mb4`, the maximum index key length is 3072 bytes (768 characters for 4-byte characters).
    - Ensure indexed `varchar` columns have explicit lengths (e.g., `HasMaxLength(200)`).
 6. **Connection Resilience**:
-   - Connection resilience configured with `.EnableRetryOnFailure(3)` via Pomelo.
+   - Connection resilience configured with `.EnableRetryOnFailure(3)` via the Microting provider.
 7. **Query Rules**:
    - `AsNoTracking()` for all read-only queries.
    - Explicit `Include` (no lazy loading).

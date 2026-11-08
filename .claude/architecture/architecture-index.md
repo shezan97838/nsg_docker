@@ -8,7 +8,7 @@ See `docs/architecture/ADR-*.md` for Architecture Decision Records.
 | ADR | Title | Status |
 |-----|-------|--------|
 | [ADR-001](../../docs/architecture/ADR-001-clean-architecture.md) | Clean Architecture | Accepted |
-| [ADR-002](../../docs/architecture/ADR-002-mysql-ef-core.md) | MySQL 8.x + EF Core 8 (Pomelo) | Accepted (Supersedes SQL Server) |
+| [ADR-002](../../docs/architecture/ADR-002-mysql-ef-core.md) | MySQL 8.x + EF Core 10 (Microting) | Accepted (Supersedes SQL Server) |
 | [ADR-003](../../docs/architecture/ADR-003-jwt-access-tokens.md) | JWT Access Tokens | Accepted |
 | [ADR-004](../../docs/architecture/ADR-004-refresh-token-rotation.md) | Refresh Token Rotation | Accepted |
 | [ADR-005](../../docs/architecture/ADR-005-phone-number-authentication.md) | Phone Number Authentication | Accepted |

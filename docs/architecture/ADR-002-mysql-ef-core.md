@@ -1,4 +1,4 @@
-# ADR-002: MySQL 8.x + EF Core 8 (Pomelo Provider)
+# ADR-002: MySQL 8.x + EF Core 10 (Microting.EntityFrameworkCore.MySql Provider)
 
 **Status**: Accepted (Supersedes ADR-002-sql-server-ef-core)  
 **Date**: 2026-10-12  
@@ -9,7 +9,7 @@ The project initially targeted Microsoft SQL Server per SOW §4. However, due to
 
 ## Decision
 - Pivot the relational database engine to **MySQL 8.x**.
-- Use **EF Core 8** with **Pomelo.EntityFrameworkCore.MySql** provider (v8.0.2).
+- Use **EF Core 10** (10.0.14) with the **Microting.EntityFrameworkCore.MySql** provider (10.0.14).
 - Use Code First with explicit `IEntityTypeConfiguration<T>` classes.
 - Primary key generation: `AUTO_INCREMENT` using `.ValueGeneratedOnAdd()`.
 - Explicit column types where necessary:
@@ -30,3 +30,7 @@ The project initially targeted Microsoft SQL Server per SOW §4. However, due to
 ## Addendum 2026-10-14: lowercase snake_case for all tables and columns
 
 The original decision relied on every tool preserving PascalCase. Development runs on Windows (`lower_case_table_names=1`, table names stored in lowercase) while production runs on Linux (`lower_case_table_names=0`, case-sensitive), so a dump moved between them breaks mixed-case names. **Every** table, column, index and constraint is now lowercase `snake_case`, mapped explicitly and enforced by `DatabaseNamingStandard` and tests. The existing PascalCase tables were converted by the corrective migration `Standardize_Database_Names_To_Snake_Case`. See `docs/DATABASE-STANDARDS.md` and `docs/DATABASE-SCHEMA-AUDIT.md`.
+
+## Addendum 2026-11-08: provider change from Pomelo to Microting (.NET 10 upgrade)
+
+The project was originally built on `Pomelo.EntityFrameworkCore.MySql` 8.0.2 (EF Core 8). Pomelo 9.0.0 has no EF Core 10 release, so when the project moved to .NET 10 / EF Core 10 the provider was switched to `Microting.EntityFrameworkCore.MySql` 10.0.14, a community fork of Pomelo that keeps the same API (`UseMySql`, `ServerVersion`, `MySqlServerVersion` and the `MySql*` metadata extensions stay in the same namespaces). No historical migration or Designer file needed changes. The rest of this decision is unchanged.

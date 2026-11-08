@@ -4,7 +4,7 @@
 |-------------|----------|---------------|--------|
 | Framework | ASP.NET Core Web API / .NET 8 | `net8.0` target | ✅ |
 | ORM | Entity Framework Core (Code First) | EF Core 8, explicit configs | ✅ |
-| Database | MySQL 8.x on NIC/NSG infra | Pomelo MySQL provider, connection resilience | ✅ |
+| Database | MySQL 8.x on NIC/NSG infra | Microting MySQL provider, connection resilience | ✅ |
 | Auth | JWT + OAuth 2.0 | JWT Bearer (HMAC-SHA256). Full OAuth TBD (OQ-002) | ✅ Partial |
 | Caching | Redis or equivalent | Redis via IDistributedCache, in-memory fallback | ✅ |
 | Push notifications | FCM (Android) + APNs (iOS) | Placeholder implementation | Stub |
