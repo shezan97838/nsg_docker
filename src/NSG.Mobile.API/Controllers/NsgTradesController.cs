@@ -86,5 +86,5 @@ public class NsgTradesController : ControllerBase
         return result.IsSuccess ? NoContent() : ToProblem(result);
     }
 
-    private IActionResult ToProblem(Result result) => GeographyProblem.From(this, result);
+    private IActionResult ToProblem(Result result) => ResultProblem.From(this, result);
 }

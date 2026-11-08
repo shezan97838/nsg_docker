@@ -88,5 +88,5 @@ public class EducationQualificationsController : ControllerBase
         return result.IsSuccess ? Ok(result.Data) : ToProblem(result);
     }
 
-    private IActionResult ToProblem(Result result) => GeographyProblem.From(this, result);
+    private IActionResult ToProblem(Result result) => ResultProblem.From(this, result);
 }

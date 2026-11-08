@@ -92,9 +92,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         await context.Database.ExecuteSqlRawAsync("DELETE FROM `users_pis`"); // references States
         await context.Database.ExecuteSqlRawAsync("DELETE FROM `nsg_trade`"); // referenced by UsersPIS
         await context.Database.ExecuteSqlRawAsync("DELETE FROM `pd_trade`");
-        await context.Database.ExecuteSqlRawAsync("DELETE FROM `cities`");
         await context.Database.ExecuteSqlRawAsync("DELETE FROM `states`");
-        await context.Database.ExecuteSqlRawAsync("ALTER TABLE `cities` AUTO_INCREMENT = 1");
         await context.Database.ExecuteSqlRawAsync("ALTER TABLE `states` AUTO_INCREMENT = 1");
     }
 

@@ -539,74 +539,6 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         });
                 });
 
-            modelBuilder.Entity("NSG.Mobile.Domain.Entities.City", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int?>("Classification")
-                        .HasColumnType("int")
-                        .HasColumnName("classification");
-
-                    b.Property<string>("Code")
-                        .HasMaxLength(50)
-                        .HasColumnType("varchar(50)")
-                        .HasColumnName("code");
-
-                    b.Property<DateTime>("CreatedAtIst")
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("created_at_ist");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("tinyint(1)")
-                        .HasDefaultValue(true)
-                        .HasColumnName("is_active");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("varchar(200)")
-                        .HasColumnName("name");
-
-                    b.Property<string>("SourceKey")
-                        .HasMaxLength(250)
-                        .HasColumnType("varchar(250)")
-                        .HasColumnName("source_key");
-
-                    b.Property<string>("SourceSystem")
-                        .HasMaxLength(50)
-                        .HasColumnType("varchar(50)")
-                        .HasColumnName("source_system");
-
-                    b.Property<int>("StateId")
-                        .HasColumnType("int")
-                        .HasColumnName("state_id");
-
-                    b.Property<DateTime?>("UpdatedAtIst")
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("updated_at_ist");
-
-                    b.HasKey("Id")
-                        .HasName("pk_cities");
-
-                    b.HasIndex("SourceSystem", "SourceKey")
-                        .IsUnique()
-                        .HasDatabaseName("ix_cities_source_system_source_key");
-
-                    b.HasIndex("StateId", "IsActive")
-                        .HasDatabaseName("ix_cities_state_id_is_active");
-
-                    b.HasIndex("StateId", "Name")
-                        .HasDatabaseName("ix_cities_state_id_name");
-
-                    b.ToTable("cities", (string)null);
-                });
-
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.Device", b =>
                 {
                     b.Property<int>("Id")
@@ -2908,18 +2840,6 @@ namespace NSG.Mobile.Infrastructure.Migrations
                         .HasConstraintName("fk_banners_nsg_units_nsg_unit_id");
                 });
 
-            modelBuilder.Entity("NSG.Mobile.Domain.Entities.City", b =>
-                {
-                    b.HasOne("NSG.Mobile.Domain.Entities.State", "State")
-                        .WithMany("Cities")
-                        .HasForeignKey("StateId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_cities_states_state_id");
-
-                    b.Navigation("State");
-                });
-
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.Device", b =>
                 {
                     b.HasOne("NSG.Mobile.Domain.Entities.User", "User")
@@ -3078,11 +2998,6 @@ namespace NSG.Mobile.Infrastructure.Migrations
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.SalarySlipUploadBatch", b =>
                 {
                     b.Navigation("SalarySlips");
-                });
-
-            modelBuilder.Entity("NSG.Mobile.Domain.Entities.State", b =>
-                {
-                    b.Navigation("Cities");
                 });
 
             modelBuilder.Entity("NSG.Mobile.Domain.Entities.User", b =>

@@ -57,5 +57,5 @@ public class DigitalLibraryController : ControllerBase
         return File(result.Data!.Content, result.Data.ContentType, result.Data.FileName, enableRangeProcessing: false);
     }
 
-    private IActionResult Problem(Result result) => GeographyProblem.From(this, result);
+    private IActionResult Problem(Result result) => ResultProblem.From(this, result);
 }

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using NSG.Mobile.Domain.Constants;
 
 namespace NSG.Mobile.Tests;
@@ -33,13 +34,6 @@ public class GeographyApiTests : IAsyncLifetime
         return await r.ReadDataAsync();
     }
 
-    private async Task<JsonElement> CreateCityAsync(int stateId, string name, string? classification = "CensusTown")
-    {
-        HttpResponseMessage r = await _admin.PostAsJsonAsync("/api/v1/cities", new { name, stateId, classification, isActive = true });
-        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        return await r.ReadDataAsync();
-    }
-
     private async Task<JsonElement> GetDataAsync(string url) =>
         await (await _admin.GetAsync(url)).ReadDataAsync();
 
@@ -49,7 +43,6 @@ public class GeographyApiTests : IAsyncLifetime
     public async Task Anonymous_requests_are_rejected_with_401()
     {
         Assert.Equal(HttpStatusCode.Unauthorized, (await _anonymous.GetAsync("/api/v1/states")).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await _anonymous.GetAsync("/api/v1/cities")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await _anonymous.PostAsJsonAsync("/api/v1/states", NewState("X", "99"))).StatusCode);
     }
 
@@ -60,8 +53,6 @@ public class GeographyApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await _employee.PostAsJsonAsync("/api/v1/states", NewState("X", "99"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await _employee.PutAsJsonAsync("/api/v1/states/1", NewState("X", "99"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await _employee.DeleteAsync("/api/v1/states/1")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await _employee.PostAsJsonAsync("/api/v1/cities", new { name = "X", stateId = 1 })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await _employee.DeleteAsync("/api/v1/cities/1")).StatusCode);
     }
 
     // ── States ──
@@ -170,125 +161,62 @@ public class GeographyApiTests : IAsyncLifetime
         Assert.Equal(100, capped.GetProperty("pageSize").GetInt32());
     }
 
-    // ── Cities ──
+    // ── State database protection (CHECK constraints, leading zeros, unique indexes) ──
 
     [Fact]
-    public async Task Create_city_with_valid_state_returns_201_and_state_name()
+    public async Task Database_check_constraints_reject_bad_state_type_and_bad_code_and_keep_leading_zeros()
     {
-        JsonElement s = await CreateStateAsync("Goa", "30");
-        int stateId = s.GetProperty("id").GetInt32();
+        await using var ctx = _factory.CreateContext();
 
-        JsonElement city = await CreateCityAsync(stateId, "Panaji", "StatutoryTown");
+        // ck_states_administrative_type: only 1 (State) and 2 (UnionTerritory) are valid.
+        await Assert.ThrowsAnyAsync<Exception>(() => ctx.Database.ExecuteSqlRawAsync(
+            "INSERT INTO `states` (`name`,`code`,`administrative_type`,`is_active`,`created_at_ist`) VALUES ('Bad Type','50',3,1,NOW(6))"));
+        // ck_states_code_format: the code is NULL or exactly two digits.
+        await Assert.ThrowsAnyAsync<Exception>(() => ctx.Database.ExecuteSqlRawAsync(
+            "INSERT INTO `states` (`name`,`code`,`administrative_type`,`is_active`,`created_at_ist`) VALUES ('Bad Code','1',1,1,NOW(6))"));
+        Assert.Equal(0, await ctx.States.CountAsync());
 
-        Assert.Equal("Goa", city.GetProperty("stateName").GetString());
-        Assert.Equal("StatutoryTown", city.GetProperty("classification").GetString());
+        // A valid row is accepted and the leading zero survives the round trip.
+        await ctx.Database.ExecuteSqlRawAsync(
+            "INSERT INTO `states` (`name`,`code`,`administrative_type`,`is_active`,`created_at_ist`) VALUES ('Good','07',2,1,NOW(6))");
+        Assert.Equal("07", (await ctx.States.AsNoTracking().SingleAsync()).Code);
     }
 
     [Fact]
-    public async Task Create_city_rejects_unknown_state_duplicates_and_bad_input()
+    public async Task State_unique_indexes_exist_in_the_mysql_schema()
     {
-        JsonElement s = await CreateStateAsync("Goa", "30");
-        int stateId = s.GetProperty("id").GetInt32();
+        await using var ctx = _factory.CreateContext();
+        await ctx.Database.OpenConnectionAsync();
+        await using var cmd = ctx.Database.GetDbConnection().CreateCommand();
+        cmd.CommandText =
+            "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND NON_UNIQUE = 0 AND TABLE_NAME = 'states'";
+        var names = new List<string>();
+        await using (var reader = await cmd.ExecuteReaderAsync())
+            while (await reader.ReadAsync()) names.Add(reader.GetString(0));
 
-        Assert.Equal(HttpStatusCode.BadRequest,
-            (await _admin.PostAsJsonAsync("/api/v1/cities", new { name = "Ghost", stateId = 424242 })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,
-            (await _admin.PostAsJsonAsync("/api/v1/cities", new { name = "", stateId })).StatusCode);
-
-        await CreateCityAsync(stateId, "Mapusa");
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await _admin.PostAsJsonAsync("/api/v1/cities", new { name = "mapusa", stateId, classification = "CensusTown" })).StatusCode);
+        Assert.Contains("ix_states_code", names);
+        Assert.Contains("ix_states_name", names);
     }
 
-    [Fact]
-    public async Task Same_city_name_is_allowed_in_different_states()
-    {
-        int a = (await CreateStateAsync("Uttar Pradesh", "09")).GetProperty("id").GetInt32();
-        int b = (await CreateStateAsync("Bihar", "10")).GetProperty("id").GetInt32();
-
-        await CreateCityAsync(a, "Bijnor");
-        await CreateCityAsync(b, "Bijnor");
-    }
+    // ── State delete and removed City routes ──
 
     [Fact]
-    public async Task Get_and_update_city_and_filtering()
-    {
-        int goa = (await CreateStateAsync("Goa", "30")).GetProperty("id").GetInt32();
-        int kerala = (await CreateStateAsync("Kerala", "32")).GetProperty("id").GetInt32();
-        int cityId = (await CreateCityAsync(goa, "Margao", "StatutoryTown")).GetProperty("id").GetInt32();
-        await CreateCityAsync(goa, "Curchorem", "CensusTown");
-        await CreateCityAsync(kerala, "Kochi", "StatutoryTown");
-
-        Assert.Equal(HttpStatusCode.OK, (await _admin.GetAsync($"/api/v1/cities/{cityId}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await _admin.GetAsync("/api/v1/cities/999999")).StatusCode);
-
-        HttpResponseMessage upd = await _admin.PutAsJsonAsync($"/api/v1/cities/{cityId}",
-            new { name = "Madgaon", stateId = goa, classification = "StatutoryTown", isActive = true });
-        Assert.Equal(HttpStatusCode.OK, upd.StatusCode);
-        Assert.Equal("Madgaon", (await upd.ReadDataAsync()).GetProperty("name").GetString());
-
-        Assert.Equal(HttpStatusCode.BadRequest,
-            (await _admin.PutAsJsonAsync($"/api/v1/cities/{cityId}", new { name = "Madgaon", stateId = 424242, isActive = true })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound,
-            (await _admin.PutAsJsonAsync("/api/v1/cities/999999", new { name = "X", stateId = goa, isActive = true })).StatusCode);
-
-        JsonElement byState = await GetDataAsync($"/api/v1/cities?stateId={goa}");
-        Assert.Equal(2, byState.GetProperty("totalCount").GetInt32());
-        JsonElement census = await GetDataAsync("/api/v1/cities?classification=CensusTown");
-        Assert.Equal(1, census.GetProperty("totalCount").GetInt32());
-        JsonElement search = await GetDataAsync("/api/v1/cities?search=koch");
-        Assert.Equal("Kochi", search.GetProperty("items")[0].GetProperty("name").GetString());
-    }
-
-    [Fact]
-    public async Task State_cities_endpoint_returns_404_for_unknown_state_and_scopes_results()
-    {
-        int goa = (await CreateStateAsync("Goa", "30")).GetProperty("id").GetInt32();
-        int kerala = (await CreateStateAsync("Kerala", "32")).GetProperty("id").GetInt32();
-        await CreateCityAsync(goa, "Margao");
-        await CreateCityAsync(kerala, "Kochi");
-
-        Assert.Equal(HttpStatusCode.NotFound, (await _admin.GetAsync("/api/v1/states/999999/cities")).StatusCode);
-
-        // A stateId query parameter must not override the route's parent.
-        JsonElement r = await GetDataAsync($"/api/v1/states/{goa}/cities?stateId={kerala}");
-        Assert.Equal(1, r.GetProperty("totalCount").GetInt32());
-        Assert.Equal("Margao", r.GetProperty("items")[0].GetProperty("name").GetString());
-    }
-
-    [Fact]
-    public async Task Deleting_a_state_with_cities_is_blocked_with_409_until_cities_are_removed()
+    public async Task Deleting_a_state_returns_200_then_404()
     {
         int stateId = (await CreateStateAsync("Goa", "30")).GetProperty("id").GetInt32();
-        int cityId = (await CreateCityAsync(stateId, "Margao")).GetProperty("id").GetInt32();
 
-        Assert.Equal(HttpStatusCode.Conflict, (await _admin.DeleteAsync($"/api/v1/states/{stateId}")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await _admin.GetAsync($"/api/v1/cities/{cityId}")).StatusCode); // city untouched
-
-        Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"/api/v1/cities/{cityId}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await _admin.DeleteAsync($"/api/v1/cities/{cityId}")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await _admin.DeleteAsync($"/api/v1/states/{stateId}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await _admin.DeleteAsync($"/api/v1/states/{stateId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _admin.GetAsync($"/api/v1/states/{stateId}")).StatusCode);
     }
 
     [Fact]
-    public async Task Request_cannot_set_provenance_or_system_fields()
+    public async Task City_routes_no_longer_exist()
     {
         int stateId = (await CreateStateAsync("Goa", "30")).GetProperty("id").GetInt32();
 
-        HttpResponseMessage r = await _admin.PostAsJsonAsync("/api/v1/cities", new
-        {
-            name = "Margao", stateId, id = 777, sourceSystem = "EVIL", sourceKey = "x", createdAtIst = "2000-01-01T00:00:00Z"
-        });
-        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        JsonElement body = await r.ReadDataAsync();
-
-        Assert.NotEqual(777, body.GetProperty("id").GetInt32());
-        Assert.True(body.GetProperty("createdAtIst").GetDateTime().Year >= 2025);
-
-        await using var ctx = _factory.CreateContext();
-        var city = ctx.Cities.Single();
-        Assert.Null(city.SourceSystem);
-        Assert.Null(city.SourceKey);
+        Assert.Equal(HttpStatusCode.NotFound, (await _admin.GetAsync("/api/v1/cities")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _admin.GetAsync("/api/v1/cities/1")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _admin.GetAsync($"/api/v1/states/{stateId}/cities")).StatusCode);
     }
 }

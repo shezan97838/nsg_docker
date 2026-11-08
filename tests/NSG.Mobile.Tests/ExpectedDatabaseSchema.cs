@@ -310,19 +310,6 @@ internal static class ExpectedDatabaseSchema
             "additional_data|json|NULL",
             "created_at_ist|datetime(6)|NOT NULL",
         },
-        ["cities"] = new[]
-        {
-            "id|int|NOT NULL",
-            "name|varchar(200)|NOT NULL",
-            "state_id|int|NOT NULL",
-            "code|varchar(50)|NULL",
-            "classification|int|NULL",
-            "is_active|tinyint(1)|NOT NULL",
-            "source_system|varchar(50)|NULL",
-            "source_key|varchar(250)|NULL",
-            "created_at_ist|datetime(6)|NOT NULL",
-            "updated_at_ist|datetime(6)|NULL",
-        },
         ["devices"] = new[]
         {
             "id|int|NOT NULL",

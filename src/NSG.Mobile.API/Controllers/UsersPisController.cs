@@ -129,6 +129,6 @@ public class UsersPisController : ControllerBase
             new ProblemDetails { Status = 403, Title = "Forbidden", Detail = result.ErrorMessage }),
         ApiErrorCodes.Unauthorized => StatusCode(StatusCodes.Status401Unauthorized,
             new ProblemDetails { Status = 401, Title = "Unauthorized", Detail = result.ErrorMessage }),
-        _ => GeographyProblem.From(this, result)
+        _ => ResultProblem.From(this, result)
     };
 }

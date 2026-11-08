@@ -64,6 +64,6 @@ public class SalarySlipsController : ControllerBase
     private IActionResult Problem(Result result) => result.ErrorCode switch
     {
         ApiErrorCodes.Unauthorized => Unauthorized(new ProblemDetails { Status = 401, Title = "Unauthorized", Detail = result.ErrorMessage }),
-        _ => GeographyProblem.From(this, result)
+        _ => ResultProblem.From(this, result)
     };
 }

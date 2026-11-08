@@ -1,4 +1,5 @@
 # Database Schema Audit
+> **City removal (2026-11-08):** the `cities` table, the Cities API (`/api/v1/cities`, `/api/v1/states/{id}/cities`), the city importer and its CSV data were removed; the `states` table and States API are unchanged. Migration `Remove_Cities` drops `fk_cities_states_state_id`, the three `ix_cities_*` indexes and `cities` (generated, not yet applied to any database). The `cities` sections below are the historical record.
 > **Timestamp note (2026-10-18):** this document predates the IST decision. Where it says UTC or `*_utc`, the current rule is IST and `*_ist` columns (see `CLAUDE.md` "Timestamp Convention" and `docs/DATABASE-STANDARDS.md`). The text below is kept as the historical record.
 
 Audit date 2026-10-14. Standard applied: [DATABASE-STANDARDS.md](DATABASE-STANDARDS.md). Scope: every mapped entity, table, column, key, index, constraint, migration and SQL statement.

@@ -5,7 +5,7 @@ namespace NSG.Mobile.Infrastructure.Persistence;
 
 /// <summary>
 /// Application database context — the single DbContext for the NSG Mobile API.
-/// EF Core 8 Code First with MySQL 8.x (Pomelo).
+/// EF Core 10 Code First with MySQL 8.x (Microting provider).
 /// </summary>
 public class AppDbContext : DbContext
 {
@@ -20,7 +20,6 @@ public class AppDbContext : DbContext
     public DbSet<OtpRequest> OtpRequests => Set<OtpRequest>();
     public DbSet<RankHierarchy> RankHierarchies => Set<RankHierarchy>();
     public DbSet<State> States => Set<State>();
-    public DbSet<City> Cities => Set<City>();
     public DbSet<UserPis> UsersPis => Set<UserPis>();
     public DbSet<NsgUnit> NsgUnits => Set<NsgUnit>();
     public DbSet<EducationQualification> EducationQualifications => Set<EducationQualification>();

@@ -36,29 +36,3 @@ public class UpdateStateRequestValidator : AbstractValidator<UpdateStateRequestD
         RuleFor(x => x.AdministrativeType).IsInEnum().WithMessage("AdministrativeType must be State or UnionTerritory.");
     }
 }
-
-public class CreateCityRequestValidator : AbstractValidator<CreateCityRequestDto>
-{
-    public CreateCityRequestValidator()
-    {
-        RuleFor(x => x.Name).ValidName(200);
-        RuleFor(x => x.StateId).GreaterThan(0).WithMessage("StateId is required.");
-        RuleFor(x => x.Code).MaximumLength(50).Matches(GeographyRules.CodePattern)
-            .When(x => !string.IsNullOrWhiteSpace(x.Code)).WithMessage("Code may contain only letters, digits, '.', '_' and '-' (max 50).");
-        RuleFor(x => x.Classification).IsInEnum().When(x => x.Classification.HasValue)
-            .WithMessage("Classification must be StatutoryTown or CensusTown.");
-    }
-}
-
-public class UpdateCityRequestValidator : AbstractValidator<UpdateCityRequestDto>
-{
-    public UpdateCityRequestValidator()
-    {
-        RuleFor(x => x.Name).ValidName(200);
-        RuleFor(x => x.StateId).GreaterThan(0).WithMessage("StateId is required.");
-        RuleFor(x => x.Code).MaximumLength(50).Matches(GeographyRules.CodePattern)
-            .When(x => !string.IsNullOrWhiteSpace(x.Code)).WithMessage("Code may contain only letters, digits, '.', '_' and '-' (max 50).");
-        RuleFor(x => x.Classification).IsInEnum().When(x => x.Classification.HasValue)
-            .WithMessage("Classification must be StatutoryTown or CensusTown.");
-    }
-}

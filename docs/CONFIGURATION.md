@@ -2,6 +2,8 @@
 
 > How the NSG Mobile API gets its configuration, which settings are secrets, and how to rotate them.
 > **This document contains no real values. Never paste a real secret into this file, a ticket, a chat or a log.**
+>
+> **Developer machine (Windows `dotnet run` and local Docker):** see [`CONFIGURATION-LOCAL.md`](CONFIGURATION-LOCAL.md) for the shared `.env.local.secrets` file, the separate Windows and Docker JWT settings, the shared Encryption and BlindIndex keys, and the start/stop/health commands.
 
 ## 1. Rules
 
@@ -37,7 +39,7 @@ Tools and tests:
 
 | Variable | Used by | Notes |
 |---|---|---|
-| `ConnectionStrings__MySql` | `tools/NSG.Mobile.GeoImport` | Read only from the environment. |
+| `ConnectionStrings__MySql` | the API host | Read only from the environment. |
 | `NSG_TEST_MYSQL` | `tests/NSG.Mobile.Tests` | Connection string to a **scratch** database whose name ends in `_test`; the suite drops and recreates it. The tests generate throw-away JWT and encryption keys in memory unless `Jwt__Secret` and `Encryption__Key` are already set. |
 
 `/.env.example` lists these names with placeholders.
@@ -84,8 +86,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON `<schema>`.* TO 'nsg_app'@'<app-host>';
 -- no GRANT OPTION, no global privileges, no access to mysql.* or other schemas
 ```
 
-**Production (NIC Ubuntu):** the API must not apply migrations or seed data at startup, so the runtime account never needs DDL rights. Set `Database__MigrateOnStartup=false` explicitly in production: the committed `appsettings.json` default is `true` for the Render development deployment (disposable database; see `DEPLOYMENT-RENDER.md` and OQ-034). Migrations reach production as a reviewed script or bundle run by a separate migrator account. Reference data (ranks, states, cities, lookups) lives only in the database.
-reference data (ranks, states, cities, lookups) lives only in the database.
+**Production (NIC Ubuntu):** the API must not apply migrations or seed data at startup, so the runtime account never needs DDL rights. Set `Database__MigrateOnStartup=false` explicitly in production: the committed `appsettings.json` default is `true` for the Render development deployment (disposable database; see `DEPLOYMENT-RENDER.md` and OQ-034). Migrations reach production as a reviewed script or bundle run by a separate migrator account. Reference data (ranks, states, lookups) lives only in the database.
+reference data (ranks, states, lookups) lives only in the database.
 
 ## 7. Rotation procedures
 

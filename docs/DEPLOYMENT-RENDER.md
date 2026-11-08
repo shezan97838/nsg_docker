@@ -3,7 +3,7 @@
 Status (2026-10-15): `Dockerfile` and `.dockerignore` added. **Not yet built or run**: no Docker on the development machine, and no Render service exists yet. Open items are in `OPEN-QUESTIONS.md` (OQ-032).
 
 ## What the image does
-- Multi-stage build: `sdk:8.0` restores and publishes `src/NSG.Mobile.API` (Release); `aspnet:8.0` runs it.
+- Multi-stage build: `sdk:10.0` restores and publishes `src/NSG.Mobile.API` (Release); `aspnet:10.0` runs it.
 - Runs as the non-root `app` user. Writable paths: `/app/logs` (Serilog file sink) and `/var/data/files` (the document storage root).
 - Listens on HTTP at `$PORT` (Render sets it, default `10000`), or `8080` when `PORT` is unset. Render terminates TLS in front of the container.
 - Sets `ASPNETCORE_ENVIRONMENT=Production` and `Storage__RootPath=/var/data/files` (the common document storage root, ADR-027). Every secret comes from environment variables; `appsettings.Development.json` and any `.env` file are kept out of the image.

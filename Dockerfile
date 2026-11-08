@@ -3,7 +3,7 @@
 # Configuration and secrets come ONLY from environment variables at runtime (see .env.example, docs/DEPLOYMENT-RENDER.md).
 
 # ── Build stage ──
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Restore first, from the project files only, so the restore layer is cached until a dependency changes.
@@ -21,7 +21,7 @@ RUN dotnet publish src/NSG.Mobile.API/NSG.Mobile.API.csproj \
         /p:UseAppHost=false
 
 # ── Runtime stage ──
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
 # Writable locations for the non-root user: Serilog file sink (logs/ relative to /app) and the common document storage root (Storage:RootPath).
@@ -36,7 +36,7 @@ ENV ASPNETCORE_ENVIRONMENT=Production \
     DOTNET_NOLOGO=true \
     Storage__RootPath=/var/data/files
 
-# Run as the unprivileged "app" user that ships with the .NET 8 images.
+# Run as the unprivileged "app" user that ships with the .NET 10 images.
 USER $APP_UID
 
 # Render injects PORT (default 10000) and routes HTTPS traffic to it; fall back to 8080 elsewhere.

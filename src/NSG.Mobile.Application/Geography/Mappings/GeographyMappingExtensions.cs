@@ -36,40 +36,6 @@ public static class GeographyMappingExtensions
         s.UpdatedAtIst = nowIst;
     }
 
-    public static CityResponseDto ToDto(this City c) => new()
-    {
-        Id = c.Id,
-        Name = c.Name,
-        StateId = c.StateId,
-        StateName = c.State?.Name ?? string.Empty,
-        Code = c.Code,
-        Classification = c.Classification,
-        IsActive = c.IsActive,
-        CreatedAtIst = c.CreatedAtIst,
-        UpdatedAtIst = c.UpdatedAtIst
-    };
-
-    public static City ToEntity(this CreateCityRequestDto r, DateTime nowIst) => new()
-    {
-        Name = r.Name.Trim(),
-        StateId = r.StateId,
-        Code = NormalizeCode(r.Code),
-        Classification = r.Classification,
-        IsActive = r.IsActive,
-        CreatedAtIst = nowIst
-    };
-
-    /// <summary>Applies only the permitted fields; SourceSystem/SourceKey provenance is never touched.</summary>
-    public static void ApplyTo(this UpdateCityRequestDto r, City c, DateTime nowIst)
-    {
-        c.Name = r.Name.Trim();
-        c.StateId = r.StateId;
-        c.Code = NormalizeCode(r.Code);
-        c.Classification = r.Classification;
-        c.IsActive = r.IsActive;
-        c.UpdatedAtIst = nowIst;
-    }
-
     private static string? NormalizeCode(string? code)
         => string.IsNullOrWhiteSpace(code) ? null : code.Trim();
 }

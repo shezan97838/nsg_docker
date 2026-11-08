@@ -22,5 +22,4 @@ public class State
     public DateTime CreatedAtIst { get; set; } = NSG.Mobile.Domain.Common.IndianStandardTime.Now;
     public DateTime? UpdatedAtIst { get; set; }
 
-    public ICollection<City> Cities { get; set; } = new List<City>();
 }

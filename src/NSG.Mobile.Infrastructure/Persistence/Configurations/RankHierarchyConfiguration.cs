@@ -5,7 +5,7 @@ using NSG.Mobile.Domain.Entities;
 namespace NSG.Mobile.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// EF Core entity configuration for RankHierarchy entity targeting MySQL 8.x (Pomelo).
+/// EF Core entity configuration for RankHierarchy entity targeting MySQL 8.x (Microting provider).
 /// </summary>
 public class RankHierarchyConfiguration : IEntityTypeConfiguration<RankHierarchy>
 {

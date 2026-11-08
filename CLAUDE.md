@@ -40,8 +40,8 @@ Infrastructure → Application + Domain
 
 ## Technology Stack
 
-- .NET 8 / ASP.NET Core 8
-- Entity Framework Core 8 (Code First, MySQL 8.x via Pomelo provider)
+- .NET 10 / ASP.NET Core 10
+- Entity Framework Core 10 (Code First, MySQL 8.x via Microting.EntityFrameworkCore.MySql provider)
 - FluentValidation
 - Serilog (structured logging)
 - JWT Bearer authentication (HMAC-SHA256)
@@ -122,6 +122,7 @@ UNDERSTAND → VERIFY REQUIREMENT → INSPECT EXISTING CODE → IMPACT ANALYSIS
 
 - Update `docs/` when architecture changes
 - Update `docs/REQUIREMENT-TRACEABILITY.md` when adding features
+- Configuration and secrets: `docs/CONFIGURATION.md`; local Windows and Docker setup (`.env.local.secrets`, `scripts/run-local.ps1`, `docker-compose.local.yml`): `docs/CONFIGURATION-LOCAL.md`. Update them when configuration keys or local run steps change
 - Record new architectural decisions as ADRs
 - Document open questions, never silently resolve ambiguities
 

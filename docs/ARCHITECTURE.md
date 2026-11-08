@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The NSG Mobile API is built using **Clean Architecture** with a strict unidirectional dependency flow. It targets **.NET 8**, **MySQL 8.x**, **EF Core 8 Code First (Pomelo)**, and **Redis** for distributed caching.
+The NSG Mobile API is built using **Clean Architecture** with a strict unidirectional dependency flow. It targets **.NET 10**, **MySQL 8.x**, **EF Core 10 Code First (Microting.EntityFrameworkCore.MySql)**, and **Redis** for distributed caching.
 
 ```
 ┌──────────────────────┐
@@ -150,7 +150,7 @@ Designed for **10,000+ users** with horizontal scaling support:
 
 - **Stateless API**: No in-process session state
 - **Distributed cache**: Redis for OTP rate limiting, ephemeral state
-- **Database**: MySQL 8.x with connection pooling and retry (Pomelo)
+- **Database**: MySQL 8.x with connection pooling and retry (Microting.EntityFrameworkCore.MySql)
 - **Async I/O**: All database and HTTP calls are async with CancellationToken
 - **Pagination**: All list endpoints paginated (max 100 items)
 - **Projection**: AsNoTracking for read-only queries
