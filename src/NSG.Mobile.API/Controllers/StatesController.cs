@@ -18,12 +18,10 @@ namespace NSG.Mobile.API.Controllers;
 public class StatesController : ControllerBase
 {
     private readonly IStateService _stateService;
-    private readonly ICityService _cityService;
 
-    public StatesController(IStateService stateService, ICityService cityService)
+    public StatesController(IStateService stateService)
     {
         _stateService = stateService;
-        _cityService = cityService;
     }
 
     /// <summary>List states/UTs with search, filters, sorting and pagination.</summary>
@@ -42,16 +40,6 @@ public class StatesController : ControllerBase
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
     {
         Result<StateResponseDto> result = await _stateService.GetByIdAsync(id, cancellationToken);
-        return result.IsSuccess ? Ok(result.Data) : ToProblem(result);
-    }
-
-    /// <summary>List the cities/towns of a state/UT.</summary>
-    [HttpGet("{stateId:int}/cities")]
-    [ProducesResponseType(typeof(PaginatedResponse<CityResponseDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetCities(int stateId, [FromQuery] CityListQuery query, CancellationToken cancellationToken)
-    {
-        Result<PaginatedResponse<CityResponseDto>> result = await _cityService.GetByStateAsync(stateId, query, cancellationToken);
         return result.IsSuccess ? Ok(result.Data) : ToProblem(result);
     }
 
@@ -82,7 +70,7 @@ public class StatesController : ControllerBase
         return result.IsSuccess ? Ok(result.Data) : ToProblem(result);
     }
 
-    /// <summary>Delete a state/UT. Rejected with 409 while it still has cities.</summary>
+    /// <summary>Delete a state/UT.</summary>
     [HttpDelete("{id:int}")]
     [Authorize(Policy = DomainConstants.Policies.RequirePisAdmin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -94,20 +82,5 @@ public class StatesController : ControllerBase
         return result.IsSuccess ? NoContent() : ToProblem(result);
     }
 
-    private IActionResult ToProblem(Result result) => GeographyProblem.From(this, result);
-}
-
-internal static class GeographyProblem
-{
-    public static IActionResult From(ControllerBase controller, Result result)
-    {
-        return result.ErrorCode switch
-        {
-            // An Admin Portal admin whose id cannot be used (missing, not positive, or too large for the integer audit column) is refused before any write.
-            ApiErrorCodes.Unauthorized => controller.Unauthorized(new ProblemDetails { Status = 401, Title = "Unauthorized", Detail = result.ErrorMessage }),
-            ApiErrorCodes.NotFound => controller.NotFound(new ProblemDetails { Status = 404, Title = "Not Found", Detail = result.ErrorMessage }),
-            ApiErrorCodes.Conflict => controller.Conflict(new ProblemDetails { Status = 409, Title = "Conflict", Detail = result.ErrorMessage }),
-            _ => controller.BadRequest(new ProblemDetails { Status = 400, Title = result.ErrorCode, Detail = result.ErrorMessage })
-        };
-    }
+    private IActionResult ToProblem(Result result) => ResultProblem.From(this, result);
 }

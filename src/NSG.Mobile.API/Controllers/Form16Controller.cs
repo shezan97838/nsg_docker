@@ -187,7 +187,7 @@ public class Form16Controller : ControllerBase
     {
         ApiErrorCodes.Unauthorized => Unauthorized(new ProblemDetails { Status = 401, Title = "Unauthorized", Detail = result.ErrorMessage }),
         ApiErrorCodes.InternalError => StatusCode(500, new ProblemDetails { Status = 500, Title = "Internal Server Error", Detail = result.ErrorMessage }),
-        _ => GeographyProblem.From(this, result)
+        _ => ResultProblem.From(this, result)
     };
 }
 

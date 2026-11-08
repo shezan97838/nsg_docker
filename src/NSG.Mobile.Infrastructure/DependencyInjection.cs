@@ -254,7 +254,6 @@ public static class DependencyInjection
         services.AddScoped<IPisImportRepository, PisImportRepository>();
         services.AddScoped<IPisAdminQueryRepository, PisAdminQueryRepository>();
         services.AddScoped<IStateRepository, StateRepository>();
-        services.AddScoped<ICityRepository, CityRepository>();
         services.AddScoped<IMobileUserProfileRepository, MobileUserProfileRepository>();
         services.AddScoped<IApproveMobileUserRepository, ApproveMobileUserRepository>();
         services.AddScoped<IMobileAuthGrantRepository, MobileAuthGrantRepository>();

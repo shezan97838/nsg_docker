@@ -67,7 +67,7 @@ public class UsersPisApiTests : IAsyncLifetime
 
     private async Task CleanAsync()
     {
-        await _factory.ClearGeographyAsync(); // UsersPIS, Cities, States
+        await _factory.ClearGeographyAsync(); // UsersPIS, States
         await using AppDbContext ctx = _factory.CreateContext();
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `admin_refresh_tokens`");
         await ctx.Database.ExecuteSqlRawAsync("DELETE FROM `admin_profiles`");
