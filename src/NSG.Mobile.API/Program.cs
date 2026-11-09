@@ -29,7 +29,7 @@ builder.Host.UseSerilog((context, configuration) =>
         .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {CorrelationId} {ClientIp} {Message:lj}{NewLine}{Exception}")
         .WriteTo.File("logs/nsg-api-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 30));
 
-// ── Secrets: refuse to start with a missing, placeholder or weak JWT / encryption / blind-index key ──
+// ── Secrets: refuse to start with a missing, placeholder or weak JWT secret or encryption key ──
 NSG.Mobile.Infrastructure.Security.StartupSecretsValidator.EnsureValid(builder.Configuration);
 
 // ── OTP mode guard: the fixed demo OTP can never start in Production (or any unapproved environment) ──

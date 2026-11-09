@@ -11,7 +11,7 @@ Status (2026-11-09): implemented and verified on the developer machine (both env
 | URL | `http://localhost:5062` | `http://localhost:8080` |
 | MySQL | `127.0.0.1:3306`, database `nsg_mobile_dev` | `host.docker.internal:3306` (MySQL on the Windows host), the **same** database `nsg_mobile_dev` |
 | `Database:MigrateOnStartup` | `false` (`appsettings.Development.json`) | `false` (compose) |
-| `Encryption:Key`, `BlindIndex:Key` | from `.env.local.secrets` | the **same** values from `.env.local.secrets` |
+| `Encryption:Key` | from `.env.local.secrets` | the **same** value from `.env.local.secrets` |
 | JWT secret / Issuer / Audience / AdminAudience | Windows values (section 4) | Docker values (section 4) |
 | Document storage root (`Storage:RootPath`) | `D:\NSGStorage` (`appsettings.Development.json`) | `/var/data/files` on the Docker named volume `nsg_local_files` |
 | `Security:DisableAuthorization` | `true` (from `appsettings.Development.json`, local development only) | `false` (compose, explicit) |
@@ -31,19 +31,19 @@ ASP.NET Core adds sources in this order; **later sources win**:
 
 On Windows, `scripts\run-local.ps1` puts values from `.env.local.secrets` into the process environment, so **they override User Secrets** for the same key. `.env.local.secrets` is therefore the single source of truth for shared local secrets. The User Secrets remain in place as a fallback (for example when the API is started from Visual Studio, which does not run the launcher) and must then hold the same values.
 
-The app refuses to start with a missing or `REPLACE_*` JWT, encryption or blind-index value (`StartupSecretsValidator`). In Docker, `appsettings.Development.json` is **not** in the image (`.dockerignore`), so no value from it applies there; every Docker setting comes from the compose file and `.env.local.secrets`.
+The app refuses to start with a missing or `REPLACE_*` JWT or encryption value (`StartupSecretsValidator`). In Docker, `appsettings.Development.json` is **not** in the image (`.dockerignore`), so no value from it applies there; every Docker setting comes from the compose file and `.env.local.secrets`.
 
 ## 3. `.env.local.secrets`
 
 - Git-ignored (`.gitignore`) and excluded from the Docker build context (`.dockerignore`). **Never commit it.** The committed template is `.env.local.secrets.example` (placeholders only).
-- Created once from the template; the initial values for the keys that already existed were copied from User Secrets without being printed. **Existing `Encryption:Key` and `BlindIndex:Key` must never be regenerated**: encrypted columns and the PAN/salary-account blind indexes would become unreadable.
+- Created once from the template; the initial values for the keys that already existed were copied from User Secrets without being printed. **The existing `Encryption:Key` must never be regenerated**: encrypted columns (Aadhaar, PAN, PRAN, salary account) would become unreadable.
 - Format: `NAME=value`, one per line, no quotes, no spaces around `=`. A password containing `$`, quotes, `#` or spaces would break Docker Compose interpolation; avoid them.
 - Keys in the file:
 
 | Key | Used by |
 |---|---|
 | `LOCAL_DB_USER`, `LOCAL_DB_PASSWORD`, `LOCAL_DB_NAME` | both (the launcher builds the connection string for `127.0.0.1`; compose builds it for `host.docker.internal`) |
-| `Encryption__Key`, `BlindIndex__Key` | both, identical |
+| `Encryption__Key` | both, identical |
 | `WINDOWS_Jwt__Secret` | Windows only (becomes `Jwt__Secret`) |
 | `DOCKER_Jwt__Secret`, `DOCKER_Jwt__Issuer`, `DOCKER_Jwt__Audience`, `DOCKER_Jwt__AdminAudience` | Docker only (become `Jwt__*`) |
 
@@ -62,9 +62,11 @@ A token issued by one environment must not be accepted by the other.
 
 `Jwt:AdminAudience` must differ from `Jwt:Audience`; the app refuses to start otherwise. Users and refresh tokens live in the shared `nsg_mobile_dev` database, so after switching environments sign in again (an access token from the other environment is rejected by design).
 
-## 5. Shared Encryption and BlindIndex keys
+## 5. Shared Encryption key
 
-Both environments use the same database, so they must use byte-identical `Encryption__Key` and `BlindIndex__Key` (base64 of exactly 32 bytes). One file supplies both; do not set them anywhere else (User Secrets copies must match). The Docker image holds no key; compose injects it at run time.
+Both environments use the same database, so they must use a byte-identical `Encryption__Key` (base64 of exactly 32 bytes). One file supplies it; do not set it anywhere else (a User Secrets copy must match). The Docker image holds no key; compose injects it at run time.
+
+`BlindIndex:Key` is obsolete: the PAN and salary-account blind index was removed (ADR-020), and the application neither reads nor validates that key. A leftover `BlindIndex` entry in User Secrets is ignored and can be deleted.
 
 ## 6. Database and storage
 
