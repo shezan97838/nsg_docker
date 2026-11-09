@@ -37,7 +37,7 @@ foreach ($line in Get-Content -LiteralPath $EnvFile) {
     $vars[$name.Trim()] = $value
 }
 
-foreach ($required in 'LOCAL_DB_USER', 'LOCAL_DB_PASSWORD', 'LOCAL_DB_NAME', 'Encryption__Key', 'BlindIndex__Key', 'WINDOWS_Jwt__Secret') {
+foreach ($required in 'LOCAL_DB_USER', 'LOCAL_DB_PASSWORD', 'LOCAL_DB_NAME', 'Encryption__Key', 'WINDOWS_Jwt__Secret') {
     if (-not $vars.ContainsKey($required) -or [string]::IsNullOrWhiteSpace($vars[$required]) -or $vars[$required].StartsWith('REPLACE_')) {
         throw "$required is missing or still a placeholder in $EnvFile."
     }
@@ -47,7 +47,6 @@ $set = [ordered]@{
     ASPNETCORE_ENVIRONMENT    = 'Development'
     ConnectionStrings__MySql  = "Server=127.0.0.1;Port=3306;Database=$($vars['LOCAL_DB_NAME']);Uid=$($vars['LOCAL_DB_USER']);Pwd=$($vars['LOCAL_DB_PASSWORD']);AllowUserVariables=True;SslMode=None;"
     Encryption__Key           = $vars['Encryption__Key']
-    BlindIndex__Key           = $vars['BlindIndex__Key']
     Jwt__Secret               = $vars['WINDOWS_Jwt__Secret']
 }
 foreach ($entry in $set.GetEnumerator()) {
