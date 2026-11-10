@@ -240,7 +240,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "NSG Mobile API",
         Version = "v1",
-        Description = "National Security Guard Mobile Application API. SOW Version 2.0.",
+        Description = "NSG Mobile Application API.",
         Contact = new OpenApiContact { Name = "IT Cell, NSG" }
     });
 
@@ -339,7 +339,7 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseHttpsRedirection();
 
-// Swagger — on in every environment by client request; set Swagger__Enabled=false to switch it off without a code change
+// Swagger — on in every environment ; set Swagger__Enabled=false to switch it off without a code change
 if (builder.Configuration.GetValue("Swagger:Enabled", true))
 {
     app.UseSwagger();

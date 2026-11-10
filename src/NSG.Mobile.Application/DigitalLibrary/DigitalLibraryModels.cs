@@ -43,6 +43,7 @@ public static class DigitalLibraryRules
 
     /// <summary>Relative API route that streams the file to mobile users (they call it with their bearer token).</summary>
     public static string MobileFilePath(long id) => $"/api/v1/digital-library/{id}/file";
+    public static string AdminFilePath(long id) => $"/api/v1/digital-library/{id}/file";
 
     /// <summary>The type named by the file name's extension, or null when it is not one of the accepted types.</summary>
     public static DigitalLibraryFileType? TypeFromFileName(string? fileName)
@@ -100,6 +101,7 @@ public sealed class DigitalLibraryAdminDto
     public long Id { get; set; }
     public string Description { get; set; } = string.Empty;
     public string FileType { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
     public bool IsImportant { get; set; }
     public bool IsActive { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
@@ -129,6 +131,7 @@ internal static class DigitalLibraryMapping
         Id = i.Id,
         Description = i.Description,
         FileType = i.FileType,
+        FileUrl = DigitalLibraryRules.AdminFilePath(i.Id),
         IsImportant = i.IsImportant,
         IsActive = i.IsActive,
         CreatedAt = IstTime.FromIst(i.CreatedAtIst),
