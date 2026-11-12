@@ -289,12 +289,15 @@ public class PisImportTests
     public async Task Upsert_inserts_a_new_nsg_number_with_system_defaults_and_encrypted_identifiers()
     {
         Kit kit = new();
+        DateTime beforeIst = NSG.Mobile.Domain.Common.IndianStandardTime.Now.AddSeconds(-2);
         PisUploadResultDto result = await Ok(kit, PisXlsx.Build(new[] { PisXlsx.Person("N1", "9811111101") }), PisUploadType.Upsert);
+        DateTime afterIst = NSG.Mobile.Domain.Common.IndianStandardTime.Now.AddSeconds(2);
 
         Assert.Equal((1, 1, 0, 0, 0, "UPSERT"), (result.TotalRows, result.Inserted, result.Updated, result.Failed, result.Conflicts, result.UploadType));
         UserPis p = Assert.Single(kit.Repo.People);
         Assert.Equal((MobileAppActivationStatus.Pending, true, (int?)null), (p.MobileAppActivationStatus, p.IsActive, p.UpdatedBy));
         Assert.Equal((int)AdminA, p.CreatedBy);
+        Assert.InRange(p.CreatedAtIst, beforeIst, afterIst);
         Assert.Null(p.UpdatedAtIst);
         Assert.Equal(new DateOnly(1985, 6, 15), p.DateOfBirth);
         Assert.Equal("10.01.2025 FROM 11 SRG", p.SideSteppedDetails);
@@ -852,13 +855,15 @@ public class PisImportTests
     }
 
 
-    [Fact]
-    public async Task Upload_without_an_admin_identity_is_refused_before_anything_is_written()
+    [Theory]
+    [InlineData(PisUploadType.Upsert)]
+    [InlineData(PisUploadType.UpdateOnly)]
+    public async Task Upload_without_an_admin_identity_is_refused_before_anything_is_written(PisUploadType type)
     {
         Kit kit = new();
         kit.User.AdminProfileId = null;
 
-        Result<PisUploadResultDto> result = await kit.Upload(PisXlsx.Build(new[] { PisXlsx.Person("N1", "9811111101") }), PisUploadType.Upsert);
+        Result<PisUploadResultDto> result = await kit.Upload(PisXlsx.Build(new[] { PisXlsx.Person("N1", "9811111101") }), type);
 
         Assert.Equal(ApiErrorCodes.Unauthorized, result.ErrorCode);
         Assert.Equal("The administrator could not be identified.", result.ErrorMessage);
@@ -877,17 +882,21 @@ public class PisImportTests
     }
 
     [Theory]
-    [InlineData(0L)]
-    [InlineData(-5L)]
-    [InlineData((long)int.MaxValue + 1)]
-    [InlineData(long.MaxValue)]
-    public async Task Upload_with_an_unusable_admin_id_is_refused_before_the_batch_or_any_row_is_written(long adminId)
+    [InlineData(0L, PisUploadType.Upsert)]
+    [InlineData(-5L, PisUploadType.Upsert)]
+    [InlineData((long)int.MaxValue + 1, PisUploadType.Upsert)]
+    [InlineData(long.MaxValue, PisUploadType.Upsert)]
+    [InlineData(0L, PisUploadType.UpdateOnly)]
+    [InlineData(-5L, PisUploadType.UpdateOnly)]
+    [InlineData((long)int.MaxValue + 1, PisUploadType.UpdateOnly)]
+    [InlineData(long.MaxValue, PisUploadType.UpdateOnly)]
+    public async Task Upload_with_an_unusable_admin_id_is_refused_before_the_batch_or_any_row_is_written(long adminId, PisUploadType type)
     {
         Kit kit = new();
         kit.User.AdminProfileId = adminId;
         kit.Seed("N2", "9811111102");   // owned by AdminA, which this caller is not
 
-        Result<PisUploadResultDto> result = await kit.Upload(PisXlsx.Build(new[] { PisXlsx.Person("N1", "9811111101"), PisXlsx.Person("N2", "9811111102", "Renamed") }), PisUploadType.Upsert);
+        Result<PisUploadResultDto> result = await kit.Upload(PisXlsx.Build(new[] { PisXlsx.Person("N1", "9811111101"), PisXlsx.Person("N2", "9811111102", "Renamed") }), type);
 
         Assert.Equal(ApiErrorCodes.Unauthorized, result.ErrorCode);
         Assert.Equal("The administrator could not be identified.", result.ErrorMessage);
@@ -953,6 +962,50 @@ public class PisImportTests
         Assert.NotEqual(0, kit.Repo.Batches.Single().UploadedBy);
         Assert.Equal((int)AdminA, kit.Repo.People.Single(p => p.NsgNumber == "N2").UpdatedBy);
         if (type == PisUploadType.Upsert) Assert.Equal((int)AdminA, kit.Repo.People.Single(p => p.NsgNumber == "N1").CreatedBy);
+    }
+
+    [Theory]
+    [InlineData(2L)]
+    [InlineData(5L)]
+    public async Task UpdateOnly_sets_updated_by_and_updated_at_ist_across_multiple_records_preserving_created_by_and_blank_cells(long adminId)
+    {
+        Kit kit = new();
+        kit.User.AdminProfileId = adminId;
+        UserPis first = kit.Seed("N1", "9811111101", assignedTo: adminId);
+        first.ServiceNumber = "OLD-SVC-1";
+        first.DateOfBirth = new DateOnly(1981, 4, 12);
+        first.PanNumberEncrypted = "enc:oldpan1";
+        UserPis second = kit.Seed("N2", "9811111102", assignedTo: adminId);
+        second.ServiceNumber = "OLD-SVC-2";
+        UserPis third = kit.Seed("N3", "9811111103", assignedTo: adminId);
+        third.ServiceNumber = "OLD-SVC-3";
+
+        object?[] row1 = PisXlsx.Person("N1", "9811111101", $"Updated 1 by {adminId}");
+        row1[2] = null;
+        row1[PisXlsx.Dob] = null;
+        row1[PisXlsx.Pan] = null;
+        object?[] row2 = PisXlsx.Person("N2", "9811111102", $"Updated 2 by {adminId}");
+        object?[] row3 = PisXlsx.Person("N3", "9811111103", $"Updated 3 by {adminId}");
+
+        DateTime beforeIst = NSG.Mobile.Domain.Common.IndianStandardTime.Now.AddSeconds(-2);
+        PisUploadResultDto result = await Ok(kit, PisXlsx.Build(new[] { row1, row2, row3 }), PisUploadType.UpdateOnly);
+        DateTime afterIst = NSG.Mobile.Domain.Common.IndianStandardTime.Now.AddSeconds(2);
+
+        Assert.Equal((0, 3, 0, 0), (result.Inserted, result.Updated, result.Failed, result.Conflicts));
+        Assert.All(kit.Repo.People, person =>
+        {
+            Assert.Equal((int)adminId, person.UpdatedBy);
+            Assert.NotNull(person.UpdatedAtIst);
+            Assert.InRange(person.UpdatedAtIst!.Value, beforeIst, afterIst);
+            Assert.Equal(7, person.CreatedBy);
+            Assert.Equal(new DateTime(2020, 1, 1), person.CreatedAtIst);
+            Assert.Equal(adminId, person.AssignedTo);
+        });
+        Assert.Equal(("OLD-SVC-1", new DateOnly(1981, 4, 12), "enc:oldpan1"),
+            (first.ServiceNumber, first.DateOfBirth, first.PanNumberEncrypted));
+        Assert.Equal($"Updated 1 by {adminId}", first.FullName);
+        Assert.Equal($"Updated 2 by {adminId}", second.FullName);
+        Assert.Equal($"Updated 3 by {adminId}", third.FullName);
     }
 
     [Fact]

@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using NSG.Mobile.Domain.Common;
 using NSG.Mobile.Domain.Constants;
 using NSG.Mobile.Domain.Entities;
 using NSG.Mobile.Infrastructure.Persistence;
@@ -35,8 +37,9 @@ public sealed class PisUploadAuthorizationDatabaseTests : IAsyncLifetime
     private async Task ClearAsync()
     {
         await using AppDbContext ctx = _factory.CreateContext();
-        foreach (string table in new[] { "pis_upload_batch_errors", "pis_upload_batch_records", "pis_upload_batches", "admin_refresh_tokens", "admin_profiles", "users_pis" })
+        foreach (string table in new[] { "pis_ownership_transfers", "pis_upload_batch_errors", "pis_upload_batch_records", "pis_upload_batches", "admin_refresh_tokens", "admin_profiles", "users_pis" })
             await ctx.Database.ExecuteSqlRawAsync($"DELETE FROM `{table}`");
+        await ctx.Database.ExecuteSqlRawAsync("ALTER TABLE `admin_profiles` AUTO_INCREMENT = 1");
     }
 
     private static MultipartFormDataContent File(params object?[][] people)
@@ -104,5 +107,99 @@ public sealed class PisUploadAuthorizationDatabaseTests : IAsyncLifetime
         // The admin sees their own batches through the history endpoint; the super admin (a different identity) does not get access.
         Assert.Equal(HttpStatusCode.OK, (await _pisAdmin.GetAsync(Base + "/upload-batches")).StatusCode);
         Assert.True((await _superAdmin.GetAsync(Base + "/upload-batches")).StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden);
+    }
+
+    [MySqlFact]
+    public async Task Update_upload_persists_updated_by_and_updated_at_ist_for_admin_profile_ids_2_and_5_across_multiple_records()
+    {
+        await using (AppDbContext checkAdmin2 = _factory.CreateContext())
+        {
+            long admin2Id = await checkAdmin2.AdminProfiles.AsNoTracking().Where(a => a.NsgNumber == "PAS-0002").Select(a => a.Id).SingleAsync();
+            Assert.Equal(2L, admin2Id);
+        }
+
+        // Provision PAS-0003, PAS-0004, and PAS-0005 so PAS-0005 gets admin_profile_id = 5.
+        await PisAdminSession.CreateAndSignInPisAdminAsync(_factory, _superAdmin, "PAS-0003", "9822220003");
+        await PisAdminSession.CreateAndSignInPisAdminAsync(_factory, _superAdmin, "PAS-0004", "9822220004");
+        HttpClient admin5 = await PisAdminSession.CreateAndSignInPisAdminAsync(_factory, _superAdmin, "PAS-0005", "9822220005");
+
+        await using (AppDbContext checkAdmin5 = _factory.CreateContext())
+        {
+            long admin5Id = await checkAdmin5.AdminProfiles.AsNoTracking().Where(a => a.NsgNumber == "PAS-0005").Select(a => a.Id).SingleAsync();
+            Assert.Equal(5L, admin5Id);
+        }
+
+        // 1. Insert two personnel records as Admin 2.
+        DateTime beforeInsert = IndianStandardTime.Now.AddSeconds(-2);
+        HttpResponseMessage insert = await _pisAdmin.PostAsync(Base + "/upload",
+            File(PisXlsx.Person("M1", "9811111201", "Initial One"), PisXlsx.Person("M2", "9811111202", "Initial Two")));
+        DateTime afterInsert = IndianStandardTime.Now.AddSeconds(2);
+        Assert.Equal(HttpStatusCode.OK, insert.StatusCode);
+        Assert.Equal(2, (await insert.ReadDataAsync()).GetProperty("inserted").GetInt32());
+
+        await using (AppDbContext afterInsertCtx = _factory.CreateContext())
+        {
+            List<UserPis> inserted = await afterInsertCtx.UsersPis.AsNoTracking().Where(p => p.NsgNumber == "M1" || p.NsgNumber == "M2").OrderBy(p => p.NsgNumber).ToListAsync();
+            Assert.Equal(2, inserted.Count);
+            Assert.All(inserted, p =>
+            {
+                Assert.Equal((2, (int?)null, (DateTime?)null, (long?)2L), (p.CreatedBy, p.UpdatedBy, p.UpdatedAtIst, p.AssignedTo));
+                Assert.InRange(p.CreatedAtIst, beforeInsert, afterInsert);
+            });
+        }
+
+        // 2. Update both records via POST /update-upload as Admin 2 (leave M1 ServiceNumber blank to verify blank preservation).
+        object?[] m1ByAdmin2 = PisXlsx.Person("M1", "9811111201", "Admin2 One");
+        m1ByAdmin2[2] = null;
+        object?[] m2ByAdmin2 = PisXlsx.Person("M2", "9811111202", "Admin2 Two");
+
+        DateTime beforeUpdate2 = IndianStandardTime.Now.AddSeconds(-2);
+        HttpResponseMessage update2 = await _pisAdmin.PostAsync(Base + "/update-upload", File(m1ByAdmin2, m2ByAdmin2));
+        DateTime afterUpdate2 = IndianStandardTime.Now.AddSeconds(2);
+        Assert.Equal(HttpStatusCode.OK, update2.StatusCode);
+        Assert.Equal(2, (await update2.ReadDataAsync()).GetProperty("updated").GetInt32());
+
+        await using (AppDbContext afterUpdate2Ctx = _factory.CreateContext())
+        {
+            List<UserPis> rows = await afterUpdate2Ctx.UsersPis.AsNoTracking().Where(p => p.NsgNumber == "M1" || p.NsgNumber == "M2").OrderBy(p => p.NsgNumber).ToListAsync();
+            Assert.All(rows, p =>
+            {
+                Assert.Equal((2, 2, (long?)2L), (p.CreatedBy, p.UpdatedBy, p.AssignedTo));
+                Assert.NotNull(p.UpdatedAtIst);
+                Assert.InRange(p.UpdatedAtIst!.Value, beforeUpdate2, afterUpdate2);
+            });
+            Assert.Equal(("Admin2 One", "IRLA-M1"), (rows[0].FullName, rows[0].ServiceNumber));
+            Assert.Equal("Admin2 Two", rows[1].FullName);
+        }
+
+        // 3. Transfer both records to Admin 5 and update them via POST /update-upload as Admin 5 (leave M2 DOB blank).
+        foreach (string nsg in new[] { "M1", "M2" })
+        {
+            HttpResponseMessage transfer = await _superAdmin.PostAsJsonAsync("/api/v1/admin/pis-personnel/transfer-ownership",
+                new { personnelNsgNumber = nsg, targetPisAdminNsgNumber = "PAS-0005", reason = "Reassign for update test" });
+            Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
+        }
+
+        object?[] m1ByAdmin5 = PisXlsx.Person("M1", "9811111201", "Admin5 One");
+        object?[] m2ByAdmin5 = PisXlsx.Person("M2", "9811111202", "Admin5 Two");
+        m2ByAdmin5[PisXlsx.Dob] = null;
+
+        DateTime beforeUpdate5 = IndianStandardTime.Now.AddSeconds(-2);
+        HttpResponseMessage update5 = await admin5.PostAsync(Base + "/update-upload", File(m1ByAdmin5, m2ByAdmin5));
+        DateTime afterUpdate5 = IndianStandardTime.Now.AddSeconds(2);
+        Assert.Equal(HttpStatusCode.OK, update5.StatusCode);
+        Assert.Equal(2, (await update5.ReadDataAsync()).GetProperty("updated").GetInt32());
+
+        await using AppDbContext afterUpdate5Ctx = _factory.CreateContext();
+        List<UserPis> finalRows = await afterUpdate5Ctx.UsersPis.AsNoTracking().Where(p => p.NsgNumber == "M1" || p.NsgNumber == "M2").OrderBy(p => p.NsgNumber).ToListAsync();
+        Assert.Equal(2, finalRows.Count);
+        Assert.All(finalRows, p =>
+        {
+            Assert.Equal((2, 5, (long?)5L), (p.CreatedBy, p.UpdatedBy, p.AssignedTo));
+            Assert.NotNull(p.UpdatedAtIst);
+            Assert.InRange(p.UpdatedAtIst!.Value, beforeUpdate5, afterUpdate5);
+        });
+        Assert.Equal("Admin5 One", finalRows[0].FullName);
+        Assert.Equal(("Admin5 Two", new DateOnly(1985, 6, 15)), (finalRows[1].FullName, finalRows[1].DateOfBirth));
     }
 }

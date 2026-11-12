@@ -65,4 +65,62 @@ public class PisOwnershipRepository : IPisOwnershipRepository
             return new PisOwnershipTransferResult(PisOwnershipTransferOutcome.Transferred, current.Id, current.NsgNumber, current.AssignedTo);
         });
     }
+
+    public async Task<PisBulkOwnershipTransferResult> BulkTransferAsync(
+        long sourceAdminId, long targetAdminId, long actorAdminId, string? reason, DateTime nowIst, CancellationToken cancellationToken = default)
+    {
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            _context.ChangeTracker.Clear();
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            // 1. Lock all source-owned personnel rows FIRST (no earlier read may fix a snapshot).
+            //    ix_users_pis_assigned_to is indexed, so InnoDB acquires record and gap/next-key locks on assigned_to = sourceAdminId
+            //    until commit, preventing concurrent individual or bulk transfers from slipping rows in or out mid-operation.
+            //    Lock order matches TransferAsync and registration decisions: users_pis rows first, then history insert.
+            await _context.UsersPis.Where(p => p.AssignedTo == sourceAdminId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.AssignedTo, p => p.AssignedTo), cancellationToken);
+
+            // 2. Read the locked rows (first consistent read of this transaction).
+            var records = await _context.UsersPis.AsNoTracking()
+                .Where(p => p.AssignedTo == sourceAdminId)
+                .Select(p => new { p.Id, p.NsgNumber })
+                .ToListAsync(cancellationToken);
+
+            if (records.Count == 0)
+                return new PisBulkOwnershipTransferResult(PisBulkOwnershipTransferOutcome.NothingToTransfer);
+
+            // 3. Re-verify target eligibility inside the transaction.
+            bool eligible = await _context.AdminProfiles.AsNoTracking().AnyAsync(p =>
+                p.Id == targetAdminId && p.IsActive && p.ActivationStatus == AdminActivationStatus.Active
+                && p.Role!.IsActive && p.Role.RoleCode == AdminRoleCodes.PisAdmin, cancellationToken);
+            if (!eligible)
+                return new PisBulkOwnershipTransferResult(PisBulkOwnershipTransferOutcome.TargetNotEligible);
+
+            // 4. Update ONLY assigned_to (created_by, updated_by, updated_at_ist and all personnel columns stay untouched).
+            int updated = await _context.UsersPis.Where(p => p.AssignedTo == sourceAdminId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.AssignedTo, (long?)targetAdminId), cancellationToken);
+            if (updated != records.Count)
+                throw new InvalidOperationException($"Bulk ownership transfer updated {updated} rows but locked {records.Count} rows.");
+
+            // 5. History, same transaction (one row per transferred personnel record).
+            List<PisOwnershipTransfer> history = records.Select(r => new PisOwnershipTransfer
+            {
+                PisRecordId = r.Id,
+                NsgNumber = r.NsgNumber,
+                PreviousAssignedTo = sourceAdminId,
+                NewAssignedTo = targetAdminId,
+                TransferredBy = actorAdminId,
+                Reason = reason,
+                TransferredAtIst = nowIst
+            }).ToList();
+            _context.PisOwnershipTransfers.AddRange(history);
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            _context.ChangeTracker.Clear();
+
+            return new PisBulkOwnershipTransferResult(PisBulkOwnershipTransferOutcome.Transferred, updated);
+        });
+    }
 }

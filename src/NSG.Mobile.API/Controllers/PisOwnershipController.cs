@@ -18,8 +18,13 @@ namespace NSG.Mobile.API.Controllers;
 public class PisOwnershipController : ControllerBase
 {
     private readonly IPisOwnershipTransferService _service;
+    private readonly IPisBulkOwnershipTransferService _bulkService;
 
-    public PisOwnershipController(IPisOwnershipTransferService service) => _service = service;
+    public PisOwnershipController(IPisOwnershipTransferService service, IPisBulkOwnershipTransferService bulkService)
+    {
+        _service = service;
+        _bulkService = bulkService;
+    }
 
     /// <summary>
     /// Make the target PIS Admin responsible for one personnel record. Works for an unassigned record and for one owned by another PIS Admin.
@@ -36,6 +41,24 @@ public class PisOwnershipController : ControllerBase
     public async Task<IActionResult> Transfer([FromBody] PisOwnershipTransferRequestDto request, CancellationToken cancellationToken)
     {
         Result<ApiResult<PisOwnershipTransferDto>> result = await _service.TransferAsync(request, cancellationToken);
+        return result.IsSuccess ? Ok(result.Data) : MobileAuthProblem.From(this, result);
+    }
+
+    /// <summary>
+    /// Move every personnel record currently assigned to the source PIS Admin to the target PIS Admin. The source admin's active/inactive
+    /// status does not block the transfer (supports admin retirement or account deactivation). If the source has no assigned records,
+    /// a successful response with zero transferred records is returned.
+    /// </summary>
+    [HttpPost("bulk-transfer-ownership")]
+    [ProducesResponseType(typeof(ApiResult<PisBulkOwnershipTransferDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> BulkTransfer([FromBody] PisBulkOwnershipTransferRequestDto request, CancellationToken cancellationToken)
+    {
+        Result<ApiResult<PisBulkOwnershipTransferDto>> result = await _bulkService.BulkTransferAsync(request, cancellationToken);
         return result.IsSuccess ? Ok(result.Data) : MobileAuthProblem.From(this, result);
     }
 }

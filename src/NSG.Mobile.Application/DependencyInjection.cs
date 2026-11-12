@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<NSG.Mobile.Application.Pis.Import.IPisImportService, NSG.Mobile.Application.Pis.Import.PisImportService>();
         services.AddScoped<IPisAdminQueryService, PisAdminQueryService>();
         services.AddScoped<IPisOwnershipTransferService, PisOwnershipTransferService>();
+        services.AddScoped<IPisBulkOwnershipTransferService, PisBulkOwnershipTransferService>();
         services.AddScoped<IStateService, StateService>();
         services.AddScoped<IMobileAuthService, MobileAuthService>();
         services.AddScoped<IMobileApprovalService, MobileApprovalService>();

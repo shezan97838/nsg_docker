@@ -107,12 +107,16 @@ public sealed class PisImportDatabaseTests : IAsyncLifetime
     [MySqlFact]
     public async Task Insert_saves_the_person_the_mapping_and_the_batch_summary_with_ciphertext_only()
     {
+        DateTime beforeIst = NSG.Mobile.Domain.Common.IndianStandardTime.Now.AddSeconds(-2);
         PisUploadResultDto result = await OkAsync(Sheet(PisXlsx.Person("N1", Mobile())), PisUploadType.Upsert);
+        DateTime afterIst = NSG.Mobile.Domain.Common.IndianStandardTime.Now.AddSeconds(2);
 
         Assert.Equal((1, 1, 0, 0, 0), (result.TotalRows, result.Inserted, result.Updated, result.Failed, result.Conflicts));
         await using AppDbContext c = Context();
         UserPis person = await c.UsersPis.SingleAsync(p => p.NsgNumber == "N1");
-        Assert.Equal(((int)AdminA, MobileAppActivationStatus.Pending, true), (person.CreatedBy, person.MobileAppActivationStatus, person.IsActive));
+        Assert.Equal(((int)AdminA, (int?)null, (DateTime?)null, MobileAppActivationStatus.Pending, true),
+            (person.CreatedBy, person.UpdatedBy, person.UpdatedAtIst, person.MobileAppActivationStatus, person.IsActive));
+        Assert.InRange(person.CreatedAtIst, beforeIst, afterIst);
         Assert.StartsWith("enc:", person.AadhaarNumberEncrypted);
         Assert.DoesNotContain("123412341234", person.AadhaarNumberEncrypted);
 
@@ -144,6 +148,90 @@ public sealed class PisImportDatabaseTests : IAsyncLifetime
         Assert.NotNull(n1.UpdatedAtIst);
         Assert.Equal(2, await c.PisUploadBatchRecords.CountAsync(r => r.Operation == PisRowOperation.Updated));
         Assert.All(await c.PisUploadBatchRecords.ToListAsync(), r => Assert.NotEqual(0, r.PisRecordId));
+    }
+
+    [MySqlFact]
+    public async Task UpdateOnly_persists_updated_by_and_updated_at_ist_for_admin_2_and_admin_5_across_multiple_records_while_preserving_created_by_and_blank_cells()
+    {
+        string m1 = Mobile(), m2 = Mobile(), m3 = Mobile(), m4 = Mobile(), m5 = Mobile();
+        DateTime seededCreatedAt = new(2020, 1, 1, 8, 0, 0);
+        await using (AppDbContext seed = Context())
+        {
+            seed.UsersPis.AddRange(
+                new UserPis
+                {
+                    NsgNumber = "A2-1", MobileNumber = m1, FullName = "Before 1", ServiceNumber = "SVC-1",
+                    DateOfBirth = new DateOnly(1982, 3, 14), PanNumberEncrypted = "enc:pan1",
+                    CreatedBy = 99, CreatedAtIst = seededCreatedAt, AssignedTo = 2, IsActive = true
+                },
+                new UserPis
+                {
+                    NsgNumber = "A2-2", MobileNumber = m2, FullName = "Before 2", ServiceNumber = "SVC-2",
+                    CreatedBy = 99, CreatedAtIst = seededCreatedAt, AssignedTo = 2, IsActive = true
+                },
+                new UserPis
+                {
+                    NsgNumber = "A5-1", MobileNumber = m3, FullName = "Before 3", ServiceNumber = "SVC-3",
+                    DateOfBirth = new DateOnly(1984, 7, 20), AadhaarNumberEncrypted = "enc:aadhaar3",
+                    CreatedBy = 2, CreatedAtIst = seededCreatedAt, AssignedTo = 5, IsActive = true
+                },
+                new UserPis
+                {
+                    NsgNumber = "A5-2", MobileNumber = m4, FullName = "Before 4", ServiceNumber = "SVC-4",
+                    CreatedBy = 2, CreatedAtIst = seededCreatedAt, AssignedTo = 5, IsActive = true
+                },
+                new UserPis
+                {
+                    NsgNumber = "A5-3", MobileNumber = m5, FullName = "Before 5", ServiceNumber = "SVC-5",
+                    CreatedBy = 2, CreatedAtIst = seededCreatedAt, AssignedTo = 5, IsActive = true
+                });
+            await seed.SaveChangesAsync();
+        }
+
+        object?[] blankRowA2 = PisXlsx.Person("A2-1", m1, "After 1");
+        blankRowA2[2] = null;
+        blankRowA2[PisXlsx.Dob] = null;
+        blankRowA2[PisXlsx.Pan] = null;
+
+        DateTime beforeAdmin2 = NSG.Mobile.Domain.Common.IndianStandardTime.Now.AddSeconds(-2);
+        PisUploadResultDto res2 = await OkAsync(Sheet(blankRowA2, PisXlsx.Person("A2-2", m2, "After 2")), PisUploadType.UpdateOnly, admin: 2);
+        DateTime afterAdmin2 = NSG.Mobile.Domain.Common.IndianStandardTime.Now.AddSeconds(2);
+        Assert.Equal((0, 2, 0, 0), (res2.Inserted, res2.Updated, res2.Failed, res2.Conflicts));
+
+        object?[] blankRowA5 = PisXlsx.Person("A5-1", m3, "After 3");
+        blankRowA5[2] = null;
+        blankRowA5[PisXlsx.Dob] = null;
+        blankRowA5[PisXlsx.Aadhaar] = null;
+
+        DateTime beforeAdmin5 = NSG.Mobile.Domain.Common.IndianStandardTime.Now.AddSeconds(-2);
+        PisUploadResultDto res5 = await OkAsync(
+            Sheet(blankRowA5, PisXlsx.Person("A5-2", m4, "After 4"), PisXlsx.Person("A5-3", m5, "After 5")),
+            PisUploadType.UpdateOnly, admin: 5);
+        DateTime afterAdmin5 = NSG.Mobile.Domain.Common.IndianStandardTime.Now.AddSeconds(2);
+        Assert.Equal((0, 3, 0, 0), (res5.Inserted, res5.Updated, res5.Failed, res5.Conflicts));
+
+        await using AppDbContext check = Context();
+        List<UserPis> admin2Rows = await check.UsersPis.AsNoTracking().Where(p => p.NsgNumber == "A2-1" || p.NsgNumber == "A2-2").OrderBy(p => p.NsgNumber).ToListAsync();
+        Assert.Equal(2, admin2Rows.Count);
+        Assert.All(admin2Rows, r =>
+        {
+            Assert.Equal((99, seededCreatedAt, 2, (long?)2), (r.CreatedBy, r.CreatedAtIst, r.UpdatedBy, r.AssignedTo));
+            Assert.NotNull(r.UpdatedAtIst);
+            Assert.InRange(r.UpdatedAtIst!.Value, beforeAdmin2, afterAdmin2);
+        });
+        Assert.Equal(("After 1", "SVC-1", new DateOnly(1982, 3, 14), "enc:pan1"),
+            (admin2Rows[0].FullName, admin2Rows[0].ServiceNumber, admin2Rows[0].DateOfBirth, admin2Rows[0].PanNumberEncrypted));
+
+        List<UserPis> admin5Rows = await check.UsersPis.AsNoTracking().Where(p => p.NsgNumber.StartsWith("A5-")).OrderBy(p => p.NsgNumber).ToListAsync();
+        Assert.Equal(3, admin5Rows.Count);
+        Assert.All(admin5Rows, r =>
+        {
+            Assert.Equal((2, seededCreatedAt, 5, (long?)5), (r.CreatedBy, r.CreatedAtIst, r.UpdatedBy, r.AssignedTo));
+            Assert.NotNull(r.UpdatedAtIst);
+            Assert.InRange(r.UpdatedAtIst!.Value, beforeAdmin5, afterAdmin5);
+        });
+        Assert.Equal(("After 3", "SVC-3", new DateOnly(1984, 7, 20), "enc:aadhaar3"),
+            (admin5Rows[0].FullName, admin5Rows[0].ServiceNumber, admin5Rows[0].DateOfBirth, admin5Rows[0].AadhaarNumberEncrypted));
     }
 
     // ═══ 3-4, 6-8. A MySQL failure on one row: rollback, separate error write, processing continues ═══

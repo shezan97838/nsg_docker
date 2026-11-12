@@ -1,9 +1,12 @@
+using System.Data.Common;
 using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSG.Mobile.Application.Interfaces.Repositories;
+using NSG.Mobile.Application.Pis.Services;
 using NSG.Mobile.Domain.Constants;
 using NSG.Mobile.Domain.Entities;
 using NSG.Mobile.Domain.Enums;
@@ -338,5 +341,412 @@ public class PisOwnershipTransferDatabaseTests : IAsyncLifetime
         again.ServiceNumber = "S-BY-B";
         Assert.Equal(PisSaveOutcome.Saved, await secondRepo.UpdateAsync(again, _admins.PisBId));
         Assert.Equal("S-BY-B", (await PersonAsync("OWNT-1")).ServiceNumber);
+    }
+}
+
+/// <summary>
+/// DATABASE-BACKED tests of the Super Admin BULK ownership transfer on real MySQL 8 through the real host and repository:
+/// authorization of all caller kinds, validation of source &amp; target admins (including inactive source), atomic multi-record
+/// updates, per-record history entries, transaction rollback on update or history failure, concurrent transfer consistency,
+/// zero-record transfers, and compatibility with existing individual ownership transfers.
+/// </summary>
+[Collection("mysql-approval-ownership")]
+public class PisBulkOwnershipTransferDatabaseTests : IAsyncLifetime
+{
+    private const string BulkTransfer = "/api/v1/admin/pis-personnel/bulk-transfer-ownership";
+    private const string SingleTransfer = "/api/v1/admin/pis-personnel/transfer-ownership";
+    private const string Approvals = "/api/v1/mobile-approval-requests";
+    private const string SuperNsg = "RAS-0001", PisBNsg = "RAS-0003", RegistrationNsg = "RAS-0004";
+
+    private ApiFactory _factory = null!;
+    private ApprovalAdmins _admins = null!;
+    private int _counter;
+
+    public async Task InitializeAsync()
+    {
+        _factory = new ApiFactory();
+        await _factory.ResetDatabaseAsync();
+        _admins = await ApprovalAdminSession.CreateAsync(_factory);
+    }
+
+    public async Task DisposeAsync() => await _factory.DisposeAsync();
+
+    private async Task<UserPis> SeedPersonAsync(long? owner, int? createdBy = 5, int? updatedBy = 6)
+    {
+        await using AppDbContext ctx = _factory.CreateContext();
+        string nsg = $"BULK-{++_counter}";
+        UserPis person = new()
+        {
+            NsgNumber = nsg, ServiceNumber = "S-" + nsg, FullName = "Person " + nsg,
+            MobileNumber = (9840000000L + _counter).ToString(),
+            DateOfBirth = new DateOnly(1990, 5, 15), AssignedTo = owner,
+            CreatedBy = createdBy, UpdatedBy = updatedBy, IsActive = true
+        };
+        ctx.UsersPis.Add(person);
+        await ctx.SaveChangesAsync();
+        return person;
+    }
+
+    private async Task<long> SeedRequestAsync(UserPis person)
+    {
+        await using AppDbContext ctx = _factory.CreateContext();
+        ApproveMobileUser request = new() { NsgNumber = person.NsgNumber, MobileNumber = person.MobileNumber, DateOfBirth = new DateOnly(1990, 5, 15) };
+        ctx.ApproveMobileUsers.Add(request);
+        await ctx.SaveChangesAsync();
+        return request.Id;
+    }
+
+    private static async Task<(HttpStatusCode Status, JsonElement Body)> SendAsync(HttpClient client, HttpMethod method, string url, object? body = null)
+    {
+        using HttpRequestMessage request = new(method, url)
+        {
+            Content = body == null ? null : new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
+        };
+        HttpResponseMessage response = await client.SendAsync(request);
+        string text = await response.Content.ReadAsStringAsync();
+        return (response.StatusCode, string.IsNullOrWhiteSpace(text) ? default : JsonDocument.Parse(text).RootElement.Clone());
+    }
+
+    private static Task<(HttpStatusCode Status, JsonElement Body)> BulkTransferAsync(HttpClient client, long sourceAdminId, long targetAdminId, string? reason = null)
+        => SendAsync(client, HttpMethod.Post, BulkTransfer, new { sourceAdminId, targetAdminId, reason });
+
+    private async Task<UserPis> PersonAsync(string nsg)
+    {
+        await using AppDbContext ctx = _factory.CreateContext();
+        return await ctx.UsersPis.AsNoTracking().SingleAsync(p => p.NsgNumber == nsg);
+    }
+
+    private async Task<List<PisOwnershipTransfer>> HistoryAsync(string nsg)
+    {
+        await using AppDbContext ctx = _factory.CreateContext();
+        return await ctx.PisOwnershipTransfers.AsNoTracking().Where(h => h.NsgNumber == nsg).OrderBy(h => h.Id).ToListAsync();
+    }
+
+    private async Task<long> AdminIdAsync(string nsg)
+    {
+        await using AppDbContext ctx = _factory.CreateContext();
+        return await ctx.AdminProfiles.AsNoTracking().Where(p => p.NsgNumber == nsg).Select(p => p.Id).SingleAsync();
+    }
+
+    private AppDbContext CreateInterceptedContext(DbCommandInterceptor interceptor)
+    {
+        DbContextOptions<AppDbContext> options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseMySql(_factory.ConnectionString, ServerVersion.AutoDetect(_factory.ConnectionString))
+            .AddInterceptors(interceptor)
+            .Options;
+        return new AppDbContext(options);
+    }
+
+    private sealed class FailOnCommandInterceptor : DbCommandInterceptor
+    {
+        private readonly Func<string, bool> _shouldFail;
+        public FailOnCommandInterceptor(Func<string, bool> shouldFail) => _shouldFail = shouldFail;
+
+        public override InterceptionResult<int> NonQueryExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+        {
+            if (_shouldFail(command.CommandText)) throw new InvalidOperationException("Simulated SQL command failure.");
+            return base.NonQueryExecuting(command, eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (_shouldFail(command.CommandText)) throw new InvalidOperationException("Simulated SQL command failure.");
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
+        {
+            if (_shouldFail(command.CommandText)) throw new InvalidOperationException("Simulated SQL command failure.");
+            return base.ReaderExecuting(command, eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (_shouldFail(command.CommandText)) throw new InvalidOperationException("Simulated SQL command failure.");
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    // ═══════════ Authorization ═══════════
+
+    [MySqlFact]
+    public async Task Only_a_super_admin_can_bulk_transfer_every_other_caller_is_refused()
+    {
+        UserPis p1 = await SeedPersonAsync(_admins.PisAId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await BulkTransferAsync(_admins.PisA, _admins.PisAId, _admins.PisBId)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await BulkTransferAsync(_admins.PisB, _admins.PisAId, _admins.PisBId)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await BulkTransferAsync(_admins.Registration, _admins.PisAId, _admins.PisBId)).Status);
+        foreach (string role in new[] { DomainConstants.Roles.SuperAdmin, "SUPER_ADMIN", DomainConstants.Roles.PisAdmin })
+            Assert.Equal(HttpStatusCode.Unauthorized, (await BulkTransferAsync(_factory.CreateClientFor(role), _admins.PisAId, _admins.PisBId)).Status);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await BulkTransferAsync(_factory.CreateClientFor(null), _admins.PisAId, _admins.PisBId)).Status);
+
+        Assert.Equal(_admins.PisAId, (await PersonAsync(p1.NsgNumber)).AssignedTo);
+        Assert.Empty(await HistoryAsync(p1.NsgNumber));
+
+        Assert.Equal(HttpStatusCode.OK, (await BulkTransferAsync(_admins.Super, _admins.PisAId, _admins.PisBId)).Status);
+        Assert.Equal(_admins.PisBId, (await PersonAsync(p1.NsgNumber)).AssignedTo);
+    }
+
+    // ═══════════ Validation & Inactive Source ═══════════
+
+    [MySqlFact]
+    public async Task Validation_failures_and_unsuitable_targets_are_refused_and_nothing_changes()
+    {
+        UserPis p1 = await SeedPersonAsync(_admins.PisAId);
+        long superId = await AdminIdAsync(SuperNsg);
+        long regId = await AdminIdAsync(RegistrationNsg);
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await BulkTransferAsync(_admins.Super, 0, _admins.PisBId)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await BulkTransferAsync(_admins.Super, _admins.PisAId, 0)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await BulkTransferAsync(_admins.Super, _admins.PisAId, _admins.PisAId)).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await BulkTransferAsync(_admins.Super, 999999, _admins.PisBId)).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await BulkTransferAsync(_admins.Super, _admins.PisAId, 999999)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await BulkTransferAsync(_admins.Super, superId, _admins.PisBId)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await BulkTransferAsync(_admins.Super, _admins.PisAId, regId)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await BulkTransferAsync(_admins.Super, _admins.PisAId, superId)).Status);
+
+        // Deactivate target B -> 409 Conflict
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(_admins.Super, HttpMethod.Post, $"/api/v1/admin/accounts/{_admins.PisBId}/deactivate")).Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await BulkTransferAsync(_admins.Super, _admins.PisAId, _admins.PisBId)).Status);
+
+        // Pending activation target -> 409 Conflict
+        UserPis pending = await SeedPersonAsync(owner: null);
+        Assert.Equal(HttpStatusCode.Created, (await SendAsync(_admins.Super, HttpMethod.Post, "/api/v1/admin/accounts",
+            new { nsgNumber = pending.NsgNumber, mobileNumber = pending.MobileNumber, dateOfBirth = "1990-05-15", roleCode = AdminRoleCodes.PisAdmin })).Status);
+        long pendingId = await AdminIdAsync(pending.NsgNumber);
+        Assert.Equal(HttpStatusCode.Conflict, (await BulkTransferAsync(_admins.Super, _admins.PisAId, pendingId)).Status);
+
+        Assert.Equal(_admins.PisAId, (await PersonAsync(p1.NsgNumber)).AssignedTo);
+        Assert.Empty(await HistoryAsync(p1.NsgNumber));
+    }
+
+    [MySqlFact]
+    public async Task Inactive_source_admin_bulk_transfer_succeeds()
+    {
+        UserPis p1 = await SeedPersonAsync(_admins.PisAId);
+        UserPis p2 = await SeedPersonAsync(_admins.PisAId);
+
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(_admins.Super, HttpMethod.Post, $"/api/v1/admin/accounts/{_admins.PisAId}/deactivate")).Status);
+
+        (HttpStatusCode status, JsonElement body) = await BulkTransferAsync(_admins.Super, _admins.PisAId, _admins.PisBId, "Retired admin");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(2, body.GetProperty("data").GetProperty("transferredCount").GetInt32());
+        Assert.Equal(_admins.PisBId, (await PersonAsync(p1.NsgNumber)).AssignedTo);
+        Assert.Equal(_admins.PisBId, (await PersonAsync(p2.NsgNumber)).AssignedTo);
+        Assert.Single(await HistoryAsync(p1.NsgNumber));
+        Assert.Single(await HistoryAsync(p2.NsgNumber));
+    }
+
+    // ═══════════ Bulk Transfer Behaviour & History ═══════════
+
+    [MySqlFact]
+    public async Task Bulk_transfer_moves_all_source_records_writes_per_record_history_and_leaves_provenance_and_other_records_untouched()
+    {
+        UserPis a1 = await SeedPersonAsync(_admins.PisAId, createdBy: 5, updatedBy: 6);
+        UserPis a2 = await SeedPersonAsync(_admins.PisAId, createdBy: 7, updatedBy: 8);
+        UserPis a3 = await SeedPersonAsync(_admins.PisAId, createdBy: 9, updatedBy: null);
+        UserPis b1 = await SeedPersonAsync(_admins.PisBId);
+        UserPis unassigned = await SeedPersonAsync(owner: null);
+
+        UserPis a1Before = await PersonAsync(a1.NsgNumber);
+        long requestId = await SeedRequestAsync(a1);
+        long superId = await AdminIdAsync(SuperNsg);
+
+        (HttpStatusCode status, JsonElement body) = await BulkTransferAsync(_admins.Super, _admins.PisAId, _admins.PisBId, "Annual rotation");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.True(body.GetProperty("success").GetBoolean());
+        Assert.Equal(PisBulkOwnershipTransferService.BulkTransferredMessage, body.GetProperty("message").GetString());
+        Assert.Equal(3, body.GetProperty("data").GetProperty("transferredCount").GetInt32());
+        Assert.EndsWith("+05:30", body.GetProperty("data").GetProperty("transferredAt").GetString());
+
+        foreach (UserPis moved in new[] { a1, a2, a3 })
+        {
+            UserPis after = await PersonAsync(moved.NsgNumber);
+            Assert.Equal(_admins.PisBId, after.AssignedTo);
+
+            PisOwnershipTransfer history = Assert.Single(await HistoryAsync(moved.NsgNumber));
+            Assert.Equal((moved.Id, _admins.PisAId, _admins.PisBId, superId, "Annual rotation"),
+                (history.PisRecordId, history.PreviousAssignedTo, history.NewAssignedTo, history.TransferredBy, history.Reason));
+            Assert.NotEqual(default, history.TransferredAtIst);
+        }
+
+        UserPis a1After = await PersonAsync(a1.NsgNumber);
+        Assert.Equal((a1Before.CreatedBy, a1Before.UpdatedBy, a1Before.CreatedAtIst, a1Before.UpdatedAtIst, a1Before.FullName, a1Before.MobileNumber, a1Before.IsActive),
+            (a1After.CreatedBy, a1After.UpdatedBy, a1After.CreatedAtIst, a1After.UpdatedAtIst, a1After.FullName, a1After.MobileNumber, a1After.IsActive));
+
+        // Unrelated records unchanged and no history written for them
+        Assert.Equal(_admins.PisBId, (await PersonAsync(b1.NsgNumber)).AssignedTo);
+        Assert.Null((await PersonAsync(unassigned.NsgNumber)).AssignedTo);
+        Assert.Empty(await HistoryAsync(b1.NsgNumber));
+        Assert.Empty(await HistoryAsync(unassigned.NsgNumber));
+
+        // Pending registration request follows new owner automatically
+        Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(_admins.PisA, HttpMethod.Put, $"{Approvals}/{requestId}/decision", new { decision = "Approved" })).Status);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(_admins.PisB, HttpMethod.Put, $"{Approvals}/{requestId}/decision", new { decision = "Approved" })).Status);
+    }
+
+    [MySqlFact]
+    public async Task Bulk_transfer_with_zero_records_returns_success_with_zero_count_and_no_history()
+    {
+        UserPis other = await SeedPersonAsync(_admins.PisBId);
+
+        (HttpStatusCode status, JsonElement body) = await BulkTransferAsync(_admins.Super, _admins.PisAId, _admins.PisBId);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.True(body.GetProperty("success").GetBoolean());
+        Assert.Equal(PisBulkOwnershipTransferService.BulkNothingToTransferMessage, body.GetProperty("message").GetString());
+        Assert.Equal(0, body.GetProperty("data").GetProperty("transferredCount").GetInt32());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("data").GetProperty("transferredAt").ValueKind);
+        Assert.Empty(await HistoryAsync(other.NsgNumber));
+    }
+
+    // ═══════════ Transaction Rollback ═══════════
+
+    [MySqlFact]
+    public async Task Transaction_rolls_back_all_updates_if_history_insertion_fails()
+    {
+        UserPis p1 = await SeedPersonAsync(_admins.PisAId);
+        UserPis p2 = await SeedPersonAsync(_admins.PisAId);
+        UserPis p3 = await SeedPersonAsync(_admins.PisAId);
+        long superId = await AdminIdAsync(SuperNsg);
+
+        FailOnCommandInterceptor failHistory = new(sql =>
+            sql.Contains("pis_ownership_transfers", StringComparison.OrdinalIgnoreCase)
+            && sql.Contains("INSERT", StringComparison.OrdinalIgnoreCase));
+
+        await using AppDbContext ctx = CreateInterceptedContext(failHistory);
+        PisOwnershipRepository repo = new(ctx);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            repo.BulkTransferAsync(_admins.PisAId, _admins.PisBId, superId, "Should roll back", DateTime.Now));
+
+        foreach (UserPis p in new[] { p1, p2, p3 })
+        {
+            Assert.Equal(_admins.PisAId, (await PersonAsync(p.NsgNumber)).AssignedTo);
+            Assert.Empty(await HistoryAsync(p.NsgNumber));
+        }
+    }
+
+    [MySqlFact]
+    public async Task Transaction_rolls_back_if_ownership_update_fails()
+    {
+        UserPis p1 = await SeedPersonAsync(_admins.PisAId);
+        UserPis p2 = await SeedPersonAsync(_admins.PisAId);
+        long superId = await AdminIdAsync(SuperNsg);
+
+        // Fail on the second UPDATE (the actual assignment update; the first UPDATE is the no-op lock).
+        int updateCalls = 0;
+        FailOnCommandInterceptor failUpdate = new(sql =>
+            sql.Contains("users_pis", StringComparison.OrdinalIgnoreCase)
+            && sql.Contains("UPDATE", StringComparison.OrdinalIgnoreCase)
+            && Interlocked.Increment(ref updateCalls) == 2);
+
+        await using AppDbContext ctx = CreateInterceptedContext(failUpdate);
+        PisOwnershipRepository repo = new(ctx);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            repo.BulkTransferAsync(_admins.PisAId, _admins.PisBId, superId, "Update fails", DateTime.Now));
+
+        foreach (UserPis p in new[] { p1, p2 })
+        {
+            Assert.Equal(_admins.PisAId, (await PersonAsync(p.NsgNumber)).AssignedTo);
+            Assert.Empty(await HistoryAsync(p.NsgNumber));
+        }
+    }
+
+    // ═══════════ Concurrency ═══════════
+
+    [MySqlFact]
+    public async Task Concurrent_bulk_transfers_on_same_source_never_duplicate_history()
+    {
+        List<UserPis> people = new();
+        for (int i = 0; i < 6; i++) people.Add(await SeedPersonAsync(_admins.PisAId));
+        long superId = await AdminIdAsync(SuperNsg);
+
+        await using AppDbContext ctx1 = _factory.CreateContext();
+        await using AppDbContext ctx2 = _factory.CreateContext();
+
+        Task<PisBulkOwnershipTransferResult> t1 = Task.Run(() => new PisOwnershipRepository(ctx1)
+            .BulkTransferAsync(_admins.PisAId, _admins.PisBId, superId, "Bulk-1", DateTime.Now));
+        Task<PisBulkOwnershipTransferResult> t2 = Task.Run(() => new PisOwnershipRepository(ctx2)
+            .BulkTransferAsync(_admins.PisAId, _admins.PisBId, superId, "Bulk-2", DateTime.Now));
+
+        await Task.WhenAll(t1, t2);
+
+        Assert.Equal(6, t1.Result.TransferredCount + t2.Result.TransferredCount);
+        Assert.Contains(new[] { t1.Result.Outcome, t2.Result.Outcome }, o => o == PisBulkOwnershipTransferOutcome.Transferred);
+        Assert.Contains(new[] { t1.Result.Outcome, t2.Result.Outcome }, o => o == PisBulkOwnershipTransferOutcome.NothingToTransfer);
+
+        foreach (UserPis p in people)
+        {
+            Assert.Equal(_admins.PisBId, (await PersonAsync(p.NsgNumber)).AssignedTo);
+            PisOwnershipTransfer h = Assert.Single(await HistoryAsync(p.NsgNumber));
+            Assert.Equal((_admins.PisAId, _admins.PisBId), (h.PreviousAssignedTo, h.NewAssignedTo));
+        }
+    }
+
+    [MySqlFact]
+    public async Task Racing_bulk_and_individual_transfers_produce_consistent_owner_and_history_chain()
+    {
+        long superId = await AdminIdAsync(SuperNsg);
+        // Provision a third active PIS_ADMIN (C) so individual transfers can target C while bulk targets B.
+        UserPis adminCPerson = await SeedPersonAsync(owner: null);
+        Assert.Equal(HttpStatusCode.Created, (await SendAsync(_admins.Super, HttpMethod.Post, "/api/v1/admin/accounts",
+            new { nsgNumber = adminCPerson.NsgNumber, mobileNumber = adminCPerson.MobileNumber, dateOfBirth = "1990-05-15", roleCode = AdminRoleCodes.PisAdmin })).Status);
+        long pisCId = await AdminIdAsync(adminCPerson.NsgNumber);
+        await using (AppDbContext actCtx = _factory.CreateContext())
+        {
+            await actCtx.AdminProfiles.Where(p => p.Id == pisCId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.ActivationStatus, AdminActivationStatus.Active));
+        }
+
+        for (int round = 0; round < 6; round++)
+        {
+            UserPis p1 = await SeedPersonAsync(_admins.PisAId);
+            UserPis p2 = await SeedPersonAsync(_admins.PisAId);
+
+            await using AppDbContext bulkCtx = _factory.CreateContext();
+            await using AppDbContext singleCtx = _factory.CreateContext();
+
+            Task<PisBulkOwnershipTransferResult> bulk = Task.Run(() => new PisOwnershipRepository(bulkCtx)
+                .BulkTransferAsync(_admins.PisAId, _admins.PisBId, superId, "Bulk", DateTime.Now));
+            Task<PisOwnershipTransferResult> single = Task.Run(() => new PisOwnershipRepository(singleCtx)
+                .TransferAsync(p1.NsgNumber, pisCId, superId, "Single", DateTime.Now));
+
+            await Task.WhenAll(bulk, single);
+
+            Assert.Equal(PisOwnershipTransferOutcome.Transferred, single.Result.Outcome);
+            Assert.Equal(_admins.PisBId, (await PersonAsync(p2.NsgNumber)).AssignedTo);
+            PisOwnershipTransfer h2 = Assert.Single(await HistoryAsync(p2.NsgNumber));
+            Assert.Equal((_admins.PisAId, _admins.PisBId), (h2.PreviousAssignedTo, h2.NewAssignedTo));
+
+            // p1's final owner must match the last history row, and history chain must be continuous from PisAId.
+            long? finalOwner1 = (await PersonAsync(p1.NsgNumber)).AssignedTo;
+            List<PisOwnershipTransfer> h1 = await HistoryAsync(p1.NsgNumber);
+            Assert.NotEmpty(h1);
+            Assert.Equal(_admins.PisAId, h1[0].PreviousAssignedTo);
+            Assert.Equal(finalOwner1, h1[^1].NewAssignedTo);
+            for (int i = 1; i < h1.Count; i++)
+                Assert.Equal(h1[i - 1].NewAssignedTo, h1[i].PreviousAssignedTo);
+        }
+    }
+
+    // ═══════════ Compatibility with Individual Transfer ═══════════
+
+    [MySqlFact]
+    public async Task Individual_transfer_continues_to_work_alongside_bulk_transfer()
+    {
+        UserPis solo = await SeedPersonAsync(_admins.PisAId);
+
+        (HttpStatusCode status, JsonElement body) = await SendAsync(_admins.Super, HttpMethod.Post, SingleTransfer,
+            new { personnelNsgNumber = solo.NsgNumber, targetPisAdminNsgNumber = PisBNsg, reason = "Solo" });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.True(body.GetProperty("data").GetProperty("transferred").GetBoolean());
+        Assert.Equal(_admins.PisBId, (await PersonAsync(solo.NsgNumber)).AssignedTo);
+        Assert.Single(await HistoryAsync(solo.NsgNumber));
     }
 }

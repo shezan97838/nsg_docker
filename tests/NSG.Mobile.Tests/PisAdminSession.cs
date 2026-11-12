@@ -56,6 +56,22 @@ internal static class PisAdminSession
         return (pisAdmin, superAdmin);
     }
 
+    public static async Task<HttpClient> CreateAndSignInPisAdminAsync(ApiFactory factory, HttpClient superAdmin, string nsg, string mobile)
+    {
+        await using (AppDbContext ctx = factory.CreateContext())
+        {
+            ctx.UsersPis.Add(new UserPis { NsgNumber = nsg, ServiceNumber = "S-" + nsg, FullName = "PIS Admin " + nsg, MobileNumber = mobile, DateOfBirth = DateOnly.Parse(Dob), IsActive = true });
+            await ctx.SaveChangesAsync();
+        }
+
+        HttpResponseMessage created = await superAdmin.PostAsync(Accounts, Json(new { nsgNumber = nsg, mobileNumber = mobile, dateOfBirth = Dob, roleCode = AdminRoleCodes.PisAdmin }));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        HttpClient anonymous = factory.CreateClientFor(null);
+        await ActivateAsync(factory, anonymous, nsg, mobile);
+        return Bearer(factory, await SignInAsync(factory, anonymous, nsg));
+    }
+
     private static StringContent Json(object body) => new(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
     private static HttpClient Bearer(ApiFactory factory, string accessToken)
